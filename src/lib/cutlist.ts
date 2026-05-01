@@ -28,6 +28,7 @@ export type CabinetInput = {
 
 export type PartCategory = "carcass" | "shelf" | "back" | "support" | "front";
 export type PartKind =
+  | "custom"
   | "side"
   | "bottom"
   | "top"

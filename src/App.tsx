@@ -71,6 +71,7 @@ import {
   type CabinetInput,
   type CabinetType,
   type CornerHand,
+  type PartCategory,
   type EdgeBandProfile,
   type EdgeBandSide,
   type FrontOption,
@@ -150,6 +151,29 @@ type UnitPreset = {
   input: CabinetInput;
 };
 
+type CustomProjectPart = {
+  id: string;
+  title: string;
+  length: number;
+  width: number;
+  qty: number;
+  thickness: number;
+  material: MaterialType;
+  category: PartCategory;
+  grainDirection: GrainDirection;
+};
+
+type CustomProjectPartDraft = {
+  title: string;
+  length: string;
+  width: string;
+  qty: string;
+  thickness: string;
+  material: MaterialType;
+  category: PartCategory;
+  grainDirection: GrainDirection;
+};
+
 type EdgeBandOverrideMap = Record<string, EdgeBandProfile>;
 
 type AggregatedProjectPart = {
@@ -171,6 +195,7 @@ type SavedProject = {
   updatedAt: string;
   settings: ProjectSettings;
   units: CabinetUnit[];
+  customParts: CustomProjectPart[];
   arrangement: ProjectArrangementItem[];
   edgeBandOverrides: EdgeBandOverrideMap;
 };
@@ -222,6 +247,12 @@ type ProjectSettingsNumericDrafts = {
   laborPricePerSquareMeter: string;
   edgeBandPricePerMeter: string;
 };
+
+type WorkspaceTab = "project" | "builder" | "results" | "library";
+
+type BuilderTab = "unit" | "custom" | "units";
+
+type ResultsSectionKey = "costs" | "layout" | "metrics" | "workshop" | "parts";
 
 const projectSettingsStorageKey = "cutlist.project-settings.v1";
 const savedProjectsStorageKey = "cutlist.saved-projects.v1";
@@ -643,6 +674,7 @@ function loadSavedProjects() {
     return parsedValue
       .map((project) => ({
         ...project,
+        customParts: project.customParts ?? [],
         edgeBandOverrides: project.edgeBandOverrides ?? {},
       }))
       .sort(
@@ -1237,6 +1269,46 @@ function buildProjectSettingsDrafts(
   };
 }
 
+function buildEmptyCustomPartDraft(
+  settings: ProjectSettings,
+): CustomProjectPartDraft {
+  return {
+    title: "",
+    length: "",
+    width: "",
+    qty: "1",
+    thickness: String(round2(settings.boardThickness * 10)),
+    material: settings.material,
+    category: "carcass",
+    grainDirection: "free",
+  };
+}
+
+function createCustomPartId() {
+  return `custom-part-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function buildCustomProjectCutlistPart(entry: CustomProjectPart): CutlistPart {
+  return {
+    id: `custom-part-piece-${entry.id}`,
+    kind: "custom",
+    name: entry.title,
+    category: entry.category,
+    qty: entry.qty,
+    length: entry.length,
+    width: entry.width,
+    thickness: entry.thickness,
+    material: entry.material,
+    notes:
+      entry.category === "back"
+        ? "مقاس حر خارج الوحدات على لوح ظهر"
+        : "مقاس حر خارج الوحدات",
+    edgeBanding: {},
+    grainDirection: entry.grainDirection,
+    allowRotation: entry.grainDirection === "free",
+  };
+}
+
 function loadProjectSettings(): ProjectSettings {
   if (typeof window === "undefined") {
     return defaultProjectSettings;
@@ -1377,11 +1449,11 @@ function getVisualEdgeSide(
 }
 
 function aggregateProjectParts(
-  entries: Array<{ unitId: string; parts: CutlistPart[] }>,
+  entries: Array<{ sourceId: string; parts: CutlistPart[] }>,
 ) {
   const aggregated = new Map<string, AggregatedProjectPart>();
 
-  entries.forEach(({ unitId, parts }) =>
+  entries.forEach(({ sourceId, parts }) =>
     parts.forEach((part) => {
       const key = [
         part.kind,
@@ -1396,7 +1468,7 @@ function aggregateProjectParts(
       ].join("|");
 
       const existing = aggregated.get(key);
-      const sourceKey = createUnitPartOverrideKey(unitId, part.id);
+      const sourceKey = createUnitPartOverrideKey(sourceId, part.id);
 
       if (existing) {
         existing.part.qty += part.qty;
@@ -1419,6 +1491,19 @@ function aggregateProjectParts(
 
 function App() {
   const initialProjectSettings = loadProjectSettings();
+  const [activeWorkspaceTab, setActiveWorkspaceTab] =
+    useState<WorkspaceTab>("builder");
+  const [activeBuilderTab, setActiveBuilderTab] = useState<BuilderTab>("unit");
+  const [isTopPanelExpanded, setIsTopPanelExpanded] = useState(false);
+  const [openResultsSections, setOpenResultsSections] = useState<
+    Record<ResultsSectionKey, boolean>
+  >({
+    costs: true,
+    layout: true,
+    metrics: false,
+    workshop: false,
+    parts: false,
+  });
   const [projectName, setProjectName] = useState("مشروع جديد");
   const [currentProjectId, setCurrentProjectId] = useState<string | null>(null);
   const [savedProjects, setSavedProjects] =
@@ -1447,7 +1532,18 @@ function App() {
   >(buildEditorNumericDrafts(buildEmptyEditorInput(initialProjectSettings)));
   const [editingUnitId, setEditingUnitId] = useState<string | null>(null);
   const [units, setUnits] = useState<CabinetUnit[]>([]);
+  const [customParts, setCustomParts] = useState<CustomProjectPart[]>([]);
+  const [customPartDraft, setCustomPartDraft] =
+    useState<CustomProjectPartDraft>(
+      buildEmptyCustomPartDraft(initialProjectSettings),
+    );
+  const [editingCustomPartId, setEditingCustomPartId] = useState<string | null>(
+    null,
+  );
   const [calculatedUnits, setCalculatedUnits] = useState<CabinetUnit[]>([]);
+  const [calculatedCustomParts, setCalculatedCustomParts] = useState<
+    CustomProjectPart[]
+  >([]);
   const [selectedCalculatedUnitId, setSelectedCalculatedUnitId] = useState<
     string | null
   >(null);
@@ -1465,6 +1561,11 @@ function App() {
 
   const editorResult = calculateCabinetCutlist(editorInput);
   const editorFrontPieceCount = getFrontPieceCount(editorResult);
+  const calculatedCustomPartEntries = calculatedCustomParts.map((entry) => ({
+    sourceId: entry.id,
+    title: entry.title,
+    part: buildCustomProjectCutlistPart(entry),
+  }));
 
   const calculatedViews: CalculatedUnitView[] = calculatedUnits.map((unit) => {
     const result = calculateCabinetCutlist(unit);
@@ -1493,10 +1594,17 @@ function App() {
   });
 
   const aggregatedProjectParts = aggregateProjectParts(
-    calculatedViews.map((view) => ({
-      unitId: view.unit.id,
-      parts: view.result.parts,
-    })),
+    calculatedViews
+      .map((view) => ({
+        sourceId: view.unit.id,
+        parts: view.result.parts,
+      }))
+      .concat(
+        calculatedCustomPartEntries.map((entry) => ({
+          sourceId: entry.sourceId,
+          parts: [entry.part],
+        })),
+      ),
   );
   const projectParts = aggregatedProjectParts.map((entry) => entry.part);
   const aggregatedProjectPartMap = new Map(
@@ -1549,15 +1657,23 @@ function App() {
     units,
     projectArrangement,
   );
-  const workshopPartCards: WorkshopPartCard[] = calculatedViews.flatMap(
-    (view) =>
+  const workshopPartCards: WorkshopPartCard[] = calculatedViews
+    .flatMap((view) =>
       view.result.parts.map((part, index) => ({
         id: `${view.unit.id}-${part.id}-${index}`,
         unitId: view.unit.id,
         unitTitle: view.unit.title,
         part,
       })),
-  );
+    )
+    .concat(
+      calculatedCustomPartEntries.map((entry) => ({
+        id: `${entry.sourceId}-${entry.part.id}`,
+        unitId: entry.sourceId,
+        unitTitle: entry.title,
+        part: entry.part,
+      })),
+    );
   const workshopExecutionCards: WorkshopExecutionCard[] = workshopPartCards
     .map((card) => {
       const sourceKey = createUnitPartOverrideKey(card.unitId, card.part.id);
@@ -1677,6 +1793,121 @@ function App() {
   const projectTotalCost = round2(
     projectSheetCost + projectLaborCost + projectEdgeBandCost,
   );
+  const calculatedCustomPartCount = calculatedCustomParts.reduce(
+    (sum, entry) => sum + entry.qty,
+    0,
+  );
+  const calculatedCustomPartAreaM2 = round2(
+    calculatedCustomParts.reduce(
+      (sum, entry) => sum + (entry.length * entry.width * entry.qty) / 10000,
+      0,
+    ),
+  );
+  const projectItemCount = units.length + customParts.length;
+  const hasCalculatedProject =
+    calculatedViews.length > 0 || calculatedCustomParts.length > 0;
+  const recentSavedProjects = savedProjects.slice(0, 3);
+  const workspaceTabs: Array<{
+    id: WorkspaceTab;
+    label: string;
+    icon: typeof Settings2;
+    badge: string;
+  }> = [
+    {
+      id: "project",
+      label: "المشروع",
+      icon: Settings2,
+      badge: `${savedProjects.length}`,
+    },
+    {
+      id: "builder",
+      label: "الإضافة",
+      icon: Plus,
+      badge: `${projectItemCount}`,
+    },
+    {
+      id: "results",
+      label: "النتائج",
+      icon: Calculator,
+      badge: hasCalculatedProject ? `${projectParts.length}` : "--",
+    },
+    {
+      id: "library",
+      label: "المكتبة",
+      icon: FolderOpen,
+      badge: `${unitPresets.length + savedProjects.length}`,
+    },
+  ];
+  const builderTabs: Array<{
+    id: BuilderTab;
+    label: string;
+    description: string;
+  }> = [
+    {
+      id: "unit",
+      label: "الوحدة الحالية",
+      description: "إدخال وتعديل الوحدة مع المعاينة.",
+    },
+    {
+      id: "custom",
+      label: "مقاس حر",
+      description: "إضافة القطع غير المرتبطة بوحدة.",
+    },
+    {
+      id: "units",
+      label: "العناصر المضافة",
+      description: "الوحدات الحالية، الترتيب، والحساب.",
+    },
+  ];
+  const mobilePrimaryAction =
+    activeWorkspaceTab === "builder"
+      ? activeBuilderTab === "unit"
+        ? {
+            label: editingUnitId ? "حفظ تعديل الوحدة" : "إضافة وحدة",
+            icon: Plus,
+            onClick: saveUnit,
+            disabled: false,
+          }
+        : activeBuilderTab === "custom"
+          ? {
+              label: editingCustomPartId ? "حفظ المقاس الحر" : "إضافة مقاس حر",
+              icon: Plus,
+              onClick: saveCustomPart,
+              disabled: false,
+            }
+          : {
+              label: "احسب المشروع",
+              icon: Calculator,
+              onClick: calculateUnits,
+              disabled: projectItemCount === 0,
+            }
+      : activeWorkspaceTab === "results"
+        ? hasCalculatedProject
+          ? {
+              label: "طباعة المشروع",
+              icon: Printer,
+              onClick: printProjectSummary,
+              disabled: projectParts.length === 0,
+            }
+          : {
+              label: "احسب المشروع",
+              icon: Calculator,
+              onClick: calculateUnits,
+              disabled: projectItemCount === 0,
+            }
+        : activeWorkspaceTab === "project"
+          ? {
+              label: "حفظ المشروع",
+              icon: Save,
+              onClick: saveCurrentProject,
+              disabled: false,
+            }
+          : {
+              label: "فتح المشاريع",
+              icon: FolderOpen,
+              onClick: () => setIsProjectLibraryOpen(true),
+              disabled: false,
+            };
 
   const projectSummary = calculatedViews.reduce(
     (summary, view) => ({
@@ -1704,6 +1935,16 @@ function App() {
       totalProjectCost: 0,
     },
   );
+  projectSummary.totalPanels += calculatedCustomPartCount;
+  projectSummary.totalAreaM2 = round2(
+    projectSummary.totalAreaM2 + calculatedCustomPartAreaM2,
+  );
+  projectSummary.totalSheets = projectLayoutSheetCount;
+  projectSummary.totalSheetCost = projectSheetCost;
+  projectSummary.totalLaborCost = projectLaborCost;
+  projectSummary.totalEdgeBandLengthM = projectEdgeBandLengthM;
+  projectSummary.totalEdgeBandCost = projectEdgeBandCost;
+  projectSummary.totalProjectCost = projectTotalCost;
 
   useEffect(() => {
     window.localStorage.setItem(
@@ -1814,14 +2055,115 @@ function App() {
     setSelectedPartId(null);
   }
 
+  function resetCustomPartEditor(settings = projectSettings) {
+    setCustomPartDraft(buildEmptyCustomPartDraft(settings));
+    setEditingCustomPartId(null);
+  }
+
+  function updateCustomPartDraft<K extends keyof CustomProjectPartDraft>(
+    key: K,
+    value: CustomProjectPartDraft[K],
+  ) {
+    setCustomPartDraft((current) => ({
+      ...current,
+      [key]: value,
+    }));
+  }
+
   function announceProjectAction(message: string) {
     setProjectActionMessage(message);
   }
 
   function invalidateCalculatedState() {
     setCalculatedUnits([]);
+    setCalculatedCustomParts([]);
     setSelectedCalculatedUnitId(null);
     setSelectedPartId(null);
+  }
+
+  function saveCustomPart() {
+    const title = customPartDraft.title.trim() || "مقاس حر";
+    const length = Number(normalizeNumericInput(customPartDraft.length));
+    const width = Number(normalizeNumericInput(customPartDraft.width));
+    const qty = Number(normalizeNumericInput(customPartDraft.qty));
+    const thicknessMm = Number(
+      normalizeNumericInput(customPartDraft.thickness),
+    );
+
+    if (
+      !Number.isFinite(length) ||
+      !Number.isFinite(width) ||
+      !Number.isFinite(qty) ||
+      !Number.isFinite(thicknessMm) ||
+      length <= 0 ||
+      width <= 0 ||
+      qty <= 0 ||
+      thicknessMm <= 0
+    ) {
+      announceProjectAction(
+        "أدخل الطول والعرض والكمية والسمك بقيم صحيحة قبل حفظ المقاس الحر.",
+      );
+      return;
+    }
+
+    const nextPart: CustomProjectPart = {
+      id: editingCustomPartId ?? createCustomPartId(),
+      title,
+      length,
+      width,
+      qty: Math.max(1, Math.floor(qty)),
+      thickness: thicknessMm / 10,
+      material: customPartDraft.material,
+      category: customPartDraft.category,
+      grainDirection: customPartDraft.grainDirection,
+    };
+
+    if (editingCustomPartId) {
+      setCustomParts((current) =>
+        current.map((part) =>
+          part.id === editingCustomPartId ? nextPart : part,
+        ),
+      );
+      announceProjectAction(`تم حفظ تعديل ${title} ضمن المقاسات الحرة.`);
+    } else {
+      setCustomParts((current) => [...current, nextPart]);
+      announceProjectAction(`تمت إضافة ${title} إلى المقاسات الحرة.`);
+    }
+
+    invalidateCalculatedState();
+    resetCustomPartEditor();
+  }
+
+  function loadCustomPartIntoEditor(entry: CustomProjectPart) {
+    setActiveWorkspaceTab("builder");
+    setActiveBuilderTab("custom");
+    setEditingCustomPartId(entry.id);
+    setCustomPartDraft({
+      title: entry.title,
+      length: String(round2(entry.length)),
+      width: String(round2(entry.width)),
+      qty: String(entry.qty),
+      thickness: String(round2(entry.thickness * 10)),
+      material: entry.material,
+      category: entry.category,
+      grainDirection: entry.grainDirection,
+    });
+  }
+
+  function removeCustomPart(partId: string) {
+    setCustomParts((current) => current.filter((part) => part.id !== partId));
+    setEdgeBandOverrides((current) =>
+      Object.fromEntries(
+        Object.entries(current).filter(
+          ([key]) => !key.startsWith(`${partId}::`),
+        ),
+      ),
+    );
+    invalidateCalculatedState();
+
+    if (editingCustomPartId === partId) {
+      resetCustomPartEditor();
+    }
   }
 
   function saveUnit() {
@@ -1870,6 +2212,8 @@ function App() {
   }
 
   function loadUnitIntoEditor(unit: CabinetUnit) {
+    setActiveWorkspaceTab("builder");
+    setActiveBuilderTab("unit");
     const { id, title, ...input } = unit;
     const nextInput = applyProjectSettingsToInput(input, projectSettings);
     setEditorTitle(title);
@@ -1883,6 +2227,8 @@ function App() {
   }
 
   function loadUnitPreset(preset: UnitPreset) {
+    setActiveWorkspaceTab("builder");
+    setActiveBuilderTab("unit");
     const nextInput = applyProjectSettingsToInput(
       preset.input,
       projectSettings,
@@ -1928,6 +2274,8 @@ function App() {
       return nextOverrides;
     });
     setActiveProjectUnitId(nextId);
+    setActiveWorkspaceTab("builder");
+    setActiveBuilderTab("units");
     invalidateCalculatedState();
     announceUnitSaved(
       nextId,
@@ -1961,11 +2309,13 @@ function App() {
   }
 
   function calculateUnits() {
-    if (units.length === 0) {
+    if (units.length === 0 && customParts.length === 0) {
       return;
     }
 
+    setActiveWorkspaceTab("results");
     setCalculatedUnits(units.map((unit) => ({ ...unit })));
+    setCalculatedCustomParts(customParts.map((part) => ({ ...part })));
     setSelectedCalculatedUnitId(units[0]?.id ?? null);
     setSelectedPartId(null);
   }
@@ -1987,13 +2337,18 @@ function App() {
       buildProjectSettingsDrafts(defaultProjectSettings),
     );
     setUnits([]);
+    setCustomParts([]);
     setCalculatedUnits([]);
+    setCalculatedCustomParts([]);
     setSelectedCalculatedUnitId(null);
     setProjectArrangement([]);
     setActiveProjectUnitId(null);
+    setActiveWorkspaceTab("builder");
+    setActiveBuilderTab("unit");
     setEdgeBandOverrides({});
     setUnitFeedback(null);
     resetEditor(0, defaultProjectSettings);
+    resetCustomPartEditor(defaultProjectSettings);
     announceProjectAction("تم فتح مشروع جديد.");
   }
 
@@ -2006,6 +2361,7 @@ function App() {
       updatedAt: new Date().toISOString(),
       settings: projectSettings,
       units,
+      customParts,
       arrangement: buildProjectArrangement(units, projectArrangement),
       edgeBandOverrides,
     };
@@ -2035,16 +2391,23 @@ function App() {
     setProjectSettings(project.settings);
     setProjectSettingsDrafts(buildProjectSettingsDrafts(project.settings));
     setUnits(project.units);
+    setCustomParts(project.customParts ?? []);
     setEdgeBandOverrides(project.edgeBandOverrides ?? {});
     setCalculatedUnits(project.units.map((unit) => ({ ...unit })));
+    setCalculatedCustomParts(
+      (project.customParts ?? []).map((part) => ({ ...part })),
+    );
     setSelectedCalculatedUnitId(project.units[0]?.id ?? null);
     setProjectArrangement(nextArrangement);
+    setActiveWorkspaceTab("project");
+    setActiveBuilderTab("units");
     setActiveProjectUnitId(
       nextArrangement[0]?.id ?? project.units[0]?.id ?? null,
     );
     setSelectedPartId(null);
     setUnitFeedback(null);
     resetEditor(project.units.length, project.settings);
+    resetCustomPartEditor(project.settings);
     setIsProjectLibraryOpen(false);
     announceProjectAction(`تم تحميل ${project.name}.`);
   }
@@ -2275,6 +2638,19 @@ function App() {
 
     setProjectSettings(nextSettings);
     setProjectSettingsDrafts(buildProjectSettingsDrafts(nextSettings));
+    setCustomPartDraft((current) =>
+      editingCustomPartId
+        ? current
+        : {
+            ...current,
+            material:
+              key === "material" ? (value as MaterialType) : current.material,
+            thickness:
+              key === "boardThickness"
+                ? String(round2((value as number) * 10))
+                : current.thickness,
+          },
+    );
     setEditorInput((current) =>
       applyProjectSettingsToInput(current, nextSettings),
     );
@@ -2286,6 +2662,13 @@ function App() {
       })),
     );
     invalidateCalculatedState();
+  }
+
+  function toggleResultsSection(section: ResultsSectionKey) {
+    setOpenResultsSections((current) => ({
+      ...current,
+      [section]: !current[section],
+    }));
   }
 
   function updateProjectSettingNumber(
@@ -2331,7 +2714,7 @@ function App() {
       dir="rtl"
       className="min-h-screen bg-[radial-gradient(circle_at_top,_rgba(194,165,116,0.18),_transparent_32%),linear-gradient(180deg,#f6f1e7_0%,#f2ece1_34%,#ebe3d5_100%)] text-foreground"
     >
-      <div className="mx-auto flex min-h-screen w-full max-w-7xl flex-col px-4 py-6 sm:px-6 lg:px-8">
+      <div className="mx-auto flex min-h-screen w-full max-w-7xl flex-col px-4 py-6 pb-28 sm:px-6 sm:pb-8 lg:px-8">
         {isProjectSettingsOpen ? (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-stone-950/45 p-4 backdrop-blur-sm">
             <div className="flex max-h-[calc(100vh-2rem)] w-full max-w-xl flex-col overflow-hidden rounded-[1.75rem] border border-stone-200 bg-white shadow-[0_30px_90px_-40px_rgba(63,40,12,0.55)] sm:max-h-[calc(100vh-3rem)]">
@@ -2853,7 +3236,88 @@ function App() {
 
         <section className="relative overflow-hidden rounded-[2rem] border border-black/5 bg-white/80 p-6 shadow-[0_30px_90px_-50px_rgba(63,40,12,0.45)] backdrop-blur sm:p-8">
           <div className="absolute inset-x-0 top-0 h-24 bg-[linear-gradient(90deg,rgba(116,84,45,0.14),rgba(210,191,162,0.08),rgba(41,64,55,0.14))]" />
-          <div className="relative flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
+          <div className="relative sm:hidden">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <Badge
+                  variant="outline"
+                  className="border-amber-900/15 bg-amber-50 text-amber-950"
+                >
+                  Cabinet Cut Optimizer
+                </Badge>
+                <h1 className="mt-3 text-xl font-semibold leading-tight text-stone-950">
+                  مشروع القص
+                </h1>
+                <p className="mt-1 text-xs leading-6 text-stone-500">
+                  {projectItemCount} عنصر • {units.length} وحدة •{" "}
+                  {customParts.length} مقاس حر
+                </p>
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="shrink-0"
+                onClick={() => setIsTopPanelExpanded((current) => !current)}
+              >
+                {isTopPanelExpanded ? (
+                  <ArrowUp className="size-4" />
+                ) : (
+                  <ArrowDown className="size-4" />
+                )}
+                {isTopPanelExpanded ? "إخفاء" : "تفاصيل"}
+              </Button>
+            </div>
+
+            <div className="mt-4 grid grid-cols-3 gap-2">
+              <div className="rounded-2xl bg-stone-950 px-3 py-3 text-stone-50">
+                <p className="text-[11px] text-stone-300">العناصر</p>
+                <p className="mt-1 text-sm font-semibold">{projectItemCount}</p>
+              </div>
+              <div className="rounded-2xl border border-stone-200 bg-white/90 px-3 py-3">
+                <p className="text-[11px] text-stone-500">القطع</p>
+                <p className="mt-1 text-sm font-semibold text-stone-900">
+                  {hasCalculatedProject ? projectParts.length : "--"}
+                </p>
+              </div>
+              <div className="rounded-2xl border border-stone-200 bg-white/90 px-3 py-3">
+                <p className="text-[11px] text-stone-500">الاستهلاك</p>
+                <p className="mt-1 text-sm font-semibold text-stone-900">
+                  {hasCalculatedProject
+                    ? `${projectLayoutTotalAreaM2} م²`
+                    : "--"}
+                </p>
+              </div>
+            </div>
+
+            <div className="mt-3 flex gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                className="flex-1"
+                onClick={saveCurrentProject}
+              >
+                <Save className="size-4" />
+                حفظ
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                className="flex-1"
+                onClick={() => setIsProjectSettingsOpen(true)}
+              >
+                <Settings2 className="size-4" />
+                الإعدادات
+              </Button>
+            </div>
+          </div>
+
+          <div
+            className={cn(
+              "relative flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between",
+              !isTopPanelExpanded && "hidden sm:flex",
+            )}
+          >
             <div className="max-w-3xl space-y-4">
               <Badge
                 variant="outline"
@@ -2877,8 +3341,8 @@ function App() {
               <Card className="border-0 bg-stone-950 text-stone-50 ring-0">
                 <CardContent className="flex items-center justify-between p-4">
                   <div>
-                    <p className="text-xs text-stone-300">الوحدات المضافة</p>
-                    <p className="mt-1 font-medium">{units.length}</p>
+                    <p className="text-xs text-stone-300">عناصر المشروع</p>
+                    <p className="mt-1 font-medium">{projectItemCount}</p>
                   </div>
                   <Box className="size-4 opacity-80" />
                 </CardContent>
@@ -2912,7 +3376,12 @@ function App() {
             </div>
           </div>
 
-          <div className="relative mt-5 flex flex-wrap items-center justify-end gap-3 border-t border-stone-200/70 pt-4">
+          <div
+            className={cn(
+              "relative mt-5 flex flex-wrap items-center justify-end gap-3 border-t border-stone-200/70 pt-4",
+              !isTopPanelExpanded && "hidden sm:flex",
+            )}
+          >
             <div className="min-w-[18rem] flex-1 rounded-[1.6rem] border border-stone-200 bg-[linear-gradient(135deg,rgba(252,250,247,0.96),rgba(243,236,227,0.9))] p-4 shadow-[0_18px_50px_-40px_rgba(63,40,12,0.35)]">
               <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
                 <div className="space-y-2 lg:min-w-[16rem] lg:flex-1">
@@ -2930,6 +3399,8 @@ function App() {
                   />
                   <div className="flex flex-wrap gap-2 text-xs text-stone-500">
                     <span>{units.length} وحدة</span>
+                    <span>•</span>
+                    <span>{customParts.length} مقاس حر</span>
                     <span>•</span>
                     <span>{savedProjects.length} مشروع محفوظ</span>
                     {currentProjectId ? (
@@ -3050,1732 +3521,2589 @@ function App() {
           </div>
         </section>
 
-        <section className="mt-6 grid gap-6 lg:grid-cols-[1.08fr_0.92fr]">
-          <Card className="border-0 bg-white/88 shadow-[0_20px_60px_-45px_rgba(63,40,12,0.55)] ring-1 ring-stone-950/8">
-            <CardHeader>
-              <CardTitle>
-                {editingUnitId ? "تعديل وحدة" : "إضافة وحدة"}
-              </CardTitle>
-              <CardDescription>
-                جهّز الوحدة الحالية من المقاسات ونوع الواجهة ثم أضفها إلى قائمة
-                المشروع.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="grid gap-5">
-              <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
-                <div className="space-y-2 xl:col-span-2">
-                  <Label htmlFor="unitTitle">اسم الوحدة</Label>
-                  <Input
-                    id="unitTitle"
-                    value={editorTitle}
-                    onChange={(event) => setEditorTitle(event.target.value)}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="width">
-                    {isCornerBlindEditor ? "طول الضلع الأول" : "العرض"}
-                  </Label>
-                  <Input
-                    id="width"
-                    inputMode="decimal"
-                    value={editorNumericDrafts.width}
-                    onChange={(event) =>
-                      updateNumber("width", event.target.value)
-                    }
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="height">الارتفاع</Label>
-                  <Input
-                    id="height"
-                    inputMode="decimal"
-                    value={editorNumericDrafts.height}
-                    onChange={(event) =>
-                      updateNumber("height", event.target.value)
-                    }
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="depth">
-                    {isCornerBlindEditor ? "عرض الذراع" : "العمق"}
-                  </Label>
-                  <Input
-                    id="depth"
-                    inputMode="decimal"
-                    value={editorNumericDrafts.depth}
-                    onChange={(event) =>
-                      updateNumber("depth", event.target.value)
-                    }
-                  />
-                </div>
-                {isCornerBlindEditor ? (
-                  <div className="space-y-2">
-                    <Label htmlFor="returnDepth">طول الضلع الثاني</Label>
-                    <Input
-                      id="returnDepth"
-                      inputMode="decimal"
-                      value={editorNumericDrafts.returnDepth}
-                      onChange={(event) =>
-                        updateNumber("returnDepth", event.target.value)
-                      }
-                    />
-                  </div>
-                ) : null}
-              </div>
+        <section className="mt-6">
+          <div className="flex gap-2 overflow-x-auto pb-2 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            {workspaceTabs.map((tab) => {
+              const Icon = tab.icon;
+              const isActive = activeWorkspaceTab === tab.id;
 
-              <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
-                <div className="space-y-2">
-                  <Label htmlFor="shelves">عدد الرفوف</Label>
-                  <Input
-                    id="shelves"
-                    inputMode="numeric"
-                    value={editorNumericDrafts.shelfCount}
-                    onChange={(event) =>
-                      updateNumber("shelfCount", event.target.value)
-                    }
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label>نوع الوحدة</Label>
-                  <Select
-                    value={editorInput.cabinetType}
-                    onValueChange={(value) =>
-                      updateCabinetType(value as CabinetType)
-                    }
-                  >
-                    <SelectTrigger className="w-full">
-                      <SelectValue>
-                        {cabinetTypeLabels[editorInput.cabinetType]}
-                      </SelectValue>
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="base">وحدة أرضية</SelectItem>
-                      <SelectItem value="corner-l-base">
-                        ركنة زاوية 45° أرضية
-                      </SelectItem>
-                      <SelectItem value="corner-l-wall">
-                        ركنة زاوية 45° علوية
-                      </SelectItem>
-                      <SelectItem value="wall">وحدة معلقة</SelectItem>
-                      <SelectItem value="tall">وحدة طويلة</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <Label>الواجهة الأمامية</Label>
-                  <Select
-                    value={editorInput.frontOption}
-                    onValueChange={(value) =>
-                      setEditorInput((current) => ({
-                        ...current,
-                        frontOption: value as FrontOption,
-                      }))
-                    }
-                  >
-                    <SelectTrigger className="w-full">
-                      <SelectValue>
-                        {frontOptionLabels[editorInput.frontOption]}
-                      </SelectValue>
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="doors">بدلف</SelectItem>
-                      {isCornerBlindEditor ? null : (
-                        <SelectItem value="drawers">أدراج</SelectItem>
-                      )}
-                      {isCornerBlindEditor ? null : (
-                        <SelectItem value="mixed">أدراج + دلف</SelectItem>
-                      )}
-                      <SelectItem value="none">بدون دلف</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                {isCornerBlindEditor ? (
-                  <div className="space-y-2">
-                    <Label>موضع الزاوية</Label>
-                    <Select
-                      value={
-                        editorInput.cabinetType === "corner-l-wall"
-                          ? "wall"
-                          : "base"
-                      }
-                      onValueChange={(value) =>
-                        updateCornerPlacement(value as "base" | "wall")
-                      }
-                    >
-                      <SelectTrigger className="w-full">
-                        <SelectValue>
-                          {
-                            cornerPlacementLabels[
-                              editorInput.cabinetType === "corner-l-wall"
-                                ? "wall"
-                                : "base"
-                            ]
-                          }
-                        </SelectValue>
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="base">سفلية</SelectItem>
-                        <SelectItem value="wall">علوية</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                ) : null}
-                {isCornerBlindEditor ? (
-                  <div className="space-y-2">
-                    <Label>اتجاه الزاوية</Label>
-                    <Select
-                      value={editorInput.cornerHand}
-                      onValueChange={(value) =>
-                        setEditorInput((current) => ({
-                          ...current,
-                          cornerHand: value as CornerHand,
-                        }))
-                      }
-                    >
-                      <SelectTrigger className="w-full">
-                        <SelectValue>
-                          {cornerHandLabels[editorInput.cornerHand]}
-                        </SelectValue>
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="left">رجوع يسار</SelectItem>
-                        <SelectItem value="right">رجوع يمين</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                ) : null}
-                <div className="rounded-2xl border border-stone-200 bg-stone-50/80 px-4 py-3 xl:col-span-2">
-                  <p className="text-xs text-stone-500">إعدادات المشروع</p>
-                  <p className="mt-1 text-sm font-medium text-stone-950">
-                    {materialLabels[projectSettings.material]} •{" "}
-                    {formatMmFromCm(projectSettings.boardThickness)} • ظهر{" "}
-                    {formatMmFromCm(projectSettings.backThickness)}
-                  </p>
-                </div>
-              </div>
-
-              <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-                <div className="space-y-2">
-                  <Label>اتجاه الثمرة</Label>
-                  <Select
-                    value={editorInput.grainDirection}
-                    onValueChange={(value) =>
-                      setEditorInput((current) => ({
-                        ...current,
-                        grainDirection: value as GrainDirection,
-                      }))
-                    }
-                  >
-                    <SelectTrigger className="w-full">
-                      <SelectValue>
-                        {grainDirectionLabels[editorInput.grainDirection]}
-                      </SelectValue>
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="free">حر</SelectItem>
-                      <SelectItem value="length">طولي مع طول اللوح</SelectItem>
-                      <SelectItem value="width">عرضي مع عرض اللوح</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                {(editorInput.frontOption === "drawers" ||
-                  editorInput.frontOption === "mixed") && (
-                  <div className="space-y-2">
-                    <Label htmlFor="drawerCount">عدد الأدراج</Label>
-                    <Input
-                      id="drawerCount"
-                      inputMode="numeric"
-                      value={editorNumericDrafts.drawerCount}
-                      onChange={(event) =>
-                        updateNumber("drawerCount", event.target.value)
-                      }
-                    />
-                  </div>
-                )}
-
-                {(editorInput.frontOption === "doors" ||
-                  editorInput.frontOption === "mixed") && (
-                  <div className="space-y-2">
-                    <Label htmlFor="doorLeafCount">عدد الدلف</Label>
-                    <Input
-                      id="doorLeafCount"
-                      inputMode="numeric"
-                      value={editorNumericDrafts.doorLeafCount}
-                      onChange={(event) =>
-                        updateNumber("doorLeafCount", event.target.value)
-                      }
-                    />
-                  </div>
-                )}
-              </div>
-
-              <Separator />
-
-              <div className="grid gap-4 lg:grid-cols-[1.25fr_0.75fr]">
-                <div className="rounded-2xl border border-stone-200 bg-stone-50/70 p-4">
-                  <div className="flex items-center gap-2 text-sm font-medium text-stone-950">
-                    <ScanSearch className="size-4" />
-                    ملخص الوحدة الجاري إعدادها
-                  </div>
-                  <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                    <div className="rounded-xl bg-white p-3 ring-1 ring-stone-200">
-                      <p className="text-xs text-stone-500">الأبعاد الكلية</p>
-                      <p className="mt-1 text-sm font-medium text-stone-950">
-                        {hasEditorCoreDimensions
-                          ? `${formatCm(editorInput.width)} × ${formatCm(editorInput.height)} × ${formatCm(editorInput.depth)}`
-                          : "أدخل العرض والارتفاع والعمق لعرض الملخص"}
-                      </p>
-                    </div>
-                    {isCornerBlindEditor ? (
-                      <div className="rounded-xl bg-white p-3 ring-1 ring-stone-200">
-                        <p className="text-xs text-stone-500">بيانات الزاوية</p>
-                        <p className="mt-1 text-sm font-medium text-stone-950">
-                          {hasEditorCompleteDimensions
-                            ? `${
-                                cornerPlacementLabels[
-                                  editorInput.cabinetType === "corner-l-wall"
-                                    ? "wall"
-                                    : "base"
-                                ]
-                              } • ${cornerHandLabels[editorInput.cornerHand]} • ضلع ثانٍ ${formatCm(editorInput.returnDepth)}`
-                            : "حدد ضلع الرجوع لإكمال معاينة الزاوية"}
-                        </p>
-                      </div>
-                    ) : null}
-                    <div className="rounded-xl bg-white p-3 ring-1 ring-stone-200">
-                      <p className="text-xs text-stone-500">نوع الواجهة</p>
-                      <p className="mt-1 text-sm font-medium text-stone-950">
-                        {frontOptionLabels[editorInput.frontOption]}
-                      </p>
-                    </div>
-                    <div className="rounded-xl bg-white p-3 ring-1 ring-stone-200">
-                      <p className="text-xs text-stone-500">
-                        عدد الواجهات الظاهرة
-                      </p>
-                      <p className="mt-1 text-sm font-medium text-stone-950">
-                        {editorFrontPieceCount}
-                      </p>
-                    </div>
-                    <div className="rounded-xl bg-white p-3 ring-1 ring-stone-200">
-                      <p className="text-xs text-stone-500">الخامة المختارة</p>
-                      <p className="mt-1 text-sm font-medium text-stone-950">
-                        {materialLabels[projectSettings.material]}
-                      </p>
-                    </div>
-                    <div className="rounded-xl bg-white p-3 ring-1 ring-stone-200">
-                      <p className="text-xs text-stone-500">سمك اللوح</p>
-                      <p className="mt-1 text-sm font-medium text-stone-950">
-                        {formatMmFromCm(projectSettings.boardThickness)}
-                      </p>
-                    </div>
-                    <div className="rounded-xl bg-white p-3 ring-1 ring-stone-200">
-                      <p className="text-xs text-stone-500">سمك الظهر</p>
-                      <p className="mt-1 text-sm font-medium text-stone-950">
-                        {formatMmFromCm(projectSettings.backThickness)}
-                      </p>
-                    </div>
-                    <div className="rounded-xl bg-white p-3 ring-1 ring-stone-200">
-                      <p className="text-xs text-stone-500">اتجاه الثمرة</p>
-                      <p className="mt-1 text-sm font-medium text-stone-950">
-                        {grainDirectionLabels[editorInput.grainDirection]}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="rounded-2xl border border-stone-200 bg-stone-950 p-4 text-stone-50">
-                  <div className="flex items-center gap-2 text-sm font-medium">
-                    <Sparkles className="size-4" />
-                    مراجعة قبل الإضافة
-                  </div>
-                  {hasEditorCompleteDimensions &&
-                  editorReviewWarnings.length > 0 ? (
-                    <ul className="mt-4 space-y-3 text-sm text-stone-300">
-                      {editorReviewWarnings.map((warning) => (
-                        <li key={warning}>{warning}</li>
-                      ))}
-                    </ul>
-                  ) : (
-                    <ul className="mt-4 space-y-3 text-sm text-stone-300">
-                      {hasEditorCompleteDimensions ? (
-                        <>
-                          <li>
-                            المعاينة الحالية تعكس شكل الواجهة المختار بين الدلف
-                            والأدراج والمختلط.
-                          </li>
-                          <li>
-                            بعد إضافة الوحدات اضغط احسب لاستخراج مقاسات الوحدة
-                            المختارة من المشروع.
-                          </li>
-                          <li>
-                            يمكنك تحميل أي وحدة مضافة مرة أخرى إلى النموذج
-                            لتعديلها قبل الحساب.
-                          </li>
-                        </>
-                      ) : (
-                        <>
-                          <li>
-                            ابدأ بإدخال العرض والارتفاع والعمق أولًا حتى تظهر
-                            معاينة حقيقية للوحدة بدل الحالة الافتراضية.
-                          </li>
-                          <li>
-                            لو كانت الوحدة زاوية L، أدخل طول الضلع الثاني أيضًا
-                            قبل الاعتماد على المراجعة.
-                          </li>
-                          <li>
-                            بعد اكتمال المقاسات ستظهر التحذيرات الفعلية المرتبطة
-                            بالتصميم بدل التحذيرات المبدئية.
-                          </li>
-                        </>
-                      )}
-                    </ul>
+              return (
+                <button
+                  key={tab.id}
+                  type="button"
+                  onClick={() => setActiveWorkspaceTab(tab.id)}
+                  className={cn(
+                    "flex min-w-[10.5rem] shrink-0 items-center justify-between rounded-[1.35rem] border px-4 py-3 text-right transition-colors",
+                    isActive
+                      ? "border-stone-950 bg-stone-950 text-stone-50"
+                      : "border-stone-200 bg-white/88 text-stone-700",
                   )}
-                </div>
-              </div>
-            </CardContent>
-            <CardFooter className="flex flex-col gap-3 border-t border-stone-200/80 bg-stone-50/80 sm:flex-row sm:items-center sm:justify-between">
-              <p className="text-xs text-stone-500">
-                أضف الوحدات أولًا، ثم احسب المشروع عند الانتهاء بدل الحساب
-                التلقائي مع كل تغيير.
-              </p>
-              <div className="flex w-full gap-2 sm:w-auto">
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="flex-1 sm:flex-none"
-                  onClick={() => setIsUnitPresetOpen(true)}
                 >
-                  <Box className="size-4" />
-                  وحدات جاهزة
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="flex-1 sm:flex-none"
-                  onClick={() => resetEditor(units.length)}
-                >
-                  إعادة ضبط النموذج
-                </Button>
-                <Button
-                  type="button"
-                  className="flex-1 sm:flex-none"
-                  onClick={saveUnit}
-                >
-                  <Plus className="size-4" />
-                  {editingUnitId ? "حفظ تعديل الوحدة" : "إضافة وحدة"}
-                </Button>
-              </div>
-            </CardFooter>
-          </Card>
-
-          <div className="grid gap-6">
-            <Card
-              id="project-units-list"
-              className="border-0 bg-white/88 shadow-[0_20px_60px_-45px_rgba(63,40,12,0.55)] ring-1 ring-stone-950/8"
-            >
-              <CardHeader>
-                <CardTitle>3D للوحدة الحالية</CardTitle>
-                <CardDescription>
-                  المعاينة هنا خاصة بالوحدة الجاري إعدادها قبل إضافتها أو
-                  تعديلها داخل المشروع.
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="relative overflow-hidden rounded-[1.5rem] border border-stone-200 bg-[linear-gradient(180deg,#faf7f2_0%,#efe7db_100%)] p-6">
-                  <div className="absolute inset-x-0 top-0 h-20 bg-[radial-gradient(circle_at_top,rgba(97,74,42,0.12),transparent_60%)]" />
-                  <div className="relative space-y-4">
-                    {hasEditorCompleteDimensions ? (
-                      <Suspense fallback={previewFallback}>
-                        <CabinetPreview
-                          input={editorInput}
-                          result={editorResult}
-                          selectedPartId={selectedPartId}
-                        />
-                      </Suspense>
-                    ) : (
-                      <div className="flex h-72 w-full items-center justify-center rounded-[1.25rem] border border-dashed border-stone-300 bg-white/65 px-6 text-center text-sm leading-7 text-stone-500">
-                        أدخل المقاسات الأساسية للوحدة لتظهر المعاينة ثلاثية
-                        الأبعاد والقطع المتوقعة بشكل صحيح.
-                      </div>
-                    )}
-                    <div className="grid gap-3 sm:grid-cols-3">
-                      <div className="rounded-xl bg-white/80 p-3 text-center ring-1 ring-stone-200">
-                        <p className="text-xs text-stone-500">اسم الوحدة</p>
-                        <p className="mt-1 text-sm font-medium text-stone-950">
-                          {editorTitle}
-                        </p>
-                      </div>
-                      <div className="rounded-xl bg-white/80 p-3 text-center ring-1 ring-stone-200">
-                        <p className="text-xs text-stone-500">نوع الواجهة</p>
-                        <p className="mt-1 text-sm font-medium text-stone-950">
-                          {frontOptionLabels[editorInput.frontOption]}
-                        </p>
-                      </div>
-                      <div className="rounded-xl bg-white/80 p-3 text-center ring-1 ring-stone-200">
-                        <p className="text-xs text-stone-500">عدد الواجهات</p>
-                        <p className="mt-1 text-sm font-medium text-stone-950">
-                          {hasEditorCompleteDimensions
-                            ? editorFrontPieceCount
-                            : "--"}
-                        </p>
-                      </div>
-                      <div className="rounded-xl bg-white/80 p-3 text-center ring-1 ring-stone-200">
-                        <p className="text-xs text-stone-500">اتجاه الثمرة</p>
-                        <p className="mt-1 text-sm font-medium text-stone-950">
-                          {grainDirectionLabels[editorInput.grainDirection]}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            {units.length > 1 ? (
-              <Card className="border-0 bg-white/88 shadow-[0_20px_60px_-45px_rgba(63,40,12,0.55)] ring-1 ring-stone-950/8">
-                <CardHeader>
-                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                    <div>
-                      <CardTitle>3D لترتيب المشروع</CardTitle>
-                      <CardDescription>
-                        راقب شكل المشروع النهائي، اسحب الوحدة بزرار الماوس
-                        الشمال لتحريكها في المكان الذي تريده، واسحب بزرار الماوس
-                        اليمين لتغيير زاوية العرض قبل عرضها على العميل.
-                      </CardDescription>
-                    </div>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={resetProjectArrangement}
+                  <div className="flex items-center gap-3">
+                    <span
+                      className={cn(
+                        "flex size-10 items-center justify-center rounded-full",
+                        isActive ? "bg-white/10" : "bg-stone-100",
+                      )}
                     >
-                      إعادة ضبط الترتيب
-                    </Button>
-                  </div>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <Suspense fallback={previewFallback}>
-                    <ProjectPreview
-                      units={projectPreviewUnits.map((unit) => ({
-                        ...unit,
-                        active: unit.id === activeProjectPreviewUnit?.id,
-                      }))}
-                      onSelectUnit={setActiveProjectUnitId}
-                      onUnitPositionChange={updateProjectUnitPosition}
-                    />
-                  </Suspense>
-
-                  <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-                    {projectPreviewUnits.map((unit, index) => {
-                      const isActive = activeProjectPreviewUnit?.id === unit.id;
-
-                      return (
-                        <div
-                          key={unit.id}
-                          className={cn(
-                            "rounded-2xl border p-4 ring-1",
-                            isActive
-                              ? "border-amber-300 bg-amber-50/70 ring-amber-200"
-                              : "border-stone-200 bg-stone-50/80 ring-stone-200",
-                          )}
-                        >
-                          <button
-                            type="button"
-                            className="w-full text-right"
-                            onClick={() => setActiveProjectUnitId(unit.id)}
-                          >
-                            <p className="font-medium text-stone-950">
-                              {unit.title}
-                            </p>
-                            <p className="mt-1 text-xs text-stone-500">
-                              ترتيب {index + 1} • جانبي {formatCm(unit.offsetX)}{" "}
-                              • ارتفاع {formatCm(unit.offsetY)} • عمق{" "}
-                              {formatCm(unit.offsetZ)} • دوران {unit.rotationY}°
-                            </p>
-                          </button>
-
-                          <div className="mt-4 flex flex-wrap gap-2">
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="sm"
-                              onClick={() =>
-                                moveProjectUnitOrder(unit.id, "backward")
-                              }
-                              disabled={index === 0}
-                            >
-                              <ArrowRight className="size-4" />
-                              تقديم
-                            </Button>
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="sm"
-                              onClick={() =>
-                                moveProjectUnitOrder(unit.id, "forward")
-                              }
-                              disabled={
-                                index === projectPreviewUnits.length - 1
-                              }
-                            >
-                              <ArrowLeft className="size-4" />
-                              تأخير
-                            </Button>
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="sm"
-                              onClick={() => rotateProjectUnit(unit.id, -90)}
-                            >
-                              <RotateCcw className="size-4" />
-                              لف يسار
-                            </Button>
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="sm"
-                              onClick={() => rotateProjectUnit(unit.id, 90)}
-                            >
-                              <RotateCw className="size-4" />
-                              لف يمين
-                            </Button>
-                          </div>
-
-                          <div className="mt-3 grid grid-cols-2 gap-2">
-                            <Button
-                              type="button"
-                              variant="secondary"
-                              size="sm"
-                              onClick={() =>
-                                nudgeProjectUnit(unit.id, "x", -10)
-                              }
-                            >
-                              <ArrowRight className="size-4" />
-                              يمين
-                            </Button>
-                            <Button
-                              type="button"
-                              variant="secondary"
-                              size="sm"
-                              onClick={() => nudgeProjectUnit(unit.id, "x", 10)}
-                            >
-                              <ArrowLeft className="size-4" />
-                              يسار
-                            </Button>
-                            <Button
-                              type="button"
-                              variant="secondary"
-                              size="sm"
-                              onClick={() =>
-                                nudgeProjectUnit(unit.id, "z", -10)
-                              }
-                            >
-                              <ArrowUp className="size-4" />
-                              للأمام
-                            </Button>
-                            <Button
-                              type="button"
-                              variant="secondary"
-                              size="sm"
-                              onClick={() => nudgeProjectUnit(unit.id, "z", 10)}
-                            >
-                              <ArrowDown className="size-4" />
-                              للخلف
-                            </Button>
-                            <Button
-                              type="button"
-                              variant="secondary"
-                              size="sm"
-                              onClick={() => nudgeProjectUnit(unit.id, "y", 10)}
-                            >
-                              <ArrowUp className="size-4" />
-                              لفوق
-                            </Button>
-                            <Button
-                              type="button"
-                              variant="secondary"
-                              size="sm"
-                              onClick={() =>
-                                nudgeProjectUnit(unit.id, "y", -10)
-                              }
-                            >
-                              <ArrowDown className="size-4" />
-                              لتحت
-                            </Button>
-                          </div>
-
-                          <p className="mt-3 text-[11px] leading-5 text-stone-500">
-                            الوحدات الأرضية تبدأ تحت تلقائيًا، والوحدات المعلقة
-                            تبدأ فوق تلقائيًا ويمكنك ضبط مكان كل وحدة كما تريد.
-                          </p>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </CardContent>
-              </Card>
-            ) : null}
-
-            <Card className="border-0 bg-white/88 shadow-[0_20px_60px_-45px_rgba(63,40,12,0.55)] ring-1 ring-stone-950/8">
-              <CardHeader>
-                <div className="flex items-center justify-between gap-3">
-                  <div>
-                    <CardTitle>قائمة الوحدات المضافة</CardTitle>
-                    <CardDescription>
-                      أضف كل الوحدات هنا، ثم اضغط احسب لاستخراج المقاسات
-                      النهائية للمشروع.
-                    </CardDescription>
-                  </div>
-                  <Badge
-                    variant="outline"
-                    className="border-stone-200 bg-stone-50 text-stone-700"
-                  >
-                    {units.length} وحدة
-                  </Badge>
-                </div>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                {unitFeedback ? (
-                  <div className="rounded-2xl border border-emerald-200 bg-emerald-50/80 p-4 text-sm text-emerald-900 ring-1 ring-emerald-100">
-                    <div className="flex items-center gap-2 font-medium">
-                      <Sparkles className="size-4" />
-                      تم تحديث قائمة الوحدات
-                    </div>
-                    <p className="mt-2 text-sm leading-6 text-emerald-800">
-                      {unitFeedback.message}
-                    </p>
-                  </div>
-                ) : null}
-                {units.length === 0 ? (
-                  <div className="rounded-2xl border border-dashed border-stone-300 bg-stone-50/80 p-6 text-center text-sm text-stone-500">
-                    أضف أول وحدة من النموذج الحالي لتبدأ تكوين المشروع.
-                  </div>
-                ) : (
-                  units.map((unit) => {
-                    const unitResult = calculateCabinetCutlist(unit);
-                    const isActive = selectedCalculatedUnitId === unit.id;
-                    const isRecentlySaved = unitFeedback?.unitId === unit.id;
-
-                    return (
-                      <div
-                        key={unit.id}
+                      <Icon className="size-4" />
+                    </span>
+                    <div>
+                      <p className="text-sm font-semibold">{tab.label}</p>
+                      <p
                         className={cn(
-                          "rounded-2xl border bg-stone-50/80 p-4 ring-1 transition-colors",
-                          isActive
-                            ? "border-amber-300 bg-amber-50/70 ring-amber-200"
-                            : isRecentlySaved
-                              ? "border-emerald-300 bg-emerald-50/80 ring-emerald-200"
-                              : "border-stone-200 ring-stone-200",
+                          "text-[11px]",
+                          isActive ? "text-stone-300" : "text-stone-500",
                         )}
                       >
-                        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                          <div className="space-y-1">
-                            <p className="font-medium text-stone-950">
-                              {unit.title}
-                            </p>
-                            <p className="text-xs text-stone-500">
-                              {cabinetTypeLabels[unit.cabinetType]} •{" "}
-                              {formatCm(unit.width)} × {formatCm(unit.height)} ×{" "}
-                              {formatCm(unit.depth)}
-                            </p>
-                            {unit.cabinetType === "corner-l-base" ||
-                            unit.cabinetType === "corner-l-wall" ? (
-                              <p className="text-xs text-stone-500">
-                                {
-                                  cornerPlacementLabels[
-                                    unit.cabinetType === "corner-l-wall"
-                                      ? "wall"
-                                      : "base"
-                                  ]
-                                }{" "}
-                                • {cornerHandLabels[unit.cornerHand]} • ضلع ثانٍ{" "}
-                                {formatCm(unit.returnDepth)}
-                              </p>
-                            ) : null}
-                            <p className="text-xs text-stone-500">
-                              {frontOptionLabels[unit.frontOption]} •{" "}
-                              {getFrontPieceCount(unitResult)} واجهة •{" "}
-                              {unit.shelfCount} رف
-                            </p>
-                            {isRecentlySaved ? (
-                              <p className="text-xs font-medium text-emerald-700">
-                                آخر وحدة تم حفظها في المشروع.
-                              </p>
-                            ) : null}
-                          </div>
-                          <div className="flex gap-2">
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="sm"
-                              onClick={() => duplicateUnit(unit)}
-                            >
-                              نسخ الوحدة
-                            </Button>
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="sm"
-                              onClick={() => loadUnitIntoEditor(unit)}
-                            >
-                              تحميل للتعديل
-                            </Button>
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="icon"
-                              onClick={() => removeUnit(unit.id)}
-                            >
-                              <Trash2 className="size-4" />
-                            </Button>
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })
-                )}
-              </CardContent>
-              <CardFooter className="flex flex-col gap-3 border-t border-stone-200/80 bg-stone-50/80 sm:flex-row sm:items-center sm:justify-between">
-                <p className="text-xs text-stone-500">
-                  الحساب يعتمد فقط على الوحدات الموجودة في هذه القائمة.
-                </p>
-                <Button
-                  type="button"
-                  className="w-full sm:w-auto"
-                  onClick={calculateUnits}
-                  disabled={units.length === 0}
-                >
-                  <Calculator className="size-4" />
-                  احسب المشروع
-                </Button>
-              </CardFooter>
-            </Card>
+                        {tab.badge}
+                      </p>
+                    </div>
+                  </div>
+                </button>
+              );
+            })}
           </div>
         </section>
 
-        {calculatedViews.length > 0 ? (
-          <>
-            <section className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-7">
-              <Card className="border-0 bg-white/88 ring-1 ring-stone-950/8">
-                <CardContent className="p-4">
-                  <p className="text-xs text-stone-500">الوحدات المحسوبة</p>
-                  <p className="mt-2 text-lg font-semibold text-stone-950">
-                    {projectSummary.unitCount}
-                  </p>
+        {activeWorkspaceTab === "project" ? (
+          <section className="mt-6 grid gap-6 xl:grid-cols-[1.05fr_0.95fr]">
+            <Card className="border-0 bg-white/88 shadow-[0_20px_60px_-45px_rgba(63,40,12,0.55)] ring-1 ring-stone-950/8">
+              <CardHeader>
+                <CardTitle>إدارة المشروع</CardTitle>
+                <CardDescription>
+                  اختصارات الإدارة والحفظ والإخراج مجمعة هنا بدل التنقل داخل
+                  الصفحة كاملة.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="projectNamePanel">اسم المشروع</Label>
+                  <Input
+                    id="projectNamePanel"
+                    value={projectName}
+                    onChange={(event) => setProjectName(event.target.value)}
+                    className="h-11 bg-white"
+                  />
+                </div>
+
+                <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                  <div className="rounded-2xl border border-stone-200 bg-stone-50/80 p-4">
+                    <p className="text-xs text-stone-500">الوحدات الحالية</p>
+                    <p className="mt-2 text-lg font-semibold text-stone-950">
+                      {units.length}
+                    </p>
+                  </div>
+                  <div className="rounded-2xl border border-stone-200 bg-stone-50/80 p-4">
+                    <p className="text-xs text-stone-500">المقاسات الحرة</p>
+                    <p className="mt-2 text-lg font-semibold text-stone-950">
+                      {customParts.length}
+                    </p>
+                  </div>
+                  <div className="rounded-2xl border border-stone-200 bg-stone-50/80 p-4">
+                    <p className="text-xs text-stone-500">المحفوظات</p>
+                    <p className="mt-2 text-lg font-semibold text-stone-950">
+                      {savedProjects.length}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={resetProjectWorkspace}
+                  >
+                    <Plus className="size-4" />
+                    مشروع جديد
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={saveCurrentProject}
+                  >
+                    <Save className="size-4" />
+                    حفظ المشروع
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => setIsProjectLibraryOpen(true)}
+                  >
+                    <FolderOpen className="size-4" />
+                    المشاريع
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => setIsProjectSettingsOpen(true)}
+                  >
+                    <Settings2 className="size-4" />
+                    الإعدادات
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={exportProjectCsv}
+                    disabled={projectParts.length === 0}
+                  >
+                    <Download className="size-4" />
+                    CSV
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={printProjectSummary}
+                    disabled={projectParts.length === 0}
+                  >
+                    <Printer className="size-4" />
+                    طباعة
+                  </Button>
+                </div>
+
+                {projectActionMessage ? (
+                  <div className="rounded-2xl border border-emerald-200 bg-emerald-50/80 p-4 text-sm text-emerald-800">
+                    {projectActionMessage}
+                  </div>
+                ) : null}
+              </CardContent>
+            </Card>
+
+            <div className="grid gap-6">
+              <Card className="border-0 bg-white/88 shadow-[0_20px_60px_-45px_rgba(63,40,12,0.55)] ring-1 ring-stone-950/8">
+                <CardHeader>
+                  <CardTitle>ملخص الإعدادات الحالية</CardTitle>
+                  <CardDescription>
+                    القيم التي ستُطبق على الوحدات والنتائج في هذا المشروع.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-3 text-sm text-stone-600">
+                  <div className="rounded-2xl bg-stone-50/80 p-4 ring-1 ring-stone-200">
+                    <p className="font-medium text-stone-950">
+                      {materialLabels[projectSettings.material]} •{" "}
+                      {formatMmFromCm(projectSettings.boardThickness)} • ظهر{" "}
+                      {formatMmFromCm(projectSettings.backThickness)}
+                    </p>
+                    <p className="mt-2 text-xs leading-6 text-stone-500">
+                      لوح 18:{" "}
+                      {formatSheetSize(
+                        projectSettings.boardSheetLength,
+                        projectSettings.boardSheetWidth,
+                      )}{" "}
+                      • لوح 6:{" "}
+                      {formatSheetSize(
+                        projectSettings.backSheetLength,
+                        projectSettings.backSheetWidth,
+                      )}
+                    </p>
+                    <p className="mt-1 text-xs leading-6 text-stone-500">
+                      سلاح: {formatOptionalMmFromCm(projectSettings.cutKerf)} •
+                      حافة تشطيب:{" "}
+                      {formatOptionalMmFromCm(projectSettings.trimMargin)}
+                    </p>
+                  </div>
                 </CardContent>
               </Card>
-              <Card className="border-0 bg-white/88 ring-1 ring-stone-950/8">
-                <CardContent className="p-4">
-                  <p className="text-xs text-stone-500">إجمالي القطع</p>
-                  <p className="mt-2 text-lg font-semibold text-stone-950">
-                    {projectSummary.totalPanels}
-                  </p>
-                </CardContent>
-              </Card>
-              <Card className="border-0 bg-white/88 ring-1 ring-stone-950/8">
-                <CardContent className="p-4">
-                  <p className="text-xs text-stone-500">إجمالي الألواح</p>
-                  <p className="mt-2 text-lg font-semibold text-stone-950">
-                    {projectSummary.totalSheets}
-                  </p>
-                </CardContent>
-              </Card>
-              <Card className="border-0 bg-white/88 ring-1 ring-stone-950/8">
-                <CardContent className="p-4">
-                  <p className="text-xs text-stone-500">إجمالي الاستهلاك</p>
-                  <p className="mt-2 text-lg font-semibold text-stone-950">
-                    {projectSummary.totalAreaM2} م²
-                  </p>
-                </CardContent>
-              </Card>
-              <Card className="border-0 bg-white/88 ring-1 ring-stone-950/8">
-                <CardContent className="p-4">
-                  <p className="text-xs text-stone-500">تكلفة الألواح</p>
-                  <p className="mt-2 text-lg font-semibold text-stone-950">
-                    {formatPrice(projectSummary.totalSheetCost)}
-                  </p>
-                </CardContent>
-              </Card>
-              <Card className="border-0 bg-white/88 ring-1 ring-stone-950/8">
-                <CardContent className="p-4">
-                  <p className="text-xs text-stone-500">المصنعية</p>
-                  <p className="mt-2 text-lg font-semibold text-stone-950">
-                    {formatPrice(projectSummary.totalLaborCost)}
-                  </p>
-                </CardContent>
-              </Card>
-              <Card className="border-0 bg-white/88 ring-1 ring-stone-950/8">
-                <CardContent className="p-4">
-                  <p className="text-xs text-stone-500">تكلفة شريط الحافة</p>
-                  <p className="mt-2 text-lg font-semibold text-stone-950">
-                    {formatPrice(projectSummary.totalEdgeBandCost)}
-                  </p>
-                </CardContent>
-              </Card>
+
               <Card className="border-0 bg-stone-950 text-stone-50 ring-0">
-                <CardContent className="p-4">
-                  <p className="text-xs text-stone-300">إجمالي التكلفة</p>
-                  <p className="mt-2 text-lg font-semibold">
-                    {formatPrice(projectSummary.totalProjectCost)}
-                  </p>
-                </CardContent>
-              </Card>
-            </section>
-
-            <section className="mt-6">
-              <Card className="border-0 bg-white/88 shadow-[0_20px_60px_-45px_rgba(63,40,12,0.55)] ring-1 ring-stone-950/8">
                 <CardHeader>
-                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                    <div>
-                      <CardTitle>كشف خامات وتكلفة لكل وحدة</CardTitle>
-                      <CardDescription>
-                        استهلاك الخامات والتكلفة التفصيلية لكل وحدة قبل تجميع
-                        المشروع بالكامل.
-                      </CardDescription>
-                    </div>
-                    <Badge
-                      variant="secondary"
-                      className="w-fit bg-stone-100 text-stone-700"
-                    >
-                      {unitCostSummaries.length} وحدة
-                    </Badge>
+                  <div className="flex items-center gap-2">
+                    <Info className="size-4" />
+                    <Layers2 className="size-4" />
+                    <CardTitle>وضع المحرك الحالي</CardTitle>
                   </div>
-                </CardHeader>
-                <CardContent>
-                  <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-                    {unitCostSummaries.map((summary) => (
-                      <div
-                        key={summary.unitId}
-                        className="rounded-[1.5rem] border border-stone-200 bg-[linear-gradient(180deg,rgba(252,250,247,0.95),rgba(243,236,227,0.82))] p-4 shadow-[0_18px_44px_-36px_rgba(63,40,12,0.4)]"
-                      >
-                        <div className="flex items-start justify-between gap-3">
-                          <div>
-                            <p className="text-sm font-semibold text-stone-950">
-                              {summary.unitTitle}
-                            </p>
-                            <p className="mt-1 text-xs text-stone-500">
-                              {summary.panelCount} قطعة • {summary.totalAreaM2}{" "}
-                              م²
-                            </p>
-                          </div>
-                          <Badge
-                            variant="outline"
-                            className="border-amber-200 bg-amber-50 text-amber-800"
-                          >
-                            {formatPrice(summary.totalCost)}
-                          </Badge>
-                        </div>
-
-                        <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
-                          <div className="rounded-xl bg-white/75 p-3 ring-1 ring-stone-200">
-                            <p className="text-[11px] text-stone-500">
-                              ألواح 18 مم
-                            </p>
-                            <p className="mt-1 font-semibold text-stone-950">
-                              {summary.boardSheetCount} لوح
-                            </p>
-                            <p className="mt-1 text-[11px] text-stone-500">
-                              استخدام {summary.boardUsedAreaM2} م²
-                            </p>
-                          </div>
-                          <div className="rounded-xl bg-white/75 p-3 ring-1 ring-stone-200">
-                            <p className="text-[11px] text-stone-500">
-                              ألواح 6 مم
-                            </p>
-                            <p className="mt-1 font-semibold text-stone-950">
-                              {summary.backSheetCount} لوح
-                            </p>
-                            <p className="mt-1 text-[11px] text-stone-500">
-                              استخدام {summary.backUsedAreaM2} م²
-                            </p>
-                          </div>
-                        </div>
-
-                        <div className="mt-3 space-y-2 rounded-xl bg-stone-950/[0.03] p-3 ring-1 ring-stone-200 text-xs text-stone-600">
-                          <div className="flex items-center justify-between gap-3">
-                            <span>تكلفة الألواح</span>
-                            <span className="font-medium text-stone-900">
-                              {formatPrice(summary.sheetCost)}
-                            </span>
-                          </div>
-                          <div className="flex items-center justify-between gap-3">
-                            <span>المصنعية</span>
-                            <span className="font-medium text-stone-900">
-                              {formatPrice(summary.laborCost)}
-                            </span>
-                          </div>
-                          <div className="flex items-center justify-between gap-3">
-                            <span>شريط الحافة</span>
-                            <span className="font-medium text-stone-900">
-                              {summary.edgeBandLengthM} م ط •{" "}
-                              {formatPrice(summary.edgeBandCost)}
-                            </span>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </CardContent>
-              </Card>
-            </section>
-
-            <section className="mt-6">
-              <Card className="border-0 bg-white/88 shadow-[0_20px_60px_-45px_rgba(63,40,12,0.55)] ring-1 ring-stone-950/8">
-                <CardHeader>
-                  <CardTitle>نتيجة المشروع المجمعة</CardTitle>
-                  <CardDescription>
-                    النتائج التالية تجمع كل الوحدات التي كانت موجودة عند آخر ضغط
-                    على زر احسب المشروع، بينما تبقى قائمة الوحدات أعلى الصفحة
-                    مخصصة للتعديل فقط.
+                  <CardDescription className="text-stone-300">
+                    المشروع أصبح يدعم تجميع وحدات متعددة مع أوضاع واجهات مختلفة
+                    قبل تنفيذ الحساب النهائي.
                   </CardDescription>
                 </CardHeader>
               </Card>
-            </section>
+            </div>
+          </section>
+        ) : null}
 
-            <section className="mt-6 space-y-6">
-              <Card className="border-0 bg-white/88 shadow-[0_20px_60px_-45px_rgba(63,40,12,0.55)] ring-1 ring-stone-950/8">
-                <CardHeader>
-                  <div className="flex items-center justify-between gap-3">
-                    <div>
-                      <CardTitle>توزيع ألواح المشروع</CardTitle>
-                      <CardDescription>
-                        هذا التوزيع مبني على إجمالي القطع المجمعة من كل الوحدات
-                        المضافة وقت الحساب.
-                      </CardDescription>
-                    </div>
-                    <Badge
-                      variant="outline"
-                      className="border-stone-200 bg-stone-50 text-stone-700"
+        {activeWorkspaceTab === "builder" ? (
+          <>
+            <section className="mt-6">
+              <div className="grid gap-2 sm:grid-cols-3">
+                {builderTabs.map((tab) => {
+                  const isActive = activeBuilderTab === tab.id;
+
+                  return (
+                    <button
+                      key={tab.id}
+                      type="button"
+                      onClick={() => setActiveBuilderTab(tab.id)}
+                      className={cn(
+                        "rounded-[1.35rem] border p-4 text-right transition-colors",
+                        isActive
+                          ? "border-amber-300 bg-amber-50/80 ring-1 ring-amber-200"
+                          : "border-stone-200 bg-white/88",
+                      )}
                     >
-                      {projectLayoutSheetCount} لوح /{" "}
-                      {projectSheetLayout?.stocks.length ?? 0} خامة
-                    </Badge>
-                  </div>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  {projectSheetLayout?.stocks.map((stock) => (
-                    <div
-                      key={stock.key}
-                      className="rounded-2xl border border-stone-200 bg-stone-50/70 p-3"
-                    >
-                      <div className="mb-4 flex flex-col gap-2 rounded-xl bg-white/90 p-3 ring-1 ring-stone-200 sm:flex-row sm:items-center sm:justify-between">
-                        <div>
-                          <p className="text-sm font-medium text-stone-950">
-                            {getStockLabel(stock.thickness, stock.isBackStock)}
-                          </p>
-                          <p className="text-xs text-stone-500">
-                            {stock.materialSummary} • {stock.partCount} قطعة •{" "}
-                            {stock.sheets.length} لوح •{" "}
-                            {formatSheetSize(
-                              stock.boardLength,
-                              stock.boardWidth,
-                            )}
-                          </p>
-                        </div>
-                        <p className="text-xs text-stone-500">
-                          استهلاك هذه المجموعة {stock.totalAreaM2} م²
-                        </p>
-                        <p className="text-xs text-stone-500">
-                          الهالك داخل هذه المجموعة {getStockWasteAreaM2(stock)}{" "}
-                          م²
-                        </p>
-                      </div>
-
-                      <div className="space-y-4">
-                        {stock.sheets.map((sheet) => (
-                          <div
-                            key={`${stock.key}-${sheet.index}`}
-                            className="rounded-2xl border border-stone-200 bg-white/80 p-3"
-                          >
-                            <div className="mb-3 flex items-center justify-between text-xs text-stone-500">
-                              <span>لوح #{sheet.index + 1}</span>
-                              <span>
-                                مستخدم طوليًا {formatCm(sheet.usedLength)} من{" "}
-                                {formatCm(stock.boardLength)}
-                              </span>
-                            </div>
-                            <div className="rounded-xl border border-stone-200 bg-[linear-gradient(180deg,#f8f4ee_0%,#f2ece3_100%)] p-3">
-                              <svg
-                                viewBox={`-18 -18 ${stock.boardWidth + 36} ${stock.boardLength + 36}`}
-                                className="w-full rounded-xl bg-white shadow-[inset_0_0_0_1px_rgba(214,206,194,0.9)]"
-                                preserveAspectRatio="xMidYMid meet"
-                                role="img"
-                                aria-label={`${stock.key} sheet ${sheet.index + 1} layout`}
-                              >
-                                <line
-                                  x1="0"
-                                  y1="-10"
-                                  x2={stock.boardWidth}
-                                  y2="-10"
-                                  stroke="#9b8a75"
-                                  strokeWidth="0.9"
-                                />
-                                <line
-                                  x1="0"
-                                  y1="-13.5"
-                                  x2="0"
-                                  y2="-6.5"
-                                  stroke="#9b8a75"
-                                  strokeWidth="0.9"
-                                />
-                                <line
-                                  x1={stock.boardWidth}
-                                  y1="-13.5"
-                                  x2={stock.boardWidth}
-                                  y2="-6.5"
-                                  stroke="#9b8a75"
-                                  strokeWidth="0.9"
-                                />
-                                <text
-                                  x={stock.boardWidth / 2}
-                                  y="-12.5"
-                                  textAnchor="middle"
-                                  dominantBaseline="ideographic"
-                                  fontSize="5.2"
-                                  fontWeight="700"
-                                  fill="#6b5a45"
-                                >
-                                  عرض اللوح {formatCm(stock.boardWidth)}
-                                </text>
-                                <line
-                                  x1={stock.boardWidth + 10}
-                                  y1="0"
-                                  x2={stock.boardWidth + 10}
-                                  y2={stock.boardLength}
-                                  stroke="#9b8a75"
-                                  strokeWidth="0.9"
-                                />
-                                <line
-                                  x1={stock.boardWidth + 6.5}
-                                  y1="0"
-                                  x2={stock.boardWidth + 13.5}
-                                  y2="0"
-                                  stroke="#9b8a75"
-                                  strokeWidth="0.9"
-                                />
-                                <line
-                                  x1={stock.boardWidth + 6.5}
-                                  y1={stock.boardLength}
-                                  x2={stock.boardWidth + 13.5}
-                                  y2={stock.boardLength}
-                                  stroke="#9b8a75"
-                                  strokeWidth="0.9"
-                                />
-                                <text
-                                  x={stock.boardWidth + 14}
-                                  y={stock.boardLength / 2}
-                                  textAnchor="middle"
-                                  dominantBaseline="middle"
-                                  fontSize="5.2"
-                                  fontWeight="700"
-                                  fill="#6b5a45"
-                                  transform={`rotate(90 ${stock.boardWidth + 14} ${stock.boardLength / 2})`}
-                                >
-                                  طول اللوح {formatCm(stock.boardLength)}
-                                </text>
-                                <rect
-                                  x="0"
-                                  y="0"
-                                  width={stock.boardWidth}
-                                  height={stock.boardLength}
-                                  fill="#fcfaf7"
-                                  stroke="#d6cec2"
-                                  strokeWidth="1"
-                                  rx="4"
-                                />
-                                {sheet.pieces.map((piece) => {
-                                  const pieceLabel =
-                                    getSheetPieceLabelMode(piece);
-                                  const displayPiece = pieceLabel.displayPiece;
-                                  const aggregatedPart =
-                                    aggregatedProjectPartMap.get(
-                                      piece.sourcePartId,
-                                    );
-                                  const projectPartLink =
-                                    projectPartLinkMap.get(piece.sourcePartId);
-                                  const edgeThickness = Math.max(
-                                    1.4,
-                                    Math.min(
-                                      Math.min(
-                                        displayPiece.width,
-                                        displayPiece.height,
-                                      ) * 0.08,
-                                      3.2,
-                                    ),
-                                  );
-                                  const edgeRects = [
-                                    {
-                                      edge: "top" as const,
-                                      x: displayPiece.x,
-                                      y: displayPiece.y,
-                                      width: displayPiece.width,
-                                      height: edgeThickness,
-                                    },
-                                    {
-                                      edge: "right" as const,
-                                      x:
-                                        displayPiece.x +
-                                        displayPiece.width -
-                                        edgeThickness,
-                                      y: displayPiece.y,
-                                      width: edgeThickness,
-                                      height: displayPiece.height,
-                                    },
-                                    {
-                                      edge: "bottom" as const,
-                                      x: displayPiece.x,
-                                      y:
-                                        displayPiece.y +
-                                        displayPiece.height -
-                                        edgeThickness,
-                                      width: displayPiece.width,
-                                      height: edgeThickness,
-                                    },
-                                    {
-                                      edge: "left" as const,
-                                      x: displayPiece.x,
-                                      y: displayPiece.y,
-                                      width: edgeThickness,
-                                      height: displayPiece.height,
-                                    },
-                                  ];
-
-                                  return (
-                                    <g key={piece.id}>
-                                      <rect
-                                        x={displayPiece.x}
-                                        y={displayPiece.y}
-                                        width={displayPiece.width}
-                                        height={displayPiece.height}
-                                        className="cursor-pointer"
-                                        onClick={() =>
-                                          handlePartSelection(
-                                            piece.sourcePartId,
-                                          )
-                                        }
-                                        fill={
-                                          piece.category === "front"
-                                            ? "#c88f5a"
-                                            : piece.category === "back"
-                                              ? "#90a4ae"
-                                              : piece.category === "shelf"
-                                                ? "#6f8f72"
-                                                : piece.category === "support"
-                                                  ? "#d8c178"
-                                                  : "#9a7b5f"
-                                        }
-                                        fillOpacity={
-                                          selectedPartId === piece.sourcePartId
-                                            ? "1"
-                                            : "0.82"
-                                        }
-                                        stroke={
-                                          selectedPartId === piece.sourcePartId
-                                            ? "#1f2937"
-                                            : "#fff"
-                                        }
-                                        strokeWidth={
-                                          selectedPartId === piece.sourcePartId
-                                            ? "2"
-                                            : "0.8"
-                                        }
-                                        rx="1.5"
-                                      />
-                                      {aggregatedPart
-                                        ? edgeRects.map((edgeRect) => {
-                                            const logicalSide =
-                                              getVisualEdgeSide(
-                                                piece,
-                                                edgeRect.edge,
-                                              );
-                                            const isActive =
-                                              aggregatedPart.part.edgeBanding[
-                                                logicalSide
-                                              ] ?? false;
-
-                                            return (
-                                              <rect
-                                                key={`${piece.id}-${edgeRect.edge}`}
-                                                x={edgeRect.x}
-                                                y={edgeRect.y}
-                                                width={edgeRect.width}
-                                                height={edgeRect.height}
-                                                rx="1"
-                                                className="cursor-pointer"
-                                                fill={
-                                                  isActive
-                                                    ? "#f3b04d"
-                                                    : "rgba(255,255,255,0.001)"
-                                                }
-                                                fillOpacity={
-                                                  isActive ? "0.95" : "1"
-                                                }
-                                                stroke={
-                                                  isActive
-                                                    ? "#fff7e7"
-                                                    : "rgba(255,255,255,0.45)"
-                                                }
-                                                strokeWidth={
-                                                  isActive ? "0.7" : "0.35"
-                                                }
-                                                onClick={(event) => {
-                                                  event.stopPropagation();
-                                                  toggleProjectPartEdgeBand(
-                                                    piece.sourcePartId,
-                                                    logicalSide,
-                                                  );
-                                                }}
-                                              />
-                                            );
-                                          })
-                                        : null}
-                                      {pieceLabel.mode === "full" ? (
-                                        <g>
-                                          <text
-                                            x={
-                                              displayPiece.x +
-                                              displayPiece.width / 2
-                                            }
-                                            y={
-                                              displayPiece.y +
-                                              displayPiece.height / 2 -
-                                              pieceLabel.nameOffset
-                                            }
-                                            textAnchor="middle"
-                                            dominantBaseline="middle"
-                                            fontSize={pieceLabel.nameFontSize}
-                                            fontWeight="700"
-                                            fill="#fff"
-                                            direction="rtl"
-                                            unicodeBidi="plaintext"
-                                            transform={
-                                              pieceLabel.rotate
-                                                ? `rotate(-90 ${
-                                                    displayPiece.x +
-                                                    displayPiece.width / 2
-                                                  } ${
-                                                    displayPiece.y +
-                                                    displayPiece.height / 2
-                                                  })`
-                                                : undefined
-                                            }
-                                          >
-                                            {projectPartLink
-                                              ? `${projectPartLink.code} • ${piece.name}`
-                                              : piece.name}
-                                          </text>
-                                          <text
-                                            x={
-                                              displayPiece.x +
-                                              displayPiece.width / 2
-                                            }
-                                            y={
-                                              displayPiece.y +
-                                              displayPiece.height / 2 +
-                                              pieceLabel.dimsOffset
-                                            }
-                                            textAnchor="middle"
-                                            dominantBaseline="middle"
-                                            fontSize={pieceLabel.dimsFontSize}
-                                            fontWeight="700"
-                                            fill="#fff"
-                                            transform={
-                                              pieceLabel.rotate
-                                                ? `rotate(-90 ${
-                                                    displayPiece.x +
-                                                    displayPiece.width / 2
-                                                  } ${
-                                                    displayPiece.y +
-                                                    displayPiece.height / 2
-                                                  })`
-                                                : undefined
-                                            }
-                                          >
-                                            {round2(piece.length)} ×{" "}
-                                            {round2(piece.width)} سم
-                                          </text>
-                                        </g>
-                                      ) : pieceLabel.mode === "dims" ? (
-                                        <text
-                                          x={
-                                            displayPiece.x +
-                                            displayPiece.width / 2
-                                          }
-                                          y={
-                                            displayPiece.y +
-                                            displayPiece.height / 2
-                                          }
-                                          textAnchor="middle"
-                                          dominantBaseline="middle"
-                                          fontSize={pieceLabel.fontSize}
-                                          fontWeight="600"
-                                          fill="#fff"
-                                          transform={
-                                            pieceLabel.rotate
-                                              ? `rotate(-90 ${displayPiece.x + displayPiece.width / 2} ${displayPiece.y + displayPiece.height / 2})`
-                                              : undefined
-                                          }
-                                        >
-                                          {round2(piece.length)} ×{" "}
-                                          {round2(piece.width)}
-                                        </text>
-                                      ) : null}
-                                    </g>
-                                  );
-                                })}
-                              </svg>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  ))}
-
-                  {projectWasteInsight ? (
-                    <div className="rounded-2xl border border-amber-200 bg-amber-50/80 p-4 text-sm leading-7 text-amber-950 ring-1 ring-amber-100">
-                      <p className="font-medium">قراءة سريعة للهالك</p>
-                      <p className="mt-2 text-amber-900">
-                        {projectWasteInsight}
+                      <p className="text-sm font-semibold text-stone-950">
+                        {tab.label}
                       </p>
-                    </div>
-                  ) : null}
-                </CardContent>
-                <CardFooter className="justify-between border-t border-stone-200/80 bg-stone-50/80 text-xs text-stone-500">
-                  <span>
-                    توزيع المشروع يظل مفصولًا حسب سماكة اللوح لكل خامة.
-                  </span>
-                  <span>{projectLayoutWastePercent}% هالك تقريبي</span>
-                </CardFooter>
+                      <p className="mt-1 text-xs leading-6 text-stone-500">
+                        {tab.description}
+                      </p>
+                    </button>
+                  );
+                })}
+              </div>
+            </section>
+
+            <section className="mt-6 grid gap-6 lg:grid-cols-[1.08fr_0.92fr]">
+              <Card className="border-0 bg-white/88 shadow-[0_20px_60px_-45px_rgba(63,40,12,0.55)] ring-1 ring-stone-950/8">
+                {activeBuilderTab === "unit" ? (
+                  <>
+                    <CardHeader>
+                      <CardTitle>
+                        {editingUnitId ? "تعديل وحدة" : "إضافة وحدة"}
+                      </CardTitle>
+                      <CardDescription>
+                        جهّز الوحدة الحالية من المقاسات ونوع الواجهة ثم أضفها
+                        إلى قائمة المشروع.
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent className="grid gap-5">
+                      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
+                        <div className="space-y-2 xl:col-span-2">
+                          <Label htmlFor="unitTitle">اسم الوحدة</Label>
+                          <Input
+                            id="unitTitle"
+                            value={editorTitle}
+                            onChange={(event) =>
+                              setEditorTitle(event.target.value)
+                            }
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="width">
+                            {isCornerBlindEditor ? "طول الضلع الأول" : "العرض"}
+                          </Label>
+                          <Input
+                            id="width"
+                            inputMode="decimal"
+                            value={editorNumericDrafts.width}
+                            onChange={(event) =>
+                              updateNumber("width", event.target.value)
+                            }
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="height">الارتفاع</Label>
+                          <Input
+                            id="height"
+                            inputMode="decimal"
+                            value={editorNumericDrafts.height}
+                            onChange={(event) =>
+                              updateNumber("height", event.target.value)
+                            }
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="depth">
+                            {isCornerBlindEditor ? "عرض الذراع" : "العمق"}
+                          </Label>
+                          <Input
+                            id="depth"
+                            inputMode="decimal"
+                            value={editorNumericDrafts.depth}
+                            onChange={(event) =>
+                              updateNumber("depth", event.target.value)
+                            }
+                          />
+                        </div>
+                        {isCornerBlindEditor ? (
+                          <div className="space-y-2">
+                            <Label htmlFor="returnDepth">
+                              طول الضلع الثاني
+                            </Label>
+                            <Input
+                              id="returnDepth"
+                              inputMode="decimal"
+                              value={editorNumericDrafts.returnDepth}
+                              onChange={(event) =>
+                                updateNumber("returnDepth", event.target.value)
+                              }
+                            />
+                          </div>
+                        ) : null}
+                      </div>
+
+                      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
+                        <div className="space-y-2">
+                          <Label htmlFor="shelves">عدد الرفوف</Label>
+                          <Input
+                            id="shelves"
+                            inputMode="numeric"
+                            value={editorNumericDrafts.shelfCount}
+                            onChange={(event) =>
+                              updateNumber("shelfCount", event.target.value)
+                            }
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label>نوع الوحدة</Label>
+                          <Select
+                            value={editorInput.cabinetType}
+                            onValueChange={(value) =>
+                              updateCabinetType(value as CabinetType)
+                            }
+                          >
+                            <SelectTrigger className="w-full">
+                              <SelectValue>
+                                {cabinetTypeLabels[editorInput.cabinetType]}
+                              </SelectValue>
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="base">وحدة أرضية</SelectItem>
+                              <SelectItem value="corner-l-base">
+                                ركنة زاوية 45° أرضية
+                              </SelectItem>
+                              <SelectItem value="corner-l-wall">
+                                ركنة زاوية 45° علوية
+                              </SelectItem>
+                              <SelectItem value="wall">وحدة معلقة</SelectItem>
+                              <SelectItem value="tall">وحدة طويلة</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="space-y-2">
+                          <Label>الواجهة الأمامية</Label>
+                          <Select
+                            value={editorInput.frontOption}
+                            onValueChange={(value) =>
+                              setEditorInput((current) => ({
+                                ...current,
+                                frontOption: value as FrontOption,
+                              }))
+                            }
+                          >
+                            <SelectTrigger className="w-full">
+                              <SelectValue>
+                                {frontOptionLabels[editorInput.frontOption]}
+                              </SelectValue>
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="doors">بدلف</SelectItem>
+                              {isCornerBlindEditor ? null : (
+                                <SelectItem value="drawers">أدراج</SelectItem>
+                              )}
+                              {isCornerBlindEditor ? null : (
+                                <SelectItem value="mixed">
+                                  أدراج + دلف
+                                </SelectItem>
+                              )}
+                              <SelectItem value="none">بدون دلف</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        {isCornerBlindEditor ? (
+                          <div className="space-y-2">
+                            <Label>موضع الزاوية</Label>
+                            <Select
+                              value={
+                                editorInput.cabinetType === "corner-l-wall"
+                                  ? "wall"
+                                  : "base"
+                              }
+                              onValueChange={(value) =>
+                                updateCornerPlacement(value as "base" | "wall")
+                              }
+                            >
+                              <SelectTrigger className="w-full">
+                                <SelectValue>
+                                  {
+                                    cornerPlacementLabels[
+                                      editorInput.cabinetType ===
+                                      "corner-l-wall"
+                                        ? "wall"
+                                        : "base"
+                                    ]
+                                  }
+                                </SelectValue>
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="base">سفلية</SelectItem>
+                                <SelectItem value="wall">علوية</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        ) : null}
+                        {isCornerBlindEditor ? (
+                          <div className="space-y-2">
+                            <Label>اتجاه الزاوية</Label>
+                            <Select
+                              value={editorInput.cornerHand}
+                              onValueChange={(value) =>
+                                setEditorInput((current) => ({
+                                  ...current,
+                                  cornerHand: value as CornerHand,
+                                }))
+                              }
+                            >
+                              <SelectTrigger className="w-full">
+                                <SelectValue>
+                                  {cornerHandLabels[editorInput.cornerHand]}
+                                </SelectValue>
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="left">رجوع يسار</SelectItem>
+                                <SelectItem value="right">رجوع يمين</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        ) : null}
+                        <div className="rounded-2xl border border-stone-200 bg-stone-50/80 px-4 py-3 xl:col-span-2">
+                          <p className="text-xs text-stone-500">
+                            إعدادات المشروع
+                          </p>
+                          <p className="mt-1 text-sm font-medium text-stone-950">
+                            {materialLabels[projectSettings.material]} •{" "}
+                            {formatMmFromCm(projectSettings.boardThickness)} •
+                            ظهر {formatMmFromCm(projectSettings.backThickness)}
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+                        <div className="space-y-2">
+                          <Label>اتجاه الثمرة</Label>
+                          <Select
+                            value={editorInput.grainDirection}
+                            onValueChange={(value) =>
+                              setEditorInput((current) => ({
+                                ...current,
+                                grainDirection: value as GrainDirection,
+                              }))
+                            }
+                          >
+                            <SelectTrigger className="w-full">
+                              <SelectValue>
+                                {
+                                  grainDirectionLabels[
+                                    editorInput.grainDirection
+                                  ]
+                                }
+                              </SelectValue>
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="free">حر</SelectItem>
+                              <SelectItem value="length">
+                                طولي مع طول اللوح
+                              </SelectItem>
+                              <SelectItem value="width">
+                                عرضي مع عرض اللوح
+                              </SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+
+                        {(editorInput.frontOption === "drawers" ||
+                          editorInput.frontOption === "mixed") && (
+                          <div className="space-y-2">
+                            <Label htmlFor="drawerCount">عدد الأدراج</Label>
+                            <Input
+                              id="drawerCount"
+                              inputMode="numeric"
+                              value={editorNumericDrafts.drawerCount}
+                              onChange={(event) =>
+                                updateNumber("drawerCount", event.target.value)
+                              }
+                            />
+                          </div>
+                        )}
+
+                        {(editorInput.frontOption === "doors" ||
+                          editorInput.frontOption === "mixed") && (
+                          <div className="space-y-2">
+                            <Label htmlFor="doorLeafCount">عدد الدلف</Label>
+                            <Input
+                              id="doorLeafCount"
+                              inputMode="numeric"
+                              value={editorNumericDrafts.doorLeafCount}
+                              onChange={(event) =>
+                                updateNumber(
+                                  "doorLeafCount",
+                                  event.target.value,
+                                )
+                              }
+                            />
+                          </div>
+                        )}
+                      </div>
+
+                      <Separator />
+
+                      <div className="grid gap-4 lg:grid-cols-[1.25fr_0.75fr]">
+                        <div className="rounded-2xl border border-stone-200 bg-stone-50/70 p-4">
+                          <div className="flex items-center gap-2 text-sm font-medium text-stone-950">
+                            <ScanSearch className="size-4" />
+                            ملخص الوحدة الجاري إعدادها
+                          </div>
+                          <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                            <div className="rounded-xl bg-white p-3 ring-1 ring-stone-200">
+                              <p className="text-xs text-stone-500">
+                                الأبعاد الكلية
+                              </p>
+                              <p className="mt-1 text-sm font-medium text-stone-950">
+                                {hasEditorCoreDimensions
+                                  ? `${formatCm(editorInput.width)} × ${formatCm(editorInput.height)} × ${formatCm(editorInput.depth)}`
+                                  : "أدخل العرض والارتفاع والعمق لعرض الملخص"}
+                              </p>
+                            </div>
+                            {isCornerBlindEditor ? (
+                              <div className="rounded-xl bg-white p-3 ring-1 ring-stone-200">
+                                <p className="text-xs text-stone-500">
+                                  بيانات الزاوية
+                                </p>
+                                <p className="mt-1 text-sm font-medium text-stone-950">
+                                  {hasEditorCompleteDimensions
+                                    ? `${
+                                        cornerPlacementLabels[
+                                          editorInput.cabinetType ===
+                                          "corner-l-wall"
+                                            ? "wall"
+                                            : "base"
+                                        ]
+                                      } • ${cornerHandLabels[editorInput.cornerHand]} • ضلع ثانٍ ${formatCm(editorInput.returnDepth)}`
+                                    : "حدد ضلع الرجوع لإكمال معاينة الزاوية"}
+                                </p>
+                              </div>
+                            ) : null}
+                            <div className="rounded-xl bg-white p-3 ring-1 ring-stone-200">
+                              <p className="text-xs text-stone-500">
+                                نوع الواجهة
+                              </p>
+                              <p className="mt-1 text-sm font-medium text-stone-950">
+                                {frontOptionLabels[editorInput.frontOption]}
+                              </p>
+                            </div>
+                            <div className="rounded-xl bg-white p-3 ring-1 ring-stone-200">
+                              <p className="text-xs text-stone-500">
+                                عدد الواجهات الظاهرة
+                              </p>
+                              <p className="mt-1 text-sm font-medium text-stone-950">
+                                {editorFrontPieceCount}
+                              </p>
+                            </div>
+                            <div className="rounded-xl bg-white p-3 ring-1 ring-stone-200">
+                              <p className="text-xs text-stone-500">
+                                الخامة المختارة
+                              </p>
+                              <p className="mt-1 text-sm font-medium text-stone-950">
+                                {materialLabels[projectSettings.material]}
+                              </p>
+                            </div>
+                            <div className="rounded-xl bg-white p-3 ring-1 ring-stone-200">
+                              <p className="text-xs text-stone-500">
+                                سمك اللوح
+                              </p>
+                              <p className="mt-1 text-sm font-medium text-stone-950">
+                                {formatMmFromCm(projectSettings.boardThickness)}
+                              </p>
+                            </div>
+                            <div className="rounded-xl bg-white p-3 ring-1 ring-stone-200">
+                              <p className="text-xs text-stone-500">
+                                سمك الظهر
+                              </p>
+                              <p className="mt-1 text-sm font-medium text-stone-950">
+                                {formatMmFromCm(projectSettings.backThickness)}
+                              </p>
+                            </div>
+                            <div className="rounded-xl bg-white p-3 ring-1 ring-stone-200">
+                              <p className="text-xs text-stone-500">
+                                اتجاه الثمرة
+                              </p>
+                              <p className="mt-1 text-sm font-medium text-stone-950">
+                                {
+                                  grainDirectionLabels[
+                                    editorInput.grainDirection
+                                  ]
+                                }
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="rounded-2xl border border-stone-200 bg-stone-950 p-4 text-stone-50">
+                          <div className="flex items-center gap-2 text-sm font-medium">
+                            <Sparkles className="size-4" />
+                            مراجعة قبل الإضافة
+                          </div>
+                          {hasEditorCompleteDimensions &&
+                          editorReviewWarnings.length > 0 ? (
+                            <ul className="mt-4 space-y-3 text-sm text-stone-300">
+                              {editorReviewWarnings.map((warning) => (
+                                <li key={warning}>{warning}</li>
+                              ))}
+                            </ul>
+                          ) : (
+                            <ul className="mt-4 space-y-3 text-sm text-stone-300">
+                              {hasEditorCompleteDimensions ? (
+                                <>
+                                  <li>
+                                    المعاينة الحالية تعكس شكل الواجهة المختار
+                                    بين الدلف والأدراج والمختلط.
+                                  </li>
+                                  <li>
+                                    بعد إضافة الوحدات اضغط احسب لاستخراج مقاسات
+                                    الوحدة المختارة من المشروع.
+                                  </li>
+                                  <li>
+                                    يمكنك تحميل أي وحدة مضافة مرة أخرى إلى
+                                    النموذج لتعديلها قبل الحساب.
+                                  </li>
+                                </>
+                              ) : (
+                                <>
+                                  <li>
+                                    ابدأ بإدخال العرض والارتفاع والعمق أولًا حتى
+                                    تظهر معاينة حقيقية للوحدة بدل الحالة
+                                    الافتراضية.
+                                  </li>
+                                  <li>
+                                    لو كانت الوحدة زاوية L، أدخل طول الضلع
+                                    الثاني أيضًا قبل الاعتماد على المراجعة.
+                                  </li>
+                                  <li>
+                                    بعد اكتمال المقاسات ستظهر التحذيرات الفعلية
+                                    المرتبطة بالتصميم بدل التحذيرات المبدئية.
+                                  </li>
+                                </>
+                              )}
+                            </ul>
+                          )}
+                        </div>
+                      </div>
+                    </CardContent>
+                    <CardFooter className="flex flex-col gap-3 border-t border-stone-200/80 bg-stone-50/80 sm:flex-row sm:items-center sm:justify-between">
+                      <p className="text-xs text-stone-500">
+                        أضف الوحدات أولًا، ثم احسب المشروع عند الانتهاء بدل
+                        الحساب التلقائي مع كل تغيير.
+                      </p>
+                      <div className="flex w-full gap-2 sm:w-auto">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          className="flex-1 sm:flex-none"
+                          onClick={() => setIsUnitPresetOpen(true)}
+                        >
+                          <Box className="size-4" />
+                          وحدات جاهزة
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          className="flex-1 sm:flex-none"
+                          onClick={() => resetEditor(units.length)}
+                        >
+                          إعادة ضبط النموذج
+                        </Button>
+                        <Button
+                          type="button"
+                          className="flex-1 sm:flex-none"
+                          onClick={saveUnit}
+                        >
+                          <Plus className="size-4" />
+                          {editingUnitId ? "حفظ تعديل الوحدة" : "إضافة وحدة"}
+                        </Button>
+                      </div>
+                    </CardFooter>
+                  </>
+                ) : activeBuilderTab === "custom" ? (
+                  <>
+                    <CardHeader>
+                      <div className="flex items-center justify-between gap-3">
+                        <div>
+                          <CardTitle>مقاس حر</CardTitle>
+                          <CardDescription>
+                            أضف قطعة مستقلة لا ترتبط بوحدة، مثل 140 × 60 سم،
+                            لتدخل مباشرة في كشف القص.
+                          </CardDescription>
+                        </div>
+                        <Badge
+                          variant="outline"
+                          className="border-stone-200 bg-stone-50 text-stone-700"
+                        >
+                          {customParts.length} مقاس
+                        </Badge>
+                      </div>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                        <div className="space-y-2 xl:col-span-2">
+                          <Label htmlFor="customPartTitle">اسم القطعة</Label>
+                          <Input
+                            id="customPartTitle"
+                            value={customPartDraft.title}
+                            onChange={(event) =>
+                              updateCustomPartDraft("title", event.target.value)
+                            }
+                            placeholder="مثال: قطعة ديكور حرة"
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="customPartLength">الطول</Label>
+                          <Input
+                            id="customPartLength"
+                            inputMode="decimal"
+                            value={customPartDraft.length}
+                            onChange={(event) =>
+                              updateCustomPartDraft(
+                                "length",
+                                event.target.value,
+                              )
+                            }
+                            placeholder="140"
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="customPartWidth">العرض</Label>
+                          <Input
+                            id="customPartWidth"
+                            inputMode="decimal"
+                            value={customPartDraft.width}
+                            onChange={(event) =>
+                              updateCustomPartDraft("width", event.target.value)
+                            }
+                            placeholder="60"
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="customPartQty">الكمية</Label>
+                          <Input
+                            id="customPartQty"
+                            inputMode="numeric"
+                            value={customPartDraft.qty}
+                            onChange={(event) =>
+                              updateCustomPartDraft("qty", event.target.value)
+                            }
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="customPartThickness">
+                            السمك (مم)
+                          </Label>
+                          <Input
+                            id="customPartThickness"
+                            inputMode="decimal"
+                            value={customPartDraft.thickness}
+                            onChange={(event) =>
+                              updateCustomPartDraft(
+                                "thickness",
+                                event.target.value,
+                              )
+                            }
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label>الخامة</Label>
+                          <Select
+                            value={customPartDraft.material}
+                            onValueChange={(value) =>
+                              updateCustomPartDraft(
+                                "material",
+                                value as MaterialType,
+                              )
+                            }
+                          >
+                            <SelectTrigger className="w-full bg-white">
+                              <SelectValue>
+                                {materialLabels[customPartDraft.material]}
+                              </SelectValue>
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="mdf">MDF</SelectItem>
+                              <SelectItem value="melamine">ميلامين</SelectItem>
+                              <SelectItem value="plywood">كونتر</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="space-y-2">
+                          <Label>فئة القطعة</Label>
+                          <Select
+                            value={customPartDraft.category}
+                            onValueChange={(value) =>
+                              updateCustomPartDraft(
+                                "category",
+                                value as PartCategory,
+                              )
+                            }
+                          >
+                            <SelectTrigger className="w-full bg-white">
+                              <SelectValue>
+                                {partCategoryLabels[customPartDraft.category]}
+                              </SelectValue>
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="carcass">هيكل</SelectItem>
+                              <SelectItem value="shelf">رفوف</SelectItem>
+                              <SelectItem value="support">دعامات</SelectItem>
+                              <SelectItem value="back">ظهر</SelectItem>
+                              <SelectItem value="front">واجهات</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="space-y-2">
+                          <Label>اتجاه الثمرة</Label>
+                          <Select
+                            value={customPartDraft.grainDirection}
+                            onValueChange={(value) =>
+                              updateCustomPartDraft(
+                                "grainDirection",
+                                value as GrainDirection,
+                              )
+                            }
+                          >
+                            <SelectTrigger className="w-full bg-white">
+                              <SelectValue>
+                                {
+                                  grainDirectionLabels[
+                                    customPartDraft.grainDirection
+                                  ]
+                                }
+                              </SelectValue>
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="free">حر</SelectItem>
+                              <SelectItem value="length">
+                                طولي مع طول اللوح
+                              </SelectItem>
+                              <SelectItem value="width">
+                                عرضي مع عرض اللوح
+                              </SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </div>
+
+                      <div className="flex flex-col gap-3 rounded-2xl border border-stone-200 bg-stone-50/80 p-4 sm:flex-row sm:items-center sm:justify-between">
+                        <p className="text-xs leading-6 text-stone-500">
+                          القطعة الحرة تدخل في توزيع الألواح، التكاليف، جدول
+                          القطع، والطباعة حتى لو لم تكن مرتبطة بأي وحدة.
+                        </p>
+                        <div className="flex gap-2">
+                          <Button
+                            type="button"
+                            variant="outline"
+                            onClick={() => resetCustomPartEditor()}
+                          >
+                            إعادة ضبط
+                          </Button>
+                          <Button type="button" onClick={saveCustomPart}>
+                            <Plus className="size-4" />
+                            {editingCustomPartId
+                              ? "حفظ المقاس الحر"
+                              : "إضافة مقاس حر"}
+                          </Button>
+                        </div>
+                      </div>
+
+                      {customParts.length === 0 ? (
+                        <div className="rounded-2xl border border-dashed border-stone-300 bg-stone-50/80 p-6 text-center text-sm text-stone-500">
+                          لم تتم إضافة أي مقاسات حرة بعد.
+                        </div>
+                      ) : (
+                        customParts.map((part) => (
+                          <div
+                            key={part.id}
+                            className="rounded-2xl border border-stone-200 bg-stone-50/80 p-4 ring-1 ring-stone-200"
+                          >
+                            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                              <div className="space-y-1">
+                                <p className="font-medium text-stone-950">
+                                  {part.title}
+                                </p>
+                                <p className="text-xs text-stone-500">
+                                  {partCategoryLabels[part.category]} •{" "}
+                                  {formatCm(part.length)} ×{" "}
+                                  {formatCm(part.width)} • {part.qty} قطعة •{" "}
+                                  {formatMmFromCm(part.thickness)}
+                                </p>
+                                <p className="text-xs text-stone-500">
+                                  {materialLabels[part.material]} •{" "}
+                                  {grainDirectionLabels[part.grainDirection]}
+                                </p>
+                              </div>
+                              <div className="flex gap-2">
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => loadCustomPartIntoEditor(part)}
+                                >
+                                  تحميل للتعديل
+                                </Button>
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  size="icon"
+                                  onClick={() => removeCustomPart(part.id)}
+                                >
+                                  <Trash2 className="size-4" />
+                                </Button>
+                              </div>
+                            </div>
+                          </div>
+                        ))
+                      )}
+                    </CardContent>
+                  </>
+                ) : (
+                  <>
+                    <CardHeader>
+                      <div className="flex items-center justify-between gap-3">
+                        <div>
+                          <CardTitle>قائمة العناصر المضافة</CardTitle>
+                          <CardDescription>
+                            راجع الوحدات والمقاسات الحرة الحالية ثم شغّل الحساب
+                            من هنا.
+                          </CardDescription>
+                        </div>
+                        <Badge
+                          variant="outline"
+                          className="border-stone-200 bg-stone-50 text-stone-700"
+                        >
+                          {projectItemCount} عنصر
+                        </Badge>
+                      </div>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                      {unitFeedback ? (
+                        <div className="rounded-2xl border border-emerald-200 bg-emerald-50/80 p-4 text-sm text-emerald-900 ring-1 ring-emerald-100">
+                          <div className="flex items-center gap-2 font-medium">
+                            <Sparkles className="size-4" />
+                            تم تحديث قائمة الوحدات
+                          </div>
+                          <p className="mt-2 text-sm leading-6 text-emerald-800">
+                            {unitFeedback.message}
+                          </p>
+                        </div>
+                      ) : null}
+
+                      <div className="space-y-3">
+                        {units.length === 0 ? (
+                          <div className="rounded-2xl border border-dashed border-stone-300 bg-stone-50/80 p-6 text-center text-sm text-stone-500">
+                            أضف أول وحدة من النموذج الحالي لتبدأ تكوين المشروع.
+                          </div>
+                        ) : (
+                          units.map((unit) => {
+                            const unitResult = calculateCabinetCutlist(unit);
+                            const isActive =
+                              selectedCalculatedUnitId === unit.id;
+                            const isRecentlySaved =
+                              unitFeedback?.unitId === unit.id;
+
+                            return (
+                              <div
+                                key={unit.id}
+                                className={cn(
+                                  "rounded-2xl border bg-stone-50/80 p-4 ring-1 transition-colors",
+                                  isActive
+                                    ? "border-amber-300 bg-amber-50/70 ring-amber-200"
+                                    : isRecentlySaved
+                                      ? "border-emerald-300 bg-emerald-50/80 ring-emerald-200"
+                                      : "border-stone-200 ring-stone-200",
+                                )}
+                              >
+                                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                                  <div className="space-y-1">
+                                    <p className="font-medium text-stone-950">
+                                      {unit.title}
+                                    </p>
+                                    <p className="text-xs text-stone-500">
+                                      {cabinetTypeLabels[unit.cabinetType]} •{" "}
+                                      {formatCm(unit.width)} ×{" "}
+                                      {formatCm(unit.height)} ×{" "}
+                                      {formatCm(unit.depth)}
+                                    </p>
+                                    {unit.cabinetType === "corner-l-base" ||
+                                    unit.cabinetType === "corner-l-wall" ? (
+                                      <p className="text-xs text-stone-500">
+                                        {
+                                          cornerPlacementLabels[
+                                            unit.cabinetType === "corner-l-wall"
+                                              ? "wall"
+                                              : "base"
+                                          ]
+                                        }{" "}
+                                        • {cornerHandLabels[unit.cornerHand]} •
+                                        ضلع ثانٍ {formatCm(unit.returnDepth)}
+                                      </p>
+                                    ) : null}
+                                  </div>
+                                  <div className="flex gap-2">
+                                    <Button
+                                      type="button"
+                                      variant="outline"
+                                      size="sm"
+                                      onClick={() => duplicateUnit(unit)}
+                                    >
+                                      نسخ الوحدة
+                                    </Button>
+                                    <Button
+                                      type="button"
+                                      variant="outline"
+                                      size="sm"
+                                      onClick={() => loadUnitIntoEditor(unit)}
+                                    >
+                                      تحميل للتعديل
+                                    </Button>
+                                    <Button
+                                      type="button"
+                                      variant="outline"
+                                      size="icon"
+                                      onClick={() => removeUnit(unit.id)}
+                                    >
+                                      <Trash2 className="size-4" />
+                                    </Button>
+                                  </div>
+                                </div>
+                                <p className="mt-2 text-xs text-stone-500">
+                                  {frontOptionLabels[unit.frontOption]} •{" "}
+                                  {getFrontPieceCount(unitResult)} واجهة •{" "}
+                                  {unit.shelfCount} رف
+                                </p>
+                              </div>
+                            );
+                          })
+                        )}
+                      </div>
+
+                      <div className="rounded-2xl border border-stone-200 bg-stone-50/80 p-4">
+                        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                          <p className="text-xs text-stone-500">
+                            الحساب يعتمد على الوحدات والمقاسات الحرة الموجودة
+                            داخل المشروع.
+                          </p>
+                          <Button
+                            type="button"
+                            className="w-full sm:w-auto"
+                            onClick={calculateUnits}
+                            disabled={projectItemCount === 0}
+                          >
+                            <Calculator className="size-4" />
+                            احسب المشروع
+                          </Button>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </>
+                )}
               </Card>
 
-              <Card className="border-0 bg-white/88 shadow-[0_20px_60px_-45px_rgba(63,40,12,0.55)] ring-1 ring-stone-950/8">
-                <CardHeader>
-                  <CardTitle>مؤشرات المشروع</CardTitle>
-                  <CardDescription>
-                    هذه المؤشرات تخص المشروع المجمع بالكامل.
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="grid gap-3 sm:grid-cols-2">
-                  <div className="rounded-2xl border border-stone-200 bg-stone-50 p-4">
-                    <p className="text-xs text-stone-500">عدد الوحدات</p>
+              <div className="grid gap-6">
+                {activeBuilderTab === "unit" ? (
+                  <>
+                    <Card
+                      id="project-units-list"
+                      className="border-0 bg-white/88 shadow-[0_20px_60px_-45px_rgba(63,40,12,0.55)] ring-1 ring-stone-950/8"
+                    >
+                      <CardHeader>
+                        <CardTitle>3D للوحدة الحالية</CardTitle>
+                        <CardDescription>
+                          المعاينة هنا خاصة بالوحدة الجاري إعدادها قبل إضافتها
+                          أو تعديلها داخل المشروع.
+                        </CardDescription>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="relative overflow-hidden rounded-[1.5rem] border border-stone-200 bg-[linear-gradient(180deg,#faf7f2_0%,#efe7db_100%)] p-6">
+                          <div className="absolute inset-x-0 top-0 h-20 bg-[radial-gradient(circle_at_top,rgba(97,74,42,0.12),transparent_60%)]" />
+                          <div className="relative space-y-4">
+                            {hasEditorCompleteDimensions ? (
+                              <Suspense fallback={previewFallback}>
+                                <CabinetPreview
+                                  input={editorInput}
+                                  result={editorResult}
+                                  selectedPartId={selectedPartId}
+                                />
+                              </Suspense>
+                            ) : (
+                              <div className="flex h-72 w-full items-center justify-center rounded-[1.25rem] border border-dashed border-stone-300 bg-white/65 px-6 text-center text-sm leading-7 text-stone-500">
+                                أدخل المقاسات الأساسية للوحدة لتظهر المعاينة
+                                ثلاثية الأبعاد والقطع المتوقعة بشكل صحيح.
+                              </div>
+                            )}
+                            <div className="grid gap-3 sm:grid-cols-3">
+                              <div className="rounded-xl bg-white/80 p-3 text-center ring-1 ring-stone-200">
+                                <p className="text-xs text-stone-500">
+                                  اسم الوحدة
+                                </p>
+                                <p className="mt-1 text-sm font-medium text-stone-950">
+                                  {editorTitle}
+                                </p>
+                              </div>
+                              <div className="rounded-xl bg-white/80 p-3 text-center ring-1 ring-stone-200">
+                                <p className="text-xs text-stone-500">
+                                  نوع الواجهة
+                                </p>
+                                <p className="mt-1 text-sm font-medium text-stone-950">
+                                  {frontOptionLabels[editorInput.frontOption]}
+                                </p>
+                              </div>
+                              <div className="rounded-xl bg-white/80 p-3 text-center ring-1 ring-stone-200">
+                                <p className="text-xs text-stone-500">
+                                  عدد الواجهات
+                                </p>
+                                <p className="mt-1 text-sm font-medium text-stone-950">
+                                  {hasEditorCompleteDimensions
+                                    ? editorFrontPieceCount
+                                    : "--"}
+                                </p>
+                              </div>
+                              <div className="rounded-xl bg-white/80 p-3 text-center ring-1 ring-stone-200">
+                                <p className="text-xs text-stone-500">
+                                  اتجاه الثمرة
+                                </p>
+                                <p className="mt-1 text-sm font-medium text-stone-950">
+                                  {
+                                    grainDirectionLabels[
+                                      editorInput.grainDirection
+                                    ]
+                                  }
+                                </p>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+
+                    {units.length > 1 ? (
+                      <Card className="border-0 bg-white/88 shadow-[0_20px_60px_-45px_rgba(63,40,12,0.55)] ring-1 ring-stone-950/8">
+                        <CardHeader>
+                          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                            <div>
+                              <CardTitle>3D لترتيب المشروع</CardTitle>
+                              <CardDescription>
+                                راقب شكل المشروع النهائي، اسحب الوحدة بزرار
+                                الماوس الشمال لتحريكها في المكان الذي تريده،
+                                واسحب بزرار الماوس اليمين لتغيير زاوية العرض قبل
+                                عرضها على العميل.
+                              </CardDescription>
+                            </div>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={resetProjectArrangement}
+                            >
+                              إعادة ضبط الترتيب
+                            </Button>
+                          </div>
+                        </CardHeader>
+                        <CardContent className="space-y-4">
+                          <Suspense fallback={previewFallback}>
+                            <ProjectPreview
+                              units={projectPreviewUnits.map((unit) => ({
+                                ...unit,
+                                active:
+                                  unit.id === activeProjectPreviewUnit?.id,
+                              }))}
+                              onSelectUnit={setActiveProjectUnitId}
+                              onUnitPositionChange={updateProjectUnitPosition}
+                            />
+                          </Suspense>
+
+                          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                            {projectPreviewUnits.map((unit, index) => {
+                              const isActive =
+                                activeProjectPreviewUnit?.id === unit.id;
+
+                              return (
+                                <div
+                                  key={unit.id}
+                                  className={cn(
+                                    "rounded-2xl border p-4 ring-1",
+                                    isActive
+                                      ? "border-amber-300 bg-amber-50/70 ring-amber-200"
+                                      : "border-stone-200 bg-stone-50/80 ring-stone-200",
+                                  )}
+                                >
+                                  <button
+                                    type="button"
+                                    className="w-full text-right"
+                                    onClick={() =>
+                                      setActiveProjectUnitId(unit.id)
+                                    }
+                                  >
+                                    <p className="font-medium text-stone-950">
+                                      {unit.title}
+                                    </p>
+                                    <p className="mt-1 text-xs text-stone-500">
+                                      ترتيب {index + 1} • جانبي{" "}
+                                      {formatCm(unit.offsetX)} • ارتفاع{" "}
+                                      {formatCm(unit.offsetY)} • عمق{" "}
+                                      {formatCm(unit.offsetZ)} • دوران{" "}
+                                      {unit.rotationY}°
+                                    </p>
+                                  </button>
+
+                                  <div className="mt-4 flex flex-wrap gap-2">
+                                    <Button
+                                      type="button"
+                                      variant="outline"
+                                      size="sm"
+                                      onClick={() =>
+                                        moveProjectUnitOrder(
+                                          unit.id,
+                                          "backward",
+                                        )
+                                      }
+                                      disabled={index === 0}
+                                    >
+                                      <ArrowRight className="size-4" />
+                                      تقديم
+                                    </Button>
+                                    <Button
+                                      type="button"
+                                      variant="outline"
+                                      size="sm"
+                                      onClick={() =>
+                                        moveProjectUnitOrder(unit.id, "forward")
+                                      }
+                                      disabled={
+                                        index === projectPreviewUnits.length - 1
+                                      }
+                                    >
+                                      <ArrowLeft className="size-4" />
+                                      تأخير
+                                    </Button>
+                                    <Button
+                                      type="button"
+                                      variant="outline"
+                                      size="sm"
+                                      onClick={() =>
+                                        rotateProjectUnit(unit.id, -90)
+                                      }
+                                    >
+                                      <RotateCcw className="size-4" />
+                                      لف يسار
+                                    </Button>
+                                    <Button
+                                      type="button"
+                                      variant="outline"
+                                      size="sm"
+                                      onClick={() =>
+                                        rotateProjectUnit(unit.id, 90)
+                                      }
+                                    >
+                                      <RotateCw className="size-4" />
+                                      لف يمين
+                                    </Button>
+                                  </div>
+
+                                  <div className="mt-3 grid grid-cols-2 gap-2">
+                                    <Button
+                                      type="button"
+                                      variant="secondary"
+                                      size="sm"
+                                      onClick={() =>
+                                        nudgeProjectUnit(unit.id, "x", -10)
+                                      }
+                                    >
+                                      <ArrowRight className="size-4" />
+                                      يمين
+                                    </Button>
+                                    <Button
+                                      type="button"
+                                      variant="secondary"
+                                      size="sm"
+                                      onClick={() =>
+                                        nudgeProjectUnit(unit.id, "x", 10)
+                                      }
+                                    >
+                                      <ArrowLeft className="size-4" />
+                                      يسار
+                                    </Button>
+                                    <Button
+                                      type="button"
+                                      variant="secondary"
+                                      size="sm"
+                                      onClick={() =>
+                                        nudgeProjectUnit(unit.id, "z", -10)
+                                      }
+                                    >
+                                      <ArrowUp className="size-4" />
+                                      للأمام
+                                    </Button>
+                                    <Button
+                                      type="button"
+                                      variant="secondary"
+                                      size="sm"
+                                      onClick={() =>
+                                        nudgeProjectUnit(unit.id, "z", 10)
+                                      }
+                                    >
+                                      <ArrowDown className="size-4" />
+                                      للخلف
+                                    </Button>
+                                    <Button
+                                      type="button"
+                                      variant="secondary"
+                                      size="sm"
+                                      onClick={() =>
+                                        nudgeProjectUnit(unit.id, "y", 10)
+                                      }
+                                    >
+                                      <ArrowUp className="size-4" />
+                                      لفوق
+                                    </Button>
+                                    <Button
+                                      type="button"
+                                      variant="secondary"
+                                      size="sm"
+                                      onClick={() =>
+                                        nudgeProjectUnit(unit.id, "y", -10)
+                                      }
+                                    >
+                                      <ArrowDown className="size-4" />
+                                      لتحت
+                                    </Button>
+                                  </div>
+
+                                  <p className="mt-3 text-[11px] leading-5 text-stone-500">
+                                    الوحدات الأرضية تبدأ تحت تلقائيًا، والوحدات
+                                    المعلقة تبدأ فوق تلقائيًا ويمكنك ضبط مكان كل
+                                    وحدة كما تريد.
+                                  </p>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </CardContent>
+                      </Card>
+                    ) : null}
+                  </>
+                ) : activeBuilderTab === "units" ? (
+                  units.length > 1 ? (
+                    <Card className="border-0 bg-white/88 shadow-[0_20px_60px_-45px_rgba(63,40,12,0.55)] ring-1 ring-stone-950/8">
+                      <CardHeader>
+                        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                          <div>
+                            <CardTitle>3D لترتيب المشروع</CardTitle>
+                            <CardDescription>
+                              راقب شكل المشروع النهائي واضبط تموضع الوحدات من
+                              هذا التبويب.
+                            </CardDescription>
+                          </div>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={resetProjectArrangement}
+                          >
+                            إعادة ضبط الترتيب
+                          </Button>
+                        </div>
+                      </CardHeader>
+                      <CardContent className="space-y-4">
+                        <Suspense fallback={previewFallback}>
+                          <ProjectPreview
+                            units={projectPreviewUnits.map((unit) => ({
+                              ...unit,
+                              active: unit.id === activeProjectPreviewUnit?.id,
+                            }))}
+                            onSelectUnit={setActiveProjectUnitId}
+                            onUnitPositionChange={updateProjectUnitPosition}
+                          />
+                        </Suspense>
+                      </CardContent>
+                    </Card>
+                  ) : (
+                    <Card className="border-0 bg-white/88 shadow-[0_20px_60px_-45px_rgba(63,40,12,0.55)] ring-1 ring-stone-950/8">
+                      <CardHeader>
+                        <CardTitle>ترتيب المشروع</CardTitle>
+                        <CardDescription>
+                          المعاينة الجماعية تظهر عندما يكون لديك أكثر من وحدة
+                          داخل المشروع.
+                        </CardDescription>
+                      </CardHeader>
+                    </Card>
+                  )
+                ) : (
+                  <Card className="border-0 bg-white/88 shadow-[0_20px_60px_-45px_rgba(63,40,12,0.55)] ring-1 ring-stone-950/8">
+                    <CardHeader>
+                      <CardTitle>المقاسات الحرة الحالية</CardTitle>
+                      <CardDescription>
+                        راجع المقاسات الحرة الموجودة أو انتقل إلى تبويب المقاس
+                        الحر لتعديلها.
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-3">
+                      {customParts.length === 0 ? (
+                        <div className="rounded-2xl border border-dashed border-stone-300 bg-stone-50/80 p-6 text-center text-sm text-stone-500">
+                          لا توجد مقاسات حرة بعد.
+                        </div>
+                      ) : (
+                        customParts.map((part) => (
+                          <div
+                            key={part.id}
+                            className="rounded-2xl border border-stone-200 bg-stone-50/80 p-4 ring-1 ring-stone-200"
+                          >
+                            <div className="flex items-center justify-between gap-3">
+                              <div>
+                                <p className="font-medium text-stone-950">
+                                  {part.title}
+                                </p>
+                                <p className="mt-1 text-xs text-stone-500">
+                                  {formatCm(part.length)} ×{" "}
+                                  {formatCm(part.width)} • {part.qty} قطعة
+                                </p>
+                              </div>
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                onClick={() => loadCustomPartIntoEditor(part)}
+                              >
+                                تعديل
+                              </Button>
+                            </div>
+                          </div>
+                        ))
+                      )}
+                    </CardContent>
+                  </Card>
+                )}
+              </div>
+            </section>
+          </>
+        ) : null}
+
+        {activeWorkspaceTab === "results" ? (
+          hasCalculatedProject ? (
+            <>
+              <section className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-8">
+                <Card className="border-0 bg-white/88 ring-1 ring-stone-950/8">
+                  <CardContent className="p-4">
+                    <p className="text-xs text-stone-500">الوحدات المحسوبة</p>
                     <p className="mt-2 text-lg font-semibold text-stone-950">
                       {projectSummary.unitCount}
                     </p>
-                  </div>
-                  <div className="rounded-2xl border border-stone-200 bg-stone-50 p-4">
-                    <p className="text-xs text-stone-500">الخامات المستخدمة</p>
+                  </CardContent>
+                </Card>
+                <Card className="border-0 bg-white/88 ring-1 ring-stone-950/8">
+                  <CardContent className="p-4">
+                    <p className="text-xs text-stone-500">المقاسات الحرة</p>
                     <p className="mt-2 text-lg font-semibold text-stone-950">
-                      {projectMaterialSummary || "--"}
+                      {calculatedCustomParts.length}
                     </p>
-                  </div>
-                  <div className="rounded-2xl border border-stone-200 bg-stone-50 p-4">
-                    <p className="text-xs text-stone-500">إجمالي الواجهات</p>
+                  </CardContent>
+                </Card>
+                <Card className="border-0 bg-white/88 ring-1 ring-stone-950/8">
+                  <CardContent className="p-4">
+                    <p className="text-xs text-stone-500">إجمالي القطع</p>
                     <p className="mt-2 text-lg font-semibold text-stone-950">
-                      {projectFrontPieceCount}
+                      {projectSummary.totalPanels}
                     </p>
-                  </div>
-                  <div className="rounded-2xl border border-stone-200 bg-stone-50 p-4">
-                    <p className="text-xs text-stone-500">الهالك التقريبي</p>
+                  </CardContent>
+                </Card>
+                <Card className="border-0 bg-white/88 ring-1 ring-stone-950/8">
+                  <CardContent className="p-4">
+                    <p className="text-xs text-stone-500">إجمالي الألواح</p>
                     <p className="mt-2 text-lg font-semibold text-stone-950">
-                      {projectLayoutWastePercent}%
+                      {projectSummary.totalSheets}
                     </p>
-                  </div>
-                  <div className="rounded-2xl border border-stone-200 bg-stone-50 p-4">
-                    <p className="text-xs text-stone-500">تسعير الألواح</p>
+                  </CardContent>
+                </Card>
+                <Card className="border-0 bg-white/88 ring-1 ring-stone-950/8">
+                  <CardContent className="p-4">
+                    <p className="text-xs text-stone-500">إجمالي الاستهلاك</p>
                     <p className="mt-2 text-lg font-semibold text-stone-950">
-                      18 مم: {formatPrice(projectSettings.boardSheetPrice)} • 6
-                      مم: {formatPrice(projectSettings.backSheetPrice)}
+                      {projectSummary.totalAreaM2} م²
                     </p>
-                  </div>
-                  <div className="rounded-2xl border border-stone-200 bg-stone-50 p-4">
-                    <p className="text-xs text-stone-500">مصنعية المتر</p>
+                  </CardContent>
+                </Card>
+                <Card className="border-0 bg-white/88 ring-1 ring-stone-950/8">
+                  <CardContent className="p-4">
+                    <p className="text-xs text-stone-500">تكلفة الألواح</p>
                     <p className="mt-2 text-lg font-semibold text-stone-950">
-                      {formatPrice(projectSettings.laborPricePerSquareMeter)} /
-                      م²
+                      {formatPrice(projectSummary.totalSheetCost)}
                     </p>
-                  </div>
-                  <div className="rounded-2xl border border-stone-200 bg-stone-50 p-4">
-                    <p className="text-xs text-stone-500">شريط الحافة</p>
+                  </CardContent>
+                </Card>
+                <Card className="border-0 bg-white/88 ring-1 ring-stone-950/8">
+                  <CardContent className="p-4">
+                    <p className="text-xs text-stone-500">المصنعية</p>
                     <p className="mt-2 text-lg font-semibold text-stone-950">
-                      {projectSummary.totalEdgeBandLengthM} م ط ×{" "}
-                      {formatPrice(projectSettings.edgeBandPricePerMeter)} ={" "}
+                      {formatPrice(projectSummary.totalLaborCost)}
+                    </p>
+                  </CardContent>
+                </Card>
+                <Card className="border-0 bg-white/88 ring-1 ring-stone-950/8">
+                  <CardContent className="p-4">
+                    <p className="text-xs text-stone-500">تكلفة شريط الحافة</p>
+                    <p className="mt-2 text-lg font-semibold text-stone-950">
                       {formatPrice(projectSummary.totalEdgeBandCost)}
                     </p>
-                  </div>
-                </CardContent>
-              </Card>
-            </section>
+                  </CardContent>
+                </Card>
+                <Card className="border-0 bg-stone-950 text-stone-50 ring-0">
+                  <CardContent className="p-4">
+                    <p className="text-xs text-stone-300">إجمالي التكلفة</p>
+                    <p className="mt-2 text-lg font-semibold">
+                      {formatPrice(projectSummary.totalProjectCost)}
+                    </p>
+                  </CardContent>
+                </Card>
+              </section>
 
-            <section className="mt-6">
-              <Card className="border-0 bg-white/88 shadow-[0_20px_60px_-45px_rgba(63,40,12,0.55)] ring-1 ring-stone-950/8">
-                <CardHeader>
-                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                    <div>
-                      <CardTitle>أمر تشغيل الورشة</CardTitle>
-                      <CardDescription>
-                        بطاقات تنفيذ نهائية مرتبة للقص والتشطيب، مع كود القطعة
-                        وربطها باللوح والوحدة.
-                      </CardDescription>
-                    </div>
-                    <Badge
-                      variant="secondary"
-                      className="w-fit bg-stone-100 text-stone-700"
+              <section className="mt-6">
+                <Card className="border-0 bg-white/88 shadow-[0_20px_60px_-45px_rgba(63,40,12,0.55)] ring-1 ring-stone-950/8">
+                  <CardHeader>
+                    <button
+                      type="button"
+                      className="flex w-full flex-col gap-3 text-right sm:flex-row sm:items-center sm:justify-between"
+                      onClick={() => toggleResultsSection("costs")}
                     >
-                      {workshopExecutionCards.length} بطاقة
-                    </Badge>
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-                    {workshopExecutionCards.map((card) => (
-                      <div
-                        key={card.id}
-                        className="rounded-[1.5rem] border border-stone-200 bg-[linear-gradient(180deg,rgba(252,250,247,0.95),rgba(243,236,227,0.82))] p-4 shadow-[0_18px_44px_-36px_rgba(63,40,12,0.4)]"
-                      >
-                        <div className="flex items-start justify-between gap-3">
-                          <div>
-                            <p className="text-sm font-semibold text-stone-950">
-                              {card.part.name}
-                            </p>
-                            <p className="mt-1 text-xs text-stone-500">
-                              {card.unitTitle} •{" "}
-                              {partCategoryLabels[card.part.category]}
-                            </p>
-                          </div>
-                          <div className="flex flex-col items-end gap-2">
-                            <Badge
-                              variant="outline"
-                              className="border-stone-200 bg-white text-stone-700"
-                            >
-                              تشغيل #{card.operationOrder}
-                            </Badge>
+                      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:flex-1">
+                        <div>
+                          <CardTitle>كشف خامات وتكلفة لكل وحدة</CardTitle>
+                          <CardDescription>
+                            استهلاك الخامات والتكلفة التفصيلية لكل وحدة قبل
+                            تجميع المشروع بالكامل.
+                          </CardDescription>
+                        </div>
+                        <Badge
+                          variant="secondary"
+                          className="w-fit bg-stone-100 text-stone-700"
+                        >
+                          {unitCostSummaries.length} وحدة
+                        </Badge>
+                      </div>
+                      {openResultsSections.costs ? (
+                        <ArrowUp className="size-4 text-stone-500" />
+                      ) : (
+                        <ArrowDown className="size-4 text-stone-500" />
+                      )}
+                    </button>
+                  </CardHeader>
+                  <CardContent
+                    className={cn(!openResultsSections.costs && "hidden")}
+                  >
+                    <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                      {unitCostSummaries.map((summary) => (
+                        <div
+                          key={summary.unitId}
+                          className="rounded-[1.5rem] border border-stone-200 bg-[linear-gradient(180deg,rgba(252,250,247,0.95),rgba(243,236,227,0.82))] p-4 shadow-[0_18px_44px_-36px_rgba(63,40,12,0.4)]"
+                        >
+                          <div className="flex items-start justify-between gap-3">
+                            <div>
+                              <p className="text-sm font-semibold text-stone-950">
+                                {summary.unitTitle}
+                              </p>
+                              <p className="mt-1 text-xs text-stone-500">
+                                {summary.panelCount} قطعة •{" "}
+                                {summary.totalAreaM2} م²
+                              </p>
+                            </div>
                             <Badge
                               variant="outline"
                               className="border-amber-200 bg-amber-50 text-amber-800"
                             >
-                              {card.partCode} • × {card.part.qty}
+                              {formatPrice(summary.totalCost)}
                             </Badge>
                           </div>
-                        </div>
 
-                        <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
-                          <div className="rounded-xl bg-white/75 p-3 ring-1 ring-stone-200">
-                            <p className="text-[11px] text-stone-500">
-                              الطول × العرض
+                          <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
+                            <div className="rounded-xl bg-white/75 p-3 ring-1 ring-stone-200">
+                              <p className="text-[11px] text-stone-500">
+                                ألواح 18 مم
+                              </p>
+                              <p className="mt-1 font-semibold text-stone-950">
+                                {summary.boardSheetCount} لوح
+                              </p>
+                              <p className="mt-1 text-[11px] text-stone-500">
+                                استخدام {summary.boardUsedAreaM2} م²
+                              </p>
+                            </div>
+                            <div className="rounded-xl bg-white/75 p-3 ring-1 ring-stone-200">
+                              <p className="text-[11px] text-stone-500">
+                                ألواح 6 مم
+                              </p>
+                              <p className="mt-1 font-semibold text-stone-950">
+                                {summary.backSheetCount} لوح
+                              </p>
+                              <p className="mt-1 text-[11px] text-stone-500">
+                                استخدام {summary.backUsedAreaM2} م²
+                              </p>
+                            </div>
+                          </div>
+
+                          <div className="mt-3 space-y-2 rounded-xl bg-stone-950/[0.03] p-3 ring-1 ring-stone-200 text-xs text-stone-600">
+                            <div className="flex items-center justify-between gap-3">
+                              <span>تكلفة الألواح</span>
+                              <span className="font-medium text-stone-900">
+                                {formatPrice(summary.sheetCost)}
+                              </span>
+                            </div>
+                            <div className="flex items-center justify-between gap-3">
+                              <span>المصنعية</span>
+                              <span className="font-medium text-stone-900">
+                                {formatPrice(summary.laborCost)}
+                              </span>
+                            </div>
+                            <div className="flex items-center justify-between gap-3">
+                              <span>شريط الحافة</span>
+                              <span className="font-medium text-stone-900">
+                                {summary.edgeBandLengthM} م ط •{" "}
+                                {formatPrice(summary.edgeBandCost)}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </CardContent>
+                </Card>
+              </section>
+
+              <section className="mt-6">
+                <Card className="border-0 bg-white/88 shadow-[0_20px_60px_-45px_rgba(63,40,12,0.55)] ring-1 ring-stone-950/8">
+                  <CardHeader>
+                    <CardTitle>نتيجة المشروع المجمعة</CardTitle>
+                    <CardDescription>
+                      النتائج التالية تجمع كل الوحدات التي كانت موجودة عند آخر
+                      ضغط على زر احسب المشروع، بينما تبقى قائمة الوحدات أعلى
+                      الصفحة مخصصة للتعديل فقط.
+                    </CardDescription>
+                  </CardHeader>
+                </Card>
+              </section>
+
+              <section className="mt-6 space-y-6">
+                <Card className="border-0 bg-white/88 shadow-[0_20px_60px_-45px_rgba(63,40,12,0.55)] ring-1 ring-stone-950/8">
+                  <CardHeader>
+                    <button
+                      type="button"
+                      className="flex w-full items-center justify-between gap-3 text-right"
+                      onClick={() => toggleResultsSection("layout")}
+                    >
+                      <div className="flex items-center justify-between gap-3">
+                        <div>
+                          <CardTitle>توزيع ألواح المشروع</CardTitle>
+                          <CardDescription>
+                            هذا التوزيع مبني على إجمالي القطع المجمعة من كل
+                            الوحدات المضافة وقت الحساب.
+                          </CardDescription>
+                        </div>
+                        <Badge
+                          variant="outline"
+                          className="border-stone-200 bg-stone-50 text-stone-700"
+                        >
+                          {projectLayoutSheetCount} لوح /{" "}
+                          {projectSheetLayout?.stocks.length ?? 0} خامة
+                        </Badge>
+                      </div>
+                      {openResultsSections.layout ? (
+                        <ArrowUp className="size-4 text-stone-500" />
+                      ) : (
+                        <ArrowDown className="size-4 text-stone-500" />
+                      )}
+                    </button>
+                  </CardHeader>
+                  <CardContent
+                    className={cn(
+                      "space-y-4",
+                      !openResultsSections.layout && "hidden",
+                    )}
+                  >
+                    {projectSheetLayout?.stocks.map((stock) => (
+                      <div
+                        key={stock.key}
+                        className="rounded-2xl border border-stone-200 bg-stone-50/70 p-3"
+                      >
+                        <div className="mb-4 flex flex-col gap-2 rounded-xl bg-white/90 p-3 ring-1 ring-stone-200 sm:flex-row sm:items-center sm:justify-between">
+                          <div>
+                            <p className="text-sm font-medium text-stone-950">
+                              {getStockLabel(
+                                stock.thickness,
+                                stock.isBackStock,
+                              )}
                             </p>
-                            <p className="mt-1 font-semibold text-stone-950">
-                              {formatCm(card.part.length)} ×{" "}
-                              {formatCm(card.part.width)}
+                            <p className="text-xs text-stone-500">
+                              {stock.materialSummary} • {stock.partCount} قطعة •{" "}
+                              {stock.sheets.length} لوح •{" "}
+                              {formatSheetSize(
+                                stock.boardLength,
+                                stock.boardWidth,
+                              )}
                             </p>
                           </div>
-                          <div className="rounded-xl bg-white/75 p-3 ring-1 ring-stone-200">
-                            <p className="text-[11px] text-stone-500">السمك</p>
-                            <p className="mt-1 font-semibold text-stone-950">
-                              {formatCm(card.part.thickness)}
-                            </p>
-                          </div>
-                        </div>
-
-                        <div className="mt-3 rounded-xl bg-stone-950/[0.03] p-3 ring-1 ring-stone-200">
-                          <p className="text-[11px] text-stone-500">
-                            ربط اللوح
+                          <p className="text-xs text-stone-500">
+                            استهلاك هذه المجموعة {stock.totalAreaM2} م²
                           </p>
-                          <p className="mt-1 text-sm font-medium text-stone-900">
-                            {card.primarySheetReference ?? "لم يُوزع بعد"}
-                          </p>
-                          {card.sheetReferences.length > 1 ? (
-                            <p className="mt-1 text-[11px] leading-6 text-stone-500">
-                              {card.sheetReferences.join(" • ")}
-                            </p>
-                          ) : null}
-                        </div>
-
-                        <div className="mt-3 rounded-xl bg-stone-950/[0.03] p-3 ring-1 ring-stone-200">
-                          <p className="text-[11px] text-stone-500">الحواف</p>
-                          <p className="mt-1 text-sm font-medium text-stone-900">
-                            {formatPartEdgeBanding(card.part)}
-                          </p>
-                          <p className="mt-1 text-xs text-stone-500">
-                            إجمالي الطول:{" "}
-                            {formatCm(getPartEdgeBandLengthCm(card.part))}
+                          <p className="text-xs text-stone-500">
+                            الهالك داخل هذه المجموعة{" "}
+                            {getStockWasteAreaM2(stock)} م²
                           </p>
                         </div>
 
-                        <div className="mt-3 rounded-xl bg-white/75 p-3 ring-1 ring-stone-200">
-                          <p className="text-[11px] text-stone-500">
-                            ملاحظات التنفيذ
-                          </p>
-                          <p className="mt-1 text-xs leading-6 text-stone-600">
-                            {card.part.notes}
-                          </p>
+                        <div className="space-y-4">
+                          {stock.sheets.map((sheet) => (
+                            <div
+                              key={`${stock.key}-${sheet.index}`}
+                              className="rounded-2xl border border-stone-200 bg-white/80 p-3"
+                            >
+                              <div className="mb-3 flex items-center justify-between text-xs text-stone-500">
+                                <span>لوح #{sheet.index + 1}</span>
+                                <span>
+                                  مستخدم طوليًا {formatCm(sheet.usedLength)} من{" "}
+                                  {formatCm(stock.boardLength)}
+                                </span>
+                              </div>
+                              <div className="rounded-xl border border-stone-200 bg-[linear-gradient(180deg,#f8f4ee_0%,#f2ece3_100%)] p-3">
+                                <svg
+                                  viewBox={`-18 -18 ${stock.boardWidth + 36} ${stock.boardLength + 36}`}
+                                  className="w-full rounded-xl bg-white shadow-[inset_0_0_0_1px_rgba(214,206,194,0.9)]"
+                                  preserveAspectRatio="xMidYMid meet"
+                                  role="img"
+                                  aria-label={`${stock.key} sheet ${sheet.index + 1} layout`}
+                                >
+                                  <line
+                                    x1="0"
+                                    y1="-10"
+                                    x2={stock.boardWidth}
+                                    y2="-10"
+                                    stroke="#9b8a75"
+                                    strokeWidth="0.9"
+                                  />
+                                  <line
+                                    x1="0"
+                                    y1="-13.5"
+                                    x2="0"
+                                    y2="-6.5"
+                                    stroke="#9b8a75"
+                                    strokeWidth="0.9"
+                                  />
+                                  <line
+                                    x1={stock.boardWidth}
+                                    y1="-13.5"
+                                    x2={stock.boardWidth}
+                                    y2="-6.5"
+                                    stroke="#9b8a75"
+                                    strokeWidth="0.9"
+                                  />
+                                  <text
+                                    x={stock.boardWidth / 2}
+                                    y="-12.5"
+                                    textAnchor="middle"
+                                    dominantBaseline="ideographic"
+                                    fontSize="5.2"
+                                    fontWeight="700"
+                                    fill="#6b5a45"
+                                  >
+                                    عرض اللوح {formatCm(stock.boardWidth)}
+                                  </text>
+                                  <line
+                                    x1={stock.boardWidth + 10}
+                                    y1="0"
+                                    x2={stock.boardWidth + 10}
+                                    y2={stock.boardLength}
+                                    stroke="#9b8a75"
+                                    strokeWidth="0.9"
+                                  />
+                                  <line
+                                    x1={stock.boardWidth + 6.5}
+                                    y1="0"
+                                    x2={stock.boardWidth + 13.5}
+                                    y2="0"
+                                    stroke="#9b8a75"
+                                    strokeWidth="0.9"
+                                  />
+                                  <line
+                                    x1={stock.boardWidth + 6.5}
+                                    y1={stock.boardLength}
+                                    x2={stock.boardWidth + 13.5}
+                                    y2={stock.boardLength}
+                                    stroke="#9b8a75"
+                                    strokeWidth="0.9"
+                                  />
+                                  <text
+                                    x={stock.boardWidth + 14}
+                                    y={stock.boardLength / 2}
+                                    textAnchor="middle"
+                                    dominantBaseline="middle"
+                                    fontSize="5.2"
+                                    fontWeight="700"
+                                    fill="#6b5a45"
+                                    transform={`rotate(90 ${stock.boardWidth + 14} ${stock.boardLength / 2})`}
+                                  >
+                                    طول اللوح {formatCm(stock.boardLength)}
+                                  </text>
+                                  <rect
+                                    x="0"
+                                    y="0"
+                                    width={stock.boardWidth}
+                                    height={stock.boardLength}
+                                    fill="#fcfaf7"
+                                    stroke="#d6cec2"
+                                    strokeWidth="1"
+                                    rx="4"
+                                  />
+                                  {sheet.pieces.map((piece) => {
+                                    const pieceLabel =
+                                      getSheetPieceLabelMode(piece);
+                                    const displayPiece =
+                                      pieceLabel.displayPiece;
+                                    const aggregatedPart =
+                                      aggregatedProjectPartMap.get(
+                                        piece.sourcePartId,
+                                      );
+                                    const projectPartLink =
+                                      projectPartLinkMap.get(
+                                        piece.sourcePartId,
+                                      );
+                                    const edgeThickness = Math.max(
+                                      1.4,
+                                      Math.min(
+                                        Math.min(
+                                          displayPiece.width,
+                                          displayPiece.height,
+                                        ) * 0.08,
+                                        3.2,
+                                      ),
+                                    );
+                                    const edgeRects = [
+                                      {
+                                        edge: "top" as const,
+                                        x: displayPiece.x,
+                                        y: displayPiece.y,
+                                        width: displayPiece.width,
+                                        height: edgeThickness,
+                                      },
+                                      {
+                                        edge: "right" as const,
+                                        x:
+                                          displayPiece.x +
+                                          displayPiece.width -
+                                          edgeThickness,
+                                        y: displayPiece.y,
+                                        width: edgeThickness,
+                                        height: displayPiece.height,
+                                      },
+                                      {
+                                        edge: "bottom" as const,
+                                        x: displayPiece.x,
+                                        y:
+                                          displayPiece.y +
+                                          displayPiece.height -
+                                          edgeThickness,
+                                        width: displayPiece.width,
+                                        height: edgeThickness,
+                                      },
+                                      {
+                                        edge: "left" as const,
+                                        x: displayPiece.x,
+                                        y: displayPiece.y,
+                                        width: edgeThickness,
+                                        height: displayPiece.height,
+                                      },
+                                    ];
+
+                                    return (
+                                      <g key={piece.id}>
+                                        <rect
+                                          x={displayPiece.x}
+                                          y={displayPiece.y}
+                                          width={displayPiece.width}
+                                          height={displayPiece.height}
+                                          className="cursor-pointer"
+                                          onClick={() =>
+                                            handlePartSelection(
+                                              piece.sourcePartId,
+                                            )
+                                          }
+                                          fill={
+                                            piece.category === "front"
+                                              ? "#c88f5a"
+                                              : piece.category === "back"
+                                                ? "#90a4ae"
+                                                : piece.category === "shelf"
+                                                  ? "#6f8f72"
+                                                  : piece.category === "support"
+                                                    ? "#d8c178"
+                                                    : "#9a7b5f"
+                                          }
+                                          fillOpacity={
+                                            selectedPartId ===
+                                            piece.sourcePartId
+                                              ? "1"
+                                              : "0.82"
+                                          }
+                                          stroke={
+                                            selectedPartId ===
+                                            piece.sourcePartId
+                                              ? "#1f2937"
+                                              : "#fff"
+                                          }
+                                          strokeWidth={
+                                            selectedPartId ===
+                                            piece.sourcePartId
+                                              ? "2"
+                                              : "0.8"
+                                          }
+                                          rx="1.5"
+                                        />
+                                        {aggregatedPart
+                                          ? edgeRects.map((edgeRect) => {
+                                              const logicalSide =
+                                                getVisualEdgeSide(
+                                                  piece,
+                                                  edgeRect.edge,
+                                                );
+                                              const isActive =
+                                                aggregatedPart.part.edgeBanding[
+                                                  logicalSide
+                                                ] ?? false;
+
+                                              return (
+                                                <rect
+                                                  key={`${piece.id}-${edgeRect.edge}`}
+                                                  x={edgeRect.x}
+                                                  y={edgeRect.y}
+                                                  width={edgeRect.width}
+                                                  height={edgeRect.height}
+                                                  rx="1"
+                                                  className="cursor-pointer"
+                                                  fill={
+                                                    isActive
+                                                      ? "#f3b04d"
+                                                      : "rgba(255,255,255,0.001)"
+                                                  }
+                                                  fillOpacity={
+                                                    isActive ? "0.95" : "1"
+                                                  }
+                                                  stroke={
+                                                    isActive
+                                                      ? "#fff7e7"
+                                                      : "rgba(255,255,255,0.45)"
+                                                  }
+                                                  strokeWidth={
+                                                    isActive ? "0.7" : "0.35"
+                                                  }
+                                                  onClick={(event) => {
+                                                    event.stopPropagation();
+                                                    toggleProjectPartEdgeBand(
+                                                      piece.sourcePartId,
+                                                      logicalSide,
+                                                    );
+                                                  }}
+                                                />
+                                              );
+                                            })
+                                          : null}
+                                        {pieceLabel.mode === "full" ? (
+                                          <g>
+                                            <text
+                                              x={
+                                                displayPiece.x +
+                                                displayPiece.width / 2
+                                              }
+                                              y={
+                                                displayPiece.y +
+                                                displayPiece.height / 2 -
+                                                pieceLabel.nameOffset
+                                              }
+                                              textAnchor="middle"
+                                              dominantBaseline="middle"
+                                              fontSize={pieceLabel.nameFontSize}
+                                              fontWeight="700"
+                                              fill="#fff"
+                                              direction="rtl"
+                                              unicodeBidi="plaintext"
+                                              transform={
+                                                pieceLabel.rotate
+                                                  ? `rotate(-90 ${
+                                                      displayPiece.x +
+                                                      displayPiece.width / 2
+                                                    } ${
+                                                      displayPiece.y +
+                                                      displayPiece.height / 2
+                                                    })`
+                                                  : undefined
+                                              }
+                                            >
+                                              {projectPartLink
+                                                ? `${projectPartLink.code} • ${piece.name}`
+                                                : piece.name}
+                                            </text>
+                                            <text
+                                              x={
+                                                displayPiece.x +
+                                                displayPiece.width / 2
+                                              }
+                                              y={
+                                                displayPiece.y +
+                                                displayPiece.height / 2 +
+                                                pieceLabel.dimsOffset
+                                              }
+                                              textAnchor="middle"
+                                              dominantBaseline="middle"
+                                              fontSize={pieceLabel.dimsFontSize}
+                                              fontWeight="700"
+                                              fill="#fff"
+                                              transform={
+                                                pieceLabel.rotate
+                                                  ? `rotate(-90 ${
+                                                      displayPiece.x +
+                                                      displayPiece.width / 2
+                                                    } ${
+                                                      displayPiece.y +
+                                                      displayPiece.height / 2
+                                                    })`
+                                                  : undefined
+                                              }
+                                            >
+                                              {round2(piece.length)} ×{" "}
+                                              {round2(piece.width)} سم
+                                            </text>
+                                          </g>
+                                        ) : pieceLabel.mode === "dims" ? (
+                                          <text
+                                            x={
+                                              displayPiece.x +
+                                              displayPiece.width / 2
+                                            }
+                                            y={
+                                              displayPiece.y +
+                                              displayPiece.height / 2
+                                            }
+                                            textAnchor="middle"
+                                            dominantBaseline="middle"
+                                            fontSize={pieceLabel.fontSize}
+                                            fontWeight="600"
+                                            fill="#fff"
+                                            transform={
+                                              pieceLabel.rotate
+                                                ? `rotate(-90 ${displayPiece.x + displayPiece.width / 2} ${displayPiece.y + displayPiece.height / 2})`
+                                                : undefined
+                                            }
+                                          >
+                                            {round2(piece.length)} ×{" "}
+                                            {round2(piece.width)}
+                                          </text>
+                                        ) : null}
+                                      </g>
+                                    );
+                                  })}
+                                </svg>
+                              </div>
+                            </div>
+                          ))}
                         </div>
                       </div>
                     ))}
-                  </div>
-                </CardContent>
-              </Card>
-            </section>
 
+                    {projectWasteInsight ? (
+                      <div className="rounded-2xl border border-amber-200 bg-amber-50/80 p-4 text-sm leading-7 text-amber-950 ring-1 ring-amber-100">
+                        <p className="font-medium">قراءة سريعة للهالك</p>
+                        <p className="mt-2 text-amber-900">
+                          {projectWasteInsight}
+                        </p>
+                      </div>
+                    ) : null}
+                  </CardContent>
+                  <CardFooter className="justify-between border-t border-stone-200/80 bg-stone-50/80 text-xs text-stone-500">
+                    <span>
+                      توزيع المشروع يظل مفصولًا حسب سماكة اللوح لكل خامة.
+                    </span>
+                    <span>{projectLayoutWastePercent}% هالك تقريبي</span>
+                  </CardFooter>
+                </Card>
+
+                <Card className="border-0 bg-white/88 shadow-[0_20px_60px_-45px_rgba(63,40,12,0.55)] ring-1 ring-stone-950/8">
+                  <CardHeader>
+                    <button
+                      type="button"
+                      className="flex w-full items-center justify-between gap-3 text-right"
+                      onClick={() => toggleResultsSection("metrics")}
+                    >
+                      <div>
+                        <CardTitle>مؤشرات المشروع</CardTitle>
+                        <CardDescription>
+                          هذه المؤشرات تخص المشروع المجمع بالكامل.
+                        </CardDescription>
+                      </div>
+                      {openResultsSections.metrics ? (
+                        <ArrowUp className="size-4 text-stone-500" />
+                      ) : (
+                        <ArrowDown className="size-4 text-stone-500" />
+                      )}
+                    </button>
+                  </CardHeader>
+                  <CardContent
+                    className={cn(
+                      "grid gap-3 sm:grid-cols-2",
+                      !openResultsSections.metrics && "hidden",
+                    )}
+                  >
+                    <div className="rounded-2xl border border-stone-200 bg-stone-50 p-4">
+                      <p className="text-xs text-stone-500">عدد الوحدات</p>
+                      <p className="mt-2 text-lg font-semibold text-stone-950">
+                        {projectSummary.unitCount}
+                      </p>
+                    </div>
+                    <div className="rounded-2xl border border-stone-200 bg-stone-50 p-4">
+                      <p className="text-xs text-stone-500">
+                        الخامات المستخدمة
+                      </p>
+                      <p className="mt-2 text-lg font-semibold text-stone-950">
+                        {projectMaterialSummary || "--"}
+                      </p>
+                    </div>
+                    <div className="rounded-2xl border border-stone-200 bg-stone-50 p-4">
+                      <p className="text-xs text-stone-500">إجمالي الواجهات</p>
+                      <p className="mt-2 text-lg font-semibold text-stone-950">
+                        {projectFrontPieceCount}
+                      </p>
+                    </div>
+                    <div className="rounded-2xl border border-stone-200 bg-stone-50 p-4">
+                      <p className="text-xs text-stone-500">الهالك التقريبي</p>
+                      <p className="mt-2 text-lg font-semibold text-stone-950">
+                        {projectLayoutWastePercent}%
+                      </p>
+                    </div>
+                    <div className="rounded-2xl border border-stone-200 bg-stone-50 p-4">
+                      <p className="text-xs text-stone-500">تسعير الألواح</p>
+                      <p className="mt-2 text-lg font-semibold text-stone-950">
+                        18 مم: {formatPrice(projectSettings.boardSheetPrice)} •
+                        6 مم: {formatPrice(projectSettings.backSheetPrice)}
+                      </p>
+                    </div>
+                    <div className="rounded-2xl border border-stone-200 bg-stone-50 p-4">
+                      <p className="text-xs text-stone-500">مصنعية المتر</p>
+                      <p className="mt-2 text-lg font-semibold text-stone-950">
+                        {formatPrice(projectSettings.laborPricePerSquareMeter)}{" "}
+                        / م²
+                      </p>
+                    </div>
+                    <div className="rounded-2xl border border-stone-200 bg-stone-50 p-4">
+                      <p className="text-xs text-stone-500">شريط الحافة</p>
+                      <p className="mt-2 text-lg font-semibold text-stone-950">
+                        {projectSummary.totalEdgeBandLengthM} م ط ×{" "}
+                        {formatPrice(projectSettings.edgeBandPricePerMeter)} ={" "}
+                        {formatPrice(projectSummary.totalEdgeBandCost)}
+                      </p>
+                    </div>
+                  </CardContent>
+                </Card>
+              </section>
+
+              <section className="mt-6">
+                <Card className="border-0 bg-white/88 shadow-[0_20px_60px_-45px_rgba(63,40,12,0.55)] ring-1 ring-stone-950/8">
+                  <CardHeader>
+                    <button
+                      type="button"
+                      className="flex w-full flex-col gap-3 text-right sm:flex-row sm:items-center sm:justify-between"
+                      onClick={() => toggleResultsSection("workshop")}
+                    >
+                      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:flex-1">
+                        <div>
+                          <CardTitle>أمر تشغيل الورشة</CardTitle>
+                          <CardDescription>
+                            بطاقات تنفيذ نهائية مرتبة للقص والتشطيب، مع كود
+                            القطعة وربطها باللوح والوحدة.
+                          </CardDescription>
+                        </div>
+                        <Badge
+                          variant="secondary"
+                          className="w-fit bg-stone-100 text-stone-700"
+                        >
+                          {workshopExecutionCards.length} بطاقة
+                        </Badge>
+                      </div>
+                      {openResultsSections.workshop ? (
+                        <ArrowUp className="size-4 text-stone-500" />
+                      ) : (
+                        <ArrowDown className="size-4 text-stone-500" />
+                      )}
+                    </button>
+                  </CardHeader>
+                  <CardContent
+                    className={cn(!openResultsSections.workshop && "hidden")}
+                  >
+                    <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                      {workshopExecutionCards.map((card) => (
+                        <div
+                          key={card.id}
+                          className="rounded-[1.5rem] border border-stone-200 bg-[linear-gradient(180deg,rgba(252,250,247,0.95),rgba(243,236,227,0.82))] p-4 shadow-[0_18px_44px_-36px_rgba(63,40,12,0.4)]"
+                        >
+                          <div className="flex items-start justify-between gap-3">
+                            <div>
+                              <p className="text-sm font-semibold text-stone-950">
+                                {card.part.name}
+                              </p>
+                              <p className="mt-1 text-xs text-stone-500">
+                                {card.unitTitle} •{" "}
+                                {partCategoryLabels[card.part.category]}
+                              </p>
+                            </div>
+                            <div className="flex flex-col items-end gap-2">
+                              <Badge
+                                variant="outline"
+                                className="border-stone-200 bg-white text-stone-700"
+                              >
+                                تشغيل #{card.operationOrder}
+                              </Badge>
+                              <Badge
+                                variant="outline"
+                                className="border-amber-200 bg-amber-50 text-amber-800"
+                              >
+                                {card.partCode} • × {card.part.qty}
+                              </Badge>
+                            </div>
+                          </div>
+
+                          <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
+                            <div className="rounded-xl bg-white/75 p-3 ring-1 ring-stone-200">
+                              <p className="text-[11px] text-stone-500">
+                                الطول × العرض
+                              </p>
+                              <p className="mt-1 font-semibold text-stone-950">
+                                {formatCm(card.part.length)} ×{" "}
+                                {formatCm(card.part.width)}
+                              </p>
+                            </div>
+                            <div className="rounded-xl bg-white/75 p-3 ring-1 ring-stone-200">
+                              <p className="text-[11px] text-stone-500">
+                                السمك
+                              </p>
+                              <p className="mt-1 font-semibold text-stone-950">
+                                {formatCm(card.part.thickness)}
+                              </p>
+                            </div>
+                          </div>
+
+                          <div className="mt-3 rounded-xl bg-stone-950/[0.03] p-3 ring-1 ring-stone-200">
+                            <p className="text-[11px] text-stone-500">
+                              ربط اللوح
+                            </p>
+                            <p className="mt-1 text-sm font-medium text-stone-900">
+                              {card.primarySheetReference ?? "لم يُوزع بعد"}
+                            </p>
+                            {card.sheetReferences.length > 1 ? (
+                              <p className="mt-1 text-[11px] leading-6 text-stone-500">
+                                {card.sheetReferences.join(" • ")}
+                              </p>
+                            ) : null}
+                          </div>
+
+                          <div className="mt-3 rounded-xl bg-stone-950/[0.03] p-3 ring-1 ring-stone-200">
+                            <p className="text-[11px] text-stone-500">الحواف</p>
+                            <p className="mt-1 text-sm font-medium text-stone-900">
+                              {formatPartEdgeBanding(card.part)}
+                            </p>
+                            <p className="mt-1 text-xs text-stone-500">
+                              إجمالي الطول:{" "}
+                              {formatCm(getPartEdgeBandLengthCm(card.part))}
+                            </p>
+                          </div>
+
+                          <div className="mt-3 rounded-xl bg-white/75 p-3 ring-1 ring-stone-200">
+                            <p className="text-[11px] text-stone-500">
+                              ملاحظات التنفيذ
+                            </p>
+                            <p className="mt-1 text-xs leading-6 text-stone-600">
+                              {card.part.notes}
+                            </p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </CardContent>
+                </Card>
+              </section>
+
+              <section className="mt-6 pb-8">
+                <Card className="border-0 bg-white/88 shadow-[0_20px_60px_-45px_rgba(63,40,12,0.55)] ring-1 ring-stone-950/8">
+                  <CardHeader>
+                    <button
+                      type="button"
+                      className="flex w-full flex-col gap-3 text-right sm:flex-row sm:items-center sm:justify-between"
+                      onClick={() => toggleResultsSection("parts")}
+                    >
+                      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:flex-1">
+                        <div>
+                          <CardTitle>قائمة قطع المشروع</CardTitle>
+                          <CardDescription>
+                            الجدول التالي يجمع القطع المتشابهة من كل الوحدات
+                            داخل المشروع ويمكنك اختيار أي صف لتمييزه داخل توزيع
+                            الألواح.
+                          </CardDescription>
+                        </div>
+                        <Badge
+                          variant="secondary"
+                          className="w-fit bg-stone-100 text-stone-700"
+                        >
+                          {selectedPartId
+                            ? "جزء محدد"
+                            : `${projectPartLinks.length} كود قطعة`}
+                        </Badge>
+                      </div>
+                      {openResultsSections.parts ? (
+                        <ArrowUp className="size-4 text-stone-500" />
+                      ) : (
+                        <ArrowDown className="size-4 text-stone-500" />
+                      )}
+                    </button>
+                  </CardHeader>
+                  <CardContent
+                    className={cn(!openResultsSections.parts && "hidden")}
+                  >
+                    <Table className="table-fixed">
+                      <colgroup>
+                        <col className="w-[12%]" />
+                        <col className="w-[9%]" />
+                        <col className="w-[7%]" />
+                        <col className="w-[10%]" />
+                        <col className="w-[10%]" />
+                        <col className="w-[9%]" />
+                        <col className="w-[17%]" />
+                        <col className="w-[26%]" />
+                      </colgroup>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead className="px-3 text-right text-stone-700">
+                            الجزء
+                          </TableHead>
+                          <TableHead className="px-3 text-right text-stone-700">
+                            الفئة
+                          </TableHead>
+                          <TableHead className="px-3 text-right text-stone-700">
+                            العدد
+                          </TableHead>
+                          <TableHead className="px-3 text-right text-stone-700">
+                            الطول
+                          </TableHead>
+                          <TableHead className="px-3 text-right text-stone-700">
+                            العرض
+                          </TableHead>
+                          <TableHead className="px-3 text-right text-stone-700">
+                            السمك
+                          </TableHead>
+                          <TableHead className="px-3 text-right text-stone-700">
+                            الحواف
+                          </TableHead>
+                          <TableHead className="px-3 text-right text-stone-700">
+                            ملاحظات
+                          </TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {projectParts.map((part) => (
+                          <TableRow
+                            key={part.id}
+                            className={cn(
+                              "cursor-pointer",
+                              selectedPartId === part.id &&
+                                "bg-amber-50 hover:bg-amber-50",
+                            )}
+                            onClick={() => handlePartSelection(part.id)}
+                          >
+                            <TableCell className="px-3 align-top font-medium whitespace-normal text-stone-900">
+                              <span className="inline-flex min-w-16 items-center justify-center rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-800">
+                                {projectPartLinkMap.get(part.id)?.code ?? "--"}
+                              </span>
+                              <span className="mt-2 block">{part.name}</span>
+                            </TableCell>
+                            <TableCell className="px-3 align-top whitespace-normal">
+                              {partCategoryLabels[part.category]}
+                            </TableCell>
+                            <TableCell className="px-3 align-top">
+                              {part.qty}
+                            </TableCell>
+                            <TableCell className="px-3 align-top">
+                              {formatCm(part.length)}
+                            </TableCell>
+                            <TableCell className="px-3 align-top">
+                              {formatCm(part.width)}
+                            </TableCell>
+                            <TableCell className="px-3 align-top">
+                              {formatCm(part.thickness)}
+                            </TableCell>
+                            <TableCell className="px-3 align-top whitespace-normal text-xs leading-6 text-stone-500">
+                              {formatPartEdgeBanding(part)}
+                              <span className="mt-1 block text-[11px] text-stone-400">
+                                {formatCm(getPartEdgeBandLengthCm(part))}
+                              </span>
+                              {projectPartLinkMap.get(part.id)
+                                ?.primarySheetReference ? (
+                                <span className="mt-2 block text-[11px] text-stone-500">
+                                  {
+                                    projectPartLinkMap.get(part.id)
+                                      ?.primarySheetReference
+                                  }
+                                </span>
+                              ) : null}
+                            </TableCell>
+                            <TableCell className="px-3 align-top whitespace-normal text-xs leading-6 text-stone-500">
+                              {part.notes}
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </CardContent>
+                  <CardFooter className="justify-between border-t border-stone-200/80 bg-stone-50/80 text-xs text-stone-500">
+                    <span>
+                      نتيجة المشروع النهائية تعتمد على الوحدات التي كانت موجودة
+                      عند آخر ضغط على زر احسب.
+                    </span>
+                    <span>
+                      {selectedPartId
+                        ? "الجزء المحدد ظاهر الآن في الجدول وتوزيع الألواح."
+                        : `${projectSummary.totalPanels} قطعة على ${projectLayoutSheetCount} لوح للمشروع بالكامل`}
+                    </span>
+                  </CardFooter>
+                </Card>
+              </section>
+            </>
+          ) : (
             <section className="mt-6 pb-8">
               <Card className="border-0 bg-white/88 shadow-[0_20px_60px_-45px_rgba(63,40,12,0.55)] ring-1 ring-stone-950/8">
                 <CardHeader>
-                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                    <div>
-                      <CardTitle>قائمة قطع المشروع</CardTitle>
-                      <CardDescription>
-                        الجدول التالي يجمع القطع المتشابهة من كل الوحدات داخل
-                        المشروع ويمكنك اختيار أي صف لتمييزه داخل توزيع الألواح.
-                      </CardDescription>
-                    </div>
-                    <Badge
-                      variant="secondary"
-                      className="w-fit bg-stone-100 text-stone-700"
-                    >
-                      {selectedPartId
-                        ? "جزء محدد"
-                        : `${projectPartLinks.length} كود قطعة`}
-                    </Badge>
-                  </div>
+                  <CardTitle>بانتظار الحساب</CardTitle>
+                  <CardDescription>
+                    بعد إضافة الوحدات اضغط على زر احسب المشروع لعرض قائمة القطع
+                    وتوزيع الألواح للمشروع بالكامل.
+                  </CardDescription>
                 </CardHeader>
-                <CardContent>
-                  <Table className="table-fixed">
-                    <colgroup>
-                      <col className="w-[12%]" />
-                      <col className="w-[9%]" />
-                      <col className="w-[7%]" />
-                      <col className="w-[10%]" />
-                      <col className="w-[10%]" />
-                      <col className="w-[9%]" />
-                      <col className="w-[17%]" />
-                      <col className="w-[26%]" />
-                    </colgroup>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead className="px-3 text-right text-stone-700">
-                          الجزء
-                        </TableHead>
-                        <TableHead className="px-3 text-right text-stone-700">
-                          الفئة
-                        </TableHead>
-                        <TableHead className="px-3 text-right text-stone-700">
-                          العدد
-                        </TableHead>
-                        <TableHead className="px-3 text-right text-stone-700">
-                          الطول
-                        </TableHead>
-                        <TableHead className="px-3 text-right text-stone-700">
-                          العرض
-                        </TableHead>
-                        <TableHead className="px-3 text-right text-stone-700">
-                          السمك
-                        </TableHead>
-                        <TableHead className="px-3 text-right text-stone-700">
-                          الحواف
-                        </TableHead>
-                        <TableHead className="px-3 text-right text-stone-700">
-                          ملاحظات
-                        </TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {projectParts.map((part) => (
-                        <TableRow
-                          key={part.id}
-                          className={cn(
-                            "cursor-pointer",
-                            selectedPartId === part.id &&
-                              "bg-amber-50 hover:bg-amber-50",
-                          )}
-                          onClick={() => handlePartSelection(part.id)}
-                        >
-                          <TableCell className="px-3 align-top font-medium whitespace-normal text-stone-900">
-                            <span className="inline-flex min-w-16 items-center justify-center rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-800">
-                              {projectPartLinkMap.get(part.id)?.code ?? "--"}
-                            </span>
-                            <span className="mt-2 block">{part.name}</span>
-                          </TableCell>
-                          <TableCell className="px-3 align-top whitespace-normal">
-                            {partCategoryLabels[part.category]}
-                          </TableCell>
-                          <TableCell className="px-3 align-top">
-                            {part.qty}
-                          </TableCell>
-                          <TableCell className="px-3 align-top">
-                            {formatCm(part.length)}
-                          </TableCell>
-                          <TableCell className="px-3 align-top">
-                            {formatCm(part.width)}
-                          </TableCell>
-                          <TableCell className="px-3 align-top">
-                            {formatCm(part.thickness)}
-                          </TableCell>
-                          <TableCell className="px-3 align-top whitespace-normal text-xs leading-6 text-stone-500">
-                            {formatPartEdgeBanding(part)}
-                            <span className="mt-1 block text-[11px] text-stone-400">
-                              {formatCm(getPartEdgeBandLengthCm(part))}
-                            </span>
-                            {projectPartLinkMap.get(part.id)
-                              ?.primarySheetReference ? (
-                              <span className="mt-2 block text-[11px] text-stone-500">
-                                {
-                                  projectPartLinkMap.get(part.id)
-                                    ?.primarySheetReference
-                                }
-                              </span>
-                            ) : null}
-                          </TableCell>
-                          <TableCell className="px-3 align-top whitespace-normal text-xs leading-6 text-stone-500">
-                            {part.notes}
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </CardContent>
-                <CardFooter className="justify-between border-t border-stone-200/80 bg-stone-50/80 text-xs text-stone-500">
-                  <span>
-                    نتيجة المشروع النهائية تعتمد على الوحدات التي كانت موجودة
-                    عند آخر ضغط على زر احسب.
-                  </span>
-                  <span>
-                    {selectedPartId
-                      ? "الجزء المحدد ظاهر الآن في الجدول وتوزيع الألواح."
-                      : `${projectSummary.totalPanels} قطعة على ${projectLayoutSheetCount} لوح للمشروع بالكامل`}
-                  </span>
-                </CardFooter>
               </Card>
             </section>
-          </>
-        ) : (
-          <section className="mt-6 pb-8">
+          )
+        ) : null}
+
+        {activeWorkspaceTab === "library" ? (
+          <section className="mt-6 grid gap-6 lg:grid-cols-2">
             <Card className="border-0 bg-white/88 shadow-[0_20px_60px_-45px_rgba(63,40,12,0.55)] ring-1 ring-stone-950/8">
               <CardHeader>
-                <CardTitle>بانتظار الحساب</CardTitle>
+                <CardTitle>المشاريع المحفوظة</CardTitle>
                 <CardDescription>
-                  بعد إضافة الوحدات اضغط على زر احسب المشروع لعرض قائمة القطع
-                  وتوزيع الألواح للمشروع بالكامل.
+                  وصول سريع لآخر المشاريع بدل فتح الشاشة كاملة كل مرة.
                 </CardDescription>
               </CardHeader>
+              <CardContent className="space-y-3">
+                {recentSavedProjects.length === 0 ? (
+                  <div className="rounded-2xl border border-dashed border-stone-300 bg-stone-50/80 p-6 text-center text-sm text-stone-500">
+                    لا توجد مشاريع محفوظة بعد.
+                  </div>
+                ) : (
+                  recentSavedProjects.map((project) => (
+                    <div
+                      key={project.id}
+                      className="rounded-2xl border border-stone-200 bg-stone-50/80 p-4 ring-1 ring-stone-200"
+                    >
+                      <div className="flex items-center justify-between gap-3">
+                        <div>
+                          <p className="font-medium text-stone-950">
+                            {project.name}
+                          </p>
+                          <p className="mt-1 text-xs text-stone-500">
+                            {project.units.length} وحدة •{" "}
+                            {(project.customParts ?? []).length} مقاس حر
+                          </p>
+                        </div>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => loadSavedProject(project)}
+                        >
+                          تحميل
+                        </Button>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </CardContent>
+              <CardFooter>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setIsProjectLibraryOpen(true)}
+                >
+                  <FolderOpen className="size-4" />
+                  فتح مكتبة المشاريع
+                </Button>
+              </CardFooter>
+            </Card>
+
+            <Card className="border-0 bg-white/88 shadow-[0_20px_60px_-45px_rgba(63,40,12,0.55)] ring-1 ring-stone-950/8">
+              <CardHeader>
+                <CardTitle>الوحدات الجاهزة</CardTitle>
+                <CardDescription>
+                  استخدم الوحدات المتكررة كنقطة بداية بدل إعادة إدخال كل شيء من
+                  الصفر.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {unitPresets.slice(0, 4).map((preset) => (
+                  <div
+                    key={preset.id}
+                    className="rounded-2xl border border-stone-200 bg-stone-50/80 p-4 ring-1 ring-stone-200"
+                  >
+                    <p className="font-medium text-stone-950">{preset.title}</p>
+                    <p className="mt-1 text-xs leading-6 text-stone-500">
+                      {preset.description}
+                    </p>
+                    <p className="mt-2 text-xs text-stone-500">
+                      {formatCm(preset.input.width)} ×{" "}
+                      {formatCm(preset.input.height)} ×{" "}
+                      {formatCm(preset.input.depth)}
+                    </p>
+                  </div>
+                ))}
+              </CardContent>
+              <CardFooter>
+                <Button type="button" onClick={() => setIsUnitPresetOpen(true)}>
+                  <Box className="size-4" />
+                  فتح مكتبة الوحدات
+                </Button>
+              </CardFooter>
             </Card>
           </section>
-        )}
+        ) : null}
 
-        <section className="pb-8">
-          <Card className="border-0 bg-stone-950 text-stone-50 ring-0">
-            <CardHeader>
-              <div className="flex items-center gap-2">
-                <Info className="size-4" />
-                <Layers2 className="size-4" />
-                <CardTitle>وضع المحرك الحالي</CardTitle>
-              </div>
-              <CardDescription className="text-stone-300">
-                المشروع أصبح يدعم تجميع وحدات متعددة مع أوضاع واجهات مختلفة قبل
-                تنفيذ الحساب النهائي.
-              </CardDescription>
-            </CardHeader>
-          </Card>
-        </section>
+        <div className="fixed inset-x-4 bottom-24 z-40 sm:hidden">
+          <Button
+            type="button"
+            className="h-12 w-full rounded-[1.25rem] shadow-[0_20px_50px_-30px_rgba(63,40,12,0.65)]"
+            onClick={mobilePrimaryAction.onClick}
+            disabled={mobilePrimaryAction.disabled}
+          >
+            <mobilePrimaryAction.icon className="size-4" />
+            {mobilePrimaryAction.label}
+          </Button>
+        </div>
+
+        <nav className="fixed inset-x-4 bottom-4 z-40 rounded-[1.5rem] border border-stone-200 bg-white/92 p-2 shadow-[0_20px_60px_-35px_rgba(63,40,12,0.55)] backdrop-blur sm:hidden">
+          <div className="grid grid-cols-4 gap-2">
+            {workspaceTabs.map((tab) => {
+              const Icon = tab.icon;
+              const isActive = activeWorkspaceTab === tab.id;
+
+              return (
+                <button
+                  key={tab.id}
+                  type="button"
+                  onClick={() => setActiveWorkspaceTab(tab.id)}
+                  className={cn(
+                    "flex flex-col items-center justify-center rounded-xl px-2 py-2 text-[11px]",
+                    isActive ? "bg-stone-950 text-stone-50" : "text-stone-600",
+                  )}
+                >
+                  <Icon className="size-4" />
+                  <span className="mt-1">{tab.label}</span>
+                </button>
+              );
+            })}
+          </div>
+        </nav>
       </div>
     </main>
   );
