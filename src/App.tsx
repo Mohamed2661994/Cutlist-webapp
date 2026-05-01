@@ -161,6 +161,7 @@ type CustomProjectPart = {
   material: MaterialType;
   category: PartCategory;
   grainDirection: GrainDirection;
+  edgeBanding: EdgeBandProfile;
 };
 
 type CustomProjectPartDraft = {
@@ -172,6 +173,7 @@ type CustomProjectPartDraft = {
   material: MaterialType;
   category: PartCategory;
   grainDirection: GrainDirection;
+  edgeBanding: EdgeBandProfile;
 };
 
 type EdgeBandOverrideMap = Record<string, EdgeBandProfile>;
@@ -674,7 +676,10 @@ function loadSavedProjects() {
     return parsedValue
       .map((project) => ({
         ...project,
-        customParts: project.customParts ?? [],
+        customParts: (project.customParts ?? []).map((part) => ({
+          ...part,
+          edgeBanding: part.edgeBanding ?? {},
+        })),
         edgeBandOverrides: project.edgeBandOverrides ?? {},
       }))
       .sort(
@@ -1281,6 +1286,7 @@ function buildEmptyCustomPartDraft(
     material: settings.material,
     category: "carcass",
     grainDirection: "free",
+    edgeBanding: {},
   };
 }
 
@@ -1303,7 +1309,7 @@ function buildCustomProjectCutlistPart(entry: CustomProjectPart): CutlistPart {
       entry.category === "back"
         ? "مقاس حر خارج الوحدات على لوح ظهر"
         : "مقاس حر خارج الوحدات",
-    edgeBanding: {},
+    edgeBanding: entry.edgeBanding ?? {},
     grainDirection: entry.grainDirection,
     allowRotation: entry.grainDirection === "free",
   };
@@ -1416,6 +1422,16 @@ function applyEdgeBandOverride(
   return {
     ...part,
     edgeBanding: override,
+  };
+}
+
+function toggleEdgeBandProfileSide(
+  profile: EdgeBandProfile,
+  side: EdgeBandSide,
+) {
+  return {
+    ...profile,
+    [side]: !(profile[side] ?? false),
   };
 }
 
@@ -2084,6 +2100,13 @@ function App() {
     }));
   }
 
+  function toggleCustomPartDraftEdgeBand(side: EdgeBandSide) {
+    setCustomPartDraft((current) => ({
+      ...current,
+      edgeBanding: toggleEdgeBandProfileSide(current.edgeBanding, side),
+    }));
+  }
+
   function announceProjectAction(message: string) {
     setProjectActionMessage(message);
   }
@@ -2130,6 +2153,7 @@ function App() {
       material: customPartDraft.material,
       category: customPartDraft.category,
       grainDirection: customPartDraft.grainDirection,
+      edgeBanding: { ...customPartDraft.edgeBanding },
     };
 
     if (editingCustomPartId) {
@@ -2161,6 +2185,7 @@ function App() {
       material: entry.material,
       category: entry.category,
       grainDirection: entry.grainDirection,
+      edgeBanding: { ...(entry.edgeBanding ?? {}) },
     });
   }
 
@@ -2405,11 +2430,19 @@ function App() {
     setProjectSettings(project.settings);
     setProjectSettingsDrafts(buildProjectSettingsDrafts(project.settings));
     setUnits(project.units);
-    setCustomParts(project.customParts ?? []);
+    setCustomParts(
+      (project.customParts ?? []).map((part) => ({
+        ...part,
+        edgeBanding: part.edgeBanding ?? {},
+      })),
+    );
     setEdgeBandOverrides(project.edgeBandOverrides ?? {});
     setCalculatedUnits(project.units.map((unit) => ({ ...unit })));
     setCalculatedCustomParts(
-      (project.customParts ?? []).map((part) => ({ ...part })),
+      (project.customParts ?? []).map((part) => ({
+        ...part,
+        edgeBanding: part.edgeBanding ?? {},
+      })),
     );
     setSelectedCalculatedUnitId(project.units[0]?.id ?? null);
     setProjectArrangement(nextArrangement);
@@ -4513,6 +4546,43 @@ function App() {
                             </SelectContent>
                           </Select>
                         </div>
+                        <div className="space-y-2 md:col-span-2 xl:col-span-4">
+                          <Label>شريط الحافة</Label>
+                          <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+                            {(
+                              [
+                                "length-start",
+                                "length-end",
+                                "width-start",
+                                "width-end",
+                              ] as EdgeBandSide[]
+                            ).map((side) => {
+                              const isActive =
+                                customPartDraft.edgeBanding[side] ?? false;
+
+                              return (
+                                <Button
+                                  key={side}
+                                  type="button"
+                                  variant={isActive ? "default" : "outline"}
+                                  className="justify-between"
+                                  onClick={() =>
+                                    toggleCustomPartDraftEdgeBand(side)
+                                  }
+                                >
+                                  <span>{edgeBandSideLabels[side]}</span>
+                                  <span className="text-xs opacity-80">
+                                    {isActive ? "مفعّل" : "بدون"}
+                                  </span>
+                                </Button>
+                              );
+                            })}
+                          </div>
+                          <p className="text-xs text-stone-500">
+                            اختر أي ضلع من الطول أو العرض ليُحسب ضمن شريط
+                            الحافة للمقاس الحر.
+                          </p>
+                        </div>
                       </div>
 
                       <div className="flex flex-col gap-3 rounded-2xl border border-stone-200 bg-stone-50/80 p-4 sm:flex-row sm:items-center sm:justify-between">
@@ -4561,6 +4631,11 @@ function App() {
                                 <p className="text-xs text-stone-500">
                                   {materialLabels[part.material]} •{" "}
                                   {grainDirectionLabels[part.grainDirection]}
+                                </p>
+                                <p className="text-xs text-stone-500">
+                                  {formatPartEdgeBanding(
+                                    buildCustomProjectCutlistPart(part),
+                                  )}
                                 </p>
                               </div>
                               <div className="flex gap-2">

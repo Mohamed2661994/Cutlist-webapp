@@ -5,6 +5,7 @@ import { Html, OrbitControls } from "@react-three/drei";
 import {
   MOUSE,
   Plane,
+  PerspectiveCamera,
   Raycaster,
   Vector2,
   Vector3,
@@ -1004,6 +1005,14 @@ export function ProjectPreview({
       0,
     ),
   );
+  const sceneSpan = Math.max(sceneWidth, sceneDepth, sceneHeight * 1.12);
+  const baseCameraDistance = Math.max(
+    6.5,
+    sceneSpan / (2 * Math.tan((34 * Math.PI) / 360)) + 1.6,
+  );
+  const minCameraDistance = Math.max(3.8, round2(baseCameraDistance * 0.52));
+  const maxCameraDistance = Math.max(12, round2(baseCameraDistance * 2.4));
+  const targetY = Math.max(0.95, round2(sceneHeight * 0.28));
   const dragLimitX = (sceneWidth / 2) * 100 + 120;
   const dragLimitZ = (sceneDepth / 2) * 100 + 120;
 
@@ -1123,6 +1132,32 @@ export function ProjectPreview({
     };
   }, [onCanvasReady]);
 
+  useEffect(() => {
+    const camera = cameraRef.current;
+    const controls = controlsRef.current;
+
+    if (!camera || !controls) {
+      return;
+    }
+
+    controls.target.set(0, targetY, 0);
+    camera.position.set(
+      round2(baseCameraDistance * 0.72),
+      Math.max(3.1, round2(sceneHeight * 0.62 + 1.4)),
+      round2(baseCameraDistance * 0.92),
+    );
+
+    if (camera instanceof PerspectiveCamera) {
+      camera.near = 0.1;
+      camera.far = Math.max(50, baseCameraDistance * 8);
+      camera.updateProjectionMatrix();
+    }
+
+    controls.minDistance = minCameraDistance;
+    controls.maxDistance = maxCameraDistance;
+    controls.update();
+  }, [baseCameraDistance, maxCameraDistance, minCameraDistance, sceneHeight, targetY, units.length]);
+
   function startDraggingUnit(
     unit: ProjectPreviewProps["units"][number],
     clientX: number,
@@ -1151,7 +1186,7 @@ export function ProjectPreview({
   return (
     <div
       className={cn(
-        "h-[32rem] w-full overflow-hidden rounded-[1.5rem] border border-stone-200 bg-[radial-gradient(circle_at_top,_rgba(255,255,255,0.96),_rgba(233,225,212,0.92)_58%,_rgba(216,202,180,0.9)_100%)]",
+        "h-[34rem] w-full overflow-hidden rounded-[1.5rem] border border-stone-200 bg-[radial-gradient(circle_at_top,_rgba(255,255,255,0.96),_rgba(233,225,212,0.92)_58%,_rgba(216,202,180,0.9)_100%)] lg:h-[38rem]",
         draggingUnitId ? "cursor-grabbing" : "cursor-grab",
       )}
       onContextMenu={(event) => event.preventDefault()}
@@ -1308,8 +1343,10 @@ export function ProjectPreview({
         <OrbitControls
           ref={controlsRef}
           enablePan={false}
-          minDistance={3.5}
-          maxDistance={11}
+          enableDamping
+          dampingFactor={0.08}
+          minDistance={minCameraDistance}
+          maxDistance={maxCameraDistance}
           maxPolarAngle={Math.PI / 2.05}
           mouseButtons={{
             LEFT: MOUSE.PAN,
