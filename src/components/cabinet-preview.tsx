@@ -981,22 +981,18 @@ export function ProjectPreview({
     return isQuarterTurn ? baseWidth / 100 : baseDepth / 100;
   }
 
-  const sceneWidth = Math.max(
-    8,
-    units.reduce(
-      (max, unit) =>
-        Math.max(max, Math.abs(unit.position[0]) * 2 + getPlanWidth(unit)),
-      0,
-    ) + 2,
+  const layoutWidth = units.reduce(
+    (max, unit) =>
+      Math.max(max, Math.abs(unit.basePosition[0]) * 2 + getPlanWidth(unit)),
+    0,
   );
-  const sceneDepth = Math.max(
-    6,
-    units.reduce(
-      (max, unit) =>
-        Math.max(max, Math.abs(unit.position[2]) * 2 + getPlanDepth(unit)),
-      0,
-    ) + 2,
+  const layoutDepth = units.reduce(
+    (max, unit) =>
+      Math.max(max, Math.abs(unit.basePosition[2]) * 2 + getPlanDepth(unit)),
+    0,
   );
+  const sceneWidth = Math.max(8, layoutWidth + 2);
+  const sceneDepth = Math.max(6, layoutDepth + 2);
   const sceneHeight = Math.max(
     4,
     units.reduce(
@@ -1013,8 +1009,10 @@ export function ProjectPreview({
   const minCameraDistance = Math.max(3.8, round2(baseCameraDistance * 0.52));
   const maxCameraDistance = Math.max(12, round2(baseCameraDistance * 2.4));
   const targetY = Math.max(0.95, round2(sceneHeight * 0.28));
-  const dragLimitX = (sceneWidth / 2) * 100 + 120;
-  const dragLimitZ = (sceneDepth / 2) * 100 + 120;
+  const fogNear = Math.max(10, round2(baseCameraDistance * 0.95));
+  const fogFar = Math.max(fogNear + 16, round2(maxCameraDistance * 1.9));
+  const dragLimitX = Math.max(160, round2((layoutWidth * 100) / 2 + 60));
+  const dragLimitZ = Math.max(160, round2((layoutDepth * 100) / 2 + 60));
 
   function getScenePointFromClient(
     clientX: number,
@@ -1203,7 +1201,7 @@ export function ProjectPreview({
         }}
       >
         <color attach="background" args={["#f4ede4"]} />
-        <fog attach="fog" args={["#f4ede4", 5.5, 11]} />
+        <fog attach="fog" args={["#f4ede4", fogNear, fogFar]} />
         <ambientLight intensity={1.1} />
         <hemisphereLight
           intensity={0.55}
@@ -1224,7 +1222,7 @@ export function ProjectPreview({
           penumbra={0.8}
         />
 
-        <group ref={sceneRef} position={[0, -0.55, 0]} rotation={[0, -0.35, 0]}>
+        <group ref={sceneRef} position={[0, -0.55, 0]}>
           <mesh
             position={[0, sceneHeight / 2 - 0.2, -sceneDepth / 2 + 0.02]}
             receiveShadow

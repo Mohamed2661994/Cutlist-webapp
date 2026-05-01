@@ -696,32 +696,48 @@ function buildProjectArrangement(
   units: CabinetUnit[],
   arrangement: ProjectArrangementItem[],
 ) {
-  if (arrangement.length > 0) {
-    const arrangementIds = new Set(arrangement.map((item) => item.id));
-    const missingUnits = units.filter((unit) => !arrangementIds.has(unit.id));
+  const travelLimitCm = getProjectArrangementTravelLimit(units);
+  const arrangementMap = new Map(arrangement.map((item) => [item.id, item]));
 
-    if (missingUnits.length === 0) {
-      return arrangement;
-    }
+  return units.map((unit) => {
+    const current = arrangementMap.get(unit.id);
 
-    return arrangement.concat(
-      missingUnits.map((unit) => ({
-        id: unit.id,
-        offsetX: 0,
-        offsetY: 0,
-        offsetZ: 0,
-        rotationY: 0,
-      })),
-    );
-  }
+    return {
+      id: unit.id,
+      offsetX:
+        current && Number.isFinite(current.offsetX) &&
+        Math.abs(current.offsetX) <= travelLimitCm
+          ? round2(current.offsetX)
+          : 0,
+      offsetY:
+        current && Number.isFinite(current.offsetY) &&
+        Math.abs(current.offsetY) <= travelLimitCm
+          ? round2(current.offsetY)
+          : 0,
+      offsetZ:
+        current && Number.isFinite(current.offsetZ) &&
+        Math.abs(current.offsetZ) <= travelLimitCm
+          ? round2(current.offsetZ)
+          : 0,
+      rotationY:
+        current && Number.isFinite(current.rotationY)
+          ? (((current.rotationY % 360) + 360) % 360)
+          : 0,
+    };
+  });
+}
 
-  return units.map((unit) => ({
-    id: unit.id,
-    offsetX: 0,
-    offsetY: 0,
-    offsetZ: 0,
-    rotationY: 0,
-  }));
+function getProjectArrangementTravelLimit(units: CabinetUnit[]) {
+  const maxUnitSpan = units.reduce(
+    (max, unit) =>
+      Math.max(max, unit.width, unit.height, unit.depth, unit.returnDepth),
+    0,
+  );
+
+  return Math.max(
+    150,
+    round2(maxUnitSpan * Math.max(units.length, 1.25)),
+  );
 }
 
 function buildProjectCsv(
@@ -1294,7 +1310,10 @@ function createCustomPartId() {
   return `custom-part-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
-function buildCustomProjectCutlistPart(entry: CustomProjectPart): CutlistPart {
+function buildCustomProjectCutlistPart(
+  entry: CustomProjectPart,
+  materialOverride?: MaterialType,
+): CutlistPart {
   return {
     id: `custom-part-piece-${entry.id}`,
     kind: "custom",
@@ -1304,7 +1323,7 @@ function buildCustomProjectCutlistPart(entry: CustomProjectPart): CutlistPart {
     length: entry.length,
     width: entry.width,
     thickness: entry.thickness,
-    material: entry.material,
+    material: materialOverride ?? entry.material,
     notes:
       entry.category === "back"
         ? "مقاس حر خارج الوحدات على لوح ظهر"
@@ -1578,11 +1597,23 @@ function App() {
 
   const editorResult = calculateCabinetCutlist(editorInput);
   const editorFrontPieceCount = getFrontPieceCount(editorResult);
-  const calculatedCustomPartEntries = calculatedCustomParts.map((entry) => ({
-    sourceId: entry.id,
-    title: entry.title,
-    part: buildCustomProjectCutlistPart(entry),
-  }));
+  const calculatedCustomPartEntries = calculatedCustomParts.map((entry) => {
+    const basePart = buildCustomProjectCutlistPart(
+      entry,
+      projectSettings.material,
+    );
+
+    return {
+      sourceId: entry.id,
+      title: entry.title,
+      part: applyEdgeBandOverride(
+        basePart,
+        edgeBandOverrides[
+          createUnitPartOverrideKey(entry.id, basePart.id)
+        ],
+      ),
+    };
+  });
 
   const calculatedViews: CalculatedUnitView[] = calculatedUnits.map((unit) => {
     const result = calculateCabinetCutlist(unit);
@@ -1670,9 +1701,16 @@ function App() {
     .filter((part) => part.category === "front")
     .reduce((sum, part) => sum + part.qty, 0);
   const projectMaterialSummary = materialLabels[projectSettings.material];
-  const projectPreviewUnits = buildProjectPreviewUnits(
+  const normalizedProjectArrangement = buildProjectArrangement(
     units,
     projectArrangement,
+  );
+  const projectArrangementTravelLimitCm = getProjectArrangementTravelLimit(
+    units,
+  );
+  const projectPreviewUnits = buildProjectPreviewUnits(
+    units,
+    normalizedProjectArrangement,
   );
   const workshopPartCards: WorkshopPartCard[] = calculatedViews
     .flatMap((view) =>
@@ -2150,7 +2188,7 @@ function App() {
       width,
       qty: Math.max(1, Math.floor(qty)),
       thickness: thicknessMm / 10,
-      material: customPartDraft.material,
+      material: projectSettings.material,
       category: customPartDraft.category,
       grainDirection: customPartDraft.grainDirection,
       edgeBanding: { ...customPartDraft.edgeBanding },
@@ -2182,7 +2220,7 @@ function App() {
       width: String(round2(entry.width)),
       qty: String(entry.qty),
       thickness: String(round2(entry.thickness * 10)),
-      material: entry.material,
+      material: projectSettings.material,
       category: entry.category,
       grainDirection: entry.grainDirection,
       edgeBanding: { ...(entry.edgeBanding ?? {}) },
@@ -2401,7 +2439,7 @@ function App() {
       settings: projectSettings,
       units,
       customParts,
-      arrangement: buildProjectArrangement(units, projectArrangement),
+      arrangement: normalizedProjectArrangement,
       edgeBandOverrides,
     };
 
@@ -2433,6 +2471,7 @@ function App() {
     setCustomParts(
       (project.customParts ?? []).map((part) => ({
         ...part,
+        material: project.settings.material,
         edgeBanding: part.edgeBanding ?? {},
       })),
     );
@@ -2441,6 +2480,7 @@ function App() {
     setCalculatedCustomParts(
       (project.customParts ?? []).map((part) => ({
         ...part,
+        material: project.settings.material,
         edgeBanding: part.edgeBanding ?? {},
       })),
     );
@@ -2710,9 +2750,42 @@ function App() {
         item.id === unitId
           ? {
               ...item,
-              offsetX: axis === "x" ? item.offsetX + delta : item.offsetX,
-              offsetY: axis === "y" ? item.offsetY + delta : item.offsetY,
-              offsetZ: axis === "z" ? item.offsetZ + delta : item.offsetZ,
+              offsetX:
+                axis === "x"
+                  ? round2(
+                      Math.max(
+                        -projectArrangementTravelLimitCm,
+                        Math.min(
+                          projectArrangementTravelLimitCm,
+                          (Number.isFinite(item.offsetX) ? item.offsetX : 0) + delta,
+                        ),
+                      ),
+                    )
+                  : item.offsetX,
+              offsetY:
+                axis === "y"
+                  ? round2(
+                      Math.max(
+                        -projectArrangementTravelLimitCm,
+                        Math.min(
+                          projectArrangementTravelLimitCm,
+                          (Number.isFinite(item.offsetY) ? item.offsetY : 0) + delta,
+                        ),
+                      ),
+                    )
+                  : item.offsetY,
+              offsetZ:
+                axis === "z"
+                  ? round2(
+                      Math.max(
+                        -projectArrangementTravelLimitCm,
+                        Math.min(
+                          projectArrangementTravelLimitCm,
+                          (Number.isFinite(item.offsetZ) ? item.offsetZ : 0) + delta,
+                        ),
+                      ),
+                    )
+                  : item.offsetZ,
             }
           : item,
       ),
@@ -2740,8 +2813,14 @@ function App() {
         item.id === unitId
           ? {
               ...item,
-              offsetX: nextOffsetX,
-              offsetZ: nextOffsetZ,
+              offsetX: Math.max(
+                -projectArrangementTravelLimitCm,
+                Math.min(projectArrangementTravelLimitCm, nextOffsetX),
+              ),
+              offsetZ: Math.max(
+                -projectArrangementTravelLimitCm,
+                Math.min(projectArrangementTravelLimitCm, nextOffsetZ),
+              ),
             }
           : item,
       ),
@@ -4468,28 +4547,15 @@ function App() {
                           />
                         </div>
                         <div className="space-y-2">
-                          <Label>الخامة</Label>
-                          <Select
-                            value={customPartDraft.material}
-                            onValueChange={(value) =>
-                              updateCustomPartDraft(
-                                "material",
-                                value as MaterialType,
-                              )
-                            }
-                          >
-                            <SelectTrigger className="w-full bg-white">
-                              <SelectValue>
-                                {materialLabels[customPartDraft.material]}
-                              </SelectValue>
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="mdf">MDF</SelectItem>
-                              <SelectItem value="melamine">ميلامين</SelectItem>
-                              <SelectItem value="plywood">كونتر</SelectItem>
-                            </SelectContent>
-                          </Select>
-                        </div>
+                                  <Label>الخامة</Label>
+                                  <div className="flex h-10 items-center rounded-md border border-stone-200 bg-stone-50 px-3 text-sm text-stone-700">
+                                    {materialLabels[projectSettings.material]}
+                                  </div>
+                                  <p className="text-xs text-stone-500">
+                                    المقاس الحر يستخدم خامة المشروع الحالية ويدخل مع نفس
+                                    تقسيم اللوح.
+                                  </p>
+                                </div>
                         <div className="space-y-2">
                           <Label>فئة القطعة</Label>
                           <Select
@@ -4629,12 +4695,15 @@ function App() {
                                   {formatMmFromCm(part.thickness)}
                                 </p>
                                 <p className="text-xs text-stone-500">
-                                  {materialLabels[part.material]} •{" "}
+                                  {materialLabels[projectSettings.material]} •{" "}
                                   {grainDirectionLabels[part.grainDirection]}
                                 </p>
                                 <p className="text-xs text-stone-500">
                                   {formatPartEdgeBanding(
-                                    buildCustomProjectCutlistPart(part),
+                                    buildCustomProjectCutlistPart(
+                                      part,
+                                      projectSettings.material,
+                                    ),
                                   )}
                                 </p>
                               </div>
