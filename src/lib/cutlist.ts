@@ -2291,11 +2291,14 @@ export function buildSheetLayout(
   const backStockSize = options.backStockSize ?? defaultBoardStockSize;
   const stockGroups = new Map<string, CutlistPart[]>();
 
+  function shouldUseBackStock(part: CutlistPart) {
+    return part.category === "back" && part.kind !== "custom";
+  }
+
   for (const part of parts) {
-    const stockKey =
-      part.category === "back"
-        ? `back-${part.thickness}`
-        : `${part.material}-${part.thickness}`;
+    const stockKey = shouldUseBackStock(part)
+      ? `back-${part.thickness}`
+      : `${part.material}-${part.thickness}`;
     const currentGroup = stockGroups.get(stockKey);
 
     if (currentGroup) {
@@ -2308,7 +2311,7 @@ export function buildSheetLayout(
 
   const stocks = [...stockGroups.entries()]
     .map(([key, stockParts]) => {
-      const isBackStock = stockParts.every((part) => part.category === "back");
+      const isBackStock = stockParts.every((part) => shouldUseBackStock(part));
       const stockSize = isBackStock ? backStockSize : boardStockSize;
       const materialSummary = isBackStock
         ? "خامة ظهر موحدة"

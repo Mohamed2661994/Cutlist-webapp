@@ -48,6 +48,7 @@ type ProjectPreviewProps = {
     unitId: string,
     nextPosition: { x: number; z: number },
   ) => void;
+  onCanvasReady?: (canvas: HTMLCanvasElement | null) => void;
 };
 
 type PanelProps = {
@@ -923,6 +924,7 @@ export function ProjectPreview({
   units,
   onSelectUnit,
   onUnitPositionChange,
+  onCanvasReady,
 }: ProjectPreviewProps) {
   const controlsRef = useRef<OrbitControlsImpl | null>(null);
   const sceneRef = useRef<Group | null>(null);
@@ -1113,6 +1115,14 @@ export function ProjectPreview({
     };
   }, [dragLimitX, dragLimitZ, draggingUnitId, onUnitPositionChange]);
 
+  useEffect(() => {
+    onCanvasReady?.(canvasElementRef.current);
+
+    return () => {
+      onCanvasReady?.(null);
+    };
+  }, [onCanvasReady]);
+
   function startDraggingUnit(
     unit: ProjectPreviewProps["units"][number],
     clientX: number,
@@ -1141,7 +1151,7 @@ export function ProjectPreview({
   return (
     <div
       className={cn(
-        "h-[26rem] w-full overflow-hidden rounded-[1.5rem] border border-stone-200 bg-[radial-gradient(circle_at_top,_rgba(255,255,255,0.96),_rgba(233,225,212,0.92)_58%,_rgba(216,202,180,0.9)_100%)]",
+        "h-[32rem] w-full overflow-hidden rounded-[1.5rem] border border-stone-200 bg-[radial-gradient(circle_at_top,_rgba(255,255,255,0.96),_rgba(233,225,212,0.92)_58%,_rgba(216,202,180,0.9)_100%)]",
         draggingUnitId ? "cursor-grabbing" : "cursor-grab",
       )}
       onContextMenu={(event) => event.preventDefault()}
@@ -1150,9 +1160,11 @@ export function ProjectPreview({
         camera={{ position: [0, 3, 7.2], fov: 34 }}
         shadows="basic"
         dpr={[1, 1.5]}
+        gl={{ preserveDrawingBuffer: true }}
         onCreated={({ camera, gl }) => {
           cameraRef.current = camera;
           canvasElementRef.current = gl.domElement;
+          onCanvasReady?.(gl.domElement);
         }}
       >
         <color attach="background" args={["#f4ede4"]} />

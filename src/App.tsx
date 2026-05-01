@@ -1,4 +1,4 @@
-import { Suspense, lazy, useEffect, useState } from "react";
+import { Suspense, lazy, useCallback, useEffect, useRef, useState } from "react";
 import {
   ArrowDown,
   ArrowLeft,
@@ -248,7 +248,7 @@ type ProjectSettingsNumericDrafts = {
   edgeBandPricePerMeter: string;
 };
 
-type WorkspaceTab = "project" | "builder" | "results" | "library";
+type WorkspaceTab = "project" | "builder" | "preview" | "results" | "library";
 
 type BuilderTab = "unit" | "custom" | "units";
 
@@ -1554,6 +1554,7 @@ function App() {
   const [activeProjectUnitId, setActiveProjectUnitId] = useState<string | null>(
     null,
   );
+  const projectPreviewCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const [unitFeedback, setUnitFeedback] = useState<{
     unitId: string;
     message: string;
@@ -1826,6 +1827,12 @@ function App() {
       badge: `${projectItemCount}`,
     },
     {
+      id: "preview",
+      label: "3D",
+      icon: PanelsTopLeft,
+      badge: `${projectPreviewUnits.length}`,
+    },
+    {
       id: "results",
       label: "النتائج",
       icon: Calculator,
@@ -1894,6 +1901,13 @@ function App() {
               icon: Calculator,
               onClick: calculateUnits,
               disabled: projectItemCount === 0,
+            }
+        : activeWorkspaceTab === "preview"
+          ? {
+              label: "طباعة لقطة 3D",
+              icon: Printer,
+              onClick: printProjectPreviewSnapshot,
+              disabled: projectPreviewUnits.length === 0,
             }
         : activeWorkspaceTab === "project"
           ? {
@@ -2501,6 +2515,127 @@ function App() {
       printUrl,
       "_blank",
       "width=1100,height=800",
+    );
+
+    if (!printWindow) {
+      window.URL.revokeObjectURL(printUrl);
+      return;
+    }
+
+    function revokePrintUrl() {
+      window.setTimeout(() => {
+        window.URL.revokeObjectURL(printUrl);
+      }, 60_000);
+    }
+
+    printWindow.addEventListener(
+      "load",
+      () => {
+        printWindow.focus();
+        window.setTimeout(() => {
+          printWindow.print();
+        }, 250);
+      },
+      { once: true },
+    );
+    printWindow.addEventListener("afterprint", revokePrintUrl, { once: true });
+    revokePrintUrl();
+  }
+
+  const bindProjectPreviewCanvas = useCallback(
+    (canvas: HTMLCanvasElement | null) => {
+      projectPreviewCanvasRef.current = canvas;
+    },
+    [],
+  );
+
+  function printProjectPreviewSnapshot() {
+    const canvas = projectPreviewCanvasRef.current;
+
+    if (!canvas || projectPreviewUnits.length === 0) {
+      return;
+    }
+
+    const imageDataUrl = canvas.toDataURL("image/png");
+    const printBlob = new Blob(
+      [
+        `<!doctype html>
+<html lang="ar" dir="rtl">
+  <head>
+    <meta charset="UTF-8" />
+    <title>معاينة 3D - ${projectName.trim() || "ترتيب الوحدات"}</title>
+    <style>
+      body {
+        margin: 0;
+        font-family: "Segoe UI", Tahoma, sans-serif;
+        background: #f5efe6;
+        color: #1c1917;
+      }
+
+      main {
+        padding: 24px;
+      }
+
+      h1 {
+        margin: 0 0 8px;
+        font-size: 24px;
+      }
+
+      p {
+        margin: 0 0 18px;
+        color: #57534e;
+      }
+
+      .frame {
+        border: 1px solid #d6d3d1;
+        border-radius: 24px;
+        overflow: hidden;
+        background: white;
+        box-shadow: 0 24px 60px -36px rgba(63, 40, 12, 0.45);
+      }
+
+      img {
+        display: block;
+        width: 100%;
+        height: auto;
+      }
+
+      @page {
+        size: landscape;
+        margin: 12mm;
+      }
+
+      @media print {
+        body {
+          background: white;
+        }
+
+        main {
+          padding: 0;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>${projectName.trim() || "ترتيب الوحدات"}</h1>
+      <p>لقطة مطبوعة من مشهد 3D الحالي بعد ترتيب الوحدات.</p>
+      <div class="frame">
+        <img src="${imageDataUrl}" alt="معاينة ثلاثية الأبعاد لترتيب الوحدات" />
+      </div>
+    </main>
+  </body>
+</html>`,
+      ],
+      {
+        type: "text/html;charset=utf-8",
+      },
+    );
+    const printUrl = window.URL.createObjectURL(printBlob);
+    const printWindow = window.open(
+      printUrl,
+      "_blank",
+      "width=1200,height=900",
     );
 
     if (!printWindow) {
@@ -4974,6 +5109,207 @@ function App() {
           </>
         ) : null}
 
+        {activeWorkspaceTab === "preview" ? (
+          <section className="mt-6 space-y-6 pb-8">
+            {projectPreviewUnits.length === 0 ? (
+              <Card className="border-0 bg-white/88 shadow-[0_20px_60px_-45px_rgba(63,40,12,0.55)] ring-1 ring-stone-950/8">
+                <CardHeader>
+                  <CardTitle>معاينة 3D للمشروع</CardTitle>
+                  <CardDescription>
+                    أضف وحدة واحدة على الأقل ليظهر مشهد 3D وتتمكن من ترتيب
+                    الوحدات وطباعة لقطة من الشكل النهائي.
+                  </CardDescription>
+                </CardHeader>
+              </Card>
+            ) : (
+              <Card className="border-0 bg-white/88 shadow-[0_20px_60px_-45px_rgba(63,40,12,0.55)] ring-1 ring-stone-950/8">
+                <CardHeader>
+                  <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                    <div>
+                      <CardTitle>3D لترتيب كل الوحدات</CardTitle>
+                      <CardDescription>
+                        اسحب كل وحدة داخل المشهد أو عدّل مكانها من لوحة التحكم
+                        أسفل المعاينة، ثم اطبع صورة للمشهد الحالي مباشرة.
+                      </CardDescription>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={resetProjectArrangement}
+                      >
+                        إعادة ضبط الترتيب
+                      </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        onClick={printProjectPreviewSnapshot}
+                      >
+                        <Printer className="size-4" />
+                        طباعة صورة الترتيب
+                      </Button>
+                    </div>
+                  </div>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <Suspense fallback={previewFallback}>
+                    <ProjectPreview
+                      units={projectPreviewUnits.map((unit) => ({
+                        ...unit,
+                        active: unit.id === activeProjectPreviewUnit?.id,
+                      }))}
+                      onSelectUnit={setActiveProjectUnitId}
+                      onUnitPositionChange={updateProjectUnitPosition}
+                      onCanvasReady={bindProjectPreviewCanvas}
+                    />
+                  </Suspense>
+
+                  <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                    {projectPreviewUnits.map((unit, index) => {
+                      const isActive = activeProjectPreviewUnit?.id === unit.id;
+
+                      return (
+                        <div
+                          key={unit.id}
+                          className={cn(
+                            "rounded-2xl border p-4 ring-1",
+                            isActive
+                              ? "border-amber-300 bg-amber-50/70 ring-amber-200"
+                              : "border-stone-200 bg-stone-50/80 ring-stone-200",
+                          )}
+                        >
+                          <button
+                            type="button"
+                            className="w-full text-right"
+                            onClick={() => setActiveProjectUnitId(unit.id)}
+                          >
+                            <p className="font-medium text-stone-950">
+                              {unit.title}
+                            </p>
+                            <p className="mt-1 text-xs text-stone-500">
+                              ترتيب {index + 1} • جانبي {formatCm(unit.offsetX)} •
+                              ارتفاع {formatCm(unit.offsetY)} • عمق{" "}
+                              {formatCm(unit.offsetZ)} • دوران {unit.rotationY}°
+                            </p>
+                          </button>
+
+                          <div className="mt-4 flex flex-wrap gap-2">
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={() =>
+                                moveProjectUnitOrder(unit.id, "backward")
+                              }
+                              disabled={index === 0}
+                            >
+                              <ArrowRight className="size-4" />
+                              تقديم
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={() =>
+                                moveProjectUnitOrder(unit.id, "forward")
+                              }
+                              disabled={index === projectPreviewUnits.length - 1}
+                            >
+                              <ArrowLeft className="size-4" />
+                              تأخير
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={() => rotateProjectUnit(unit.id, -90)}
+                            >
+                              <RotateCcw className="size-4" />
+                              لف يسار
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={() => rotateProjectUnit(unit.id, 90)}
+                            >
+                              <RotateCw className="size-4" />
+                              لف يمين
+                            </Button>
+                          </div>
+
+                          <div className="mt-3 grid grid-cols-2 gap-2">
+                            <Button
+                              type="button"
+                              variant="secondary"
+                              size="sm"
+                              onClick={() => nudgeProjectUnit(unit.id, "x", -10)}
+                            >
+                              <ArrowRight className="size-4" />
+                              يمين
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="secondary"
+                              size="sm"
+                              onClick={() => nudgeProjectUnit(unit.id, "x", 10)}
+                            >
+                              <ArrowLeft className="size-4" />
+                              يسار
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="secondary"
+                              size="sm"
+                              onClick={() => nudgeProjectUnit(unit.id, "z", -10)}
+                            >
+                              <ArrowUp className="size-4" />
+                              للأمام
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="secondary"
+                              size="sm"
+                              onClick={() => nudgeProjectUnit(unit.id, "z", 10)}
+                            >
+                              <ArrowDown className="size-4" />
+                              للخلف
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="secondary"
+                              size="sm"
+                              onClick={() => nudgeProjectUnit(unit.id, "y", 10)}
+                            >
+                              <ArrowUp className="size-4" />
+                              لفوق
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="secondary"
+                              size="sm"
+                              onClick={() => nudgeProjectUnit(unit.id, "y", -10)}
+                            >
+                              <ArrowDown className="size-4" />
+                              لتحت
+                            </Button>
+                          </div>
+
+                          <p className="mt-3 text-[11px] leading-5 text-stone-500">
+                            اضغط على الوحدة لتفعيلها، ثم حرّكها بالسحب داخل
+                            المشهد أو من أزرار الضبط الدقيقة هنا.
+                          </p>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+          </section>
+        ) : null}
+
         {activeWorkspaceTab === "results" ? (
           hasCalculatedProject ? (
             <>
@@ -6082,7 +6418,7 @@ function App() {
         </div>
 
         <nav className="fixed inset-x-4 bottom-4 z-40 rounded-[1.5rem] border border-stone-200 bg-white/92 p-2 shadow-[0_20px_60px_-35px_rgba(63,40,12,0.55)] backdrop-blur sm:hidden">
-          <div className="grid grid-cols-4 gap-2">
+          <div className="grid grid-cols-5 gap-2">
             {workspaceTabs.map((tab) => {
               const Icon = tab.icon;
               const isActive = activeWorkspaceTab === tab.id;
