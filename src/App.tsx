@@ -1,4 +1,11 @@
-import { Suspense, lazy, useCallback, useEffect, useRef, useState } from "react";
+import {
+  Suspense,
+  lazy,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 import {
   ArrowDown,
   ArrowLeft,
@@ -705,23 +712,26 @@ function buildProjectArrangement(
     return {
       id: unit.id,
       offsetX:
-        current && Number.isFinite(current.offsetX) &&
+        current &&
+        Number.isFinite(current.offsetX) &&
         Math.abs(current.offsetX) <= travelLimitCm
           ? round2(current.offsetX)
           : 0,
       offsetY:
-        current && Number.isFinite(current.offsetY) &&
+        current &&
+        Number.isFinite(current.offsetY) &&
         Math.abs(current.offsetY) <= travelLimitCm
           ? round2(current.offsetY)
           : 0,
       offsetZ:
-        current && Number.isFinite(current.offsetZ) &&
+        current &&
+        Number.isFinite(current.offsetZ) &&
         Math.abs(current.offsetZ) <= travelLimitCm
           ? round2(current.offsetZ)
           : 0,
       rotationY:
         current && Number.isFinite(current.rotationY)
-          ? (((current.rotationY % 360) + 360) % 360)
+          ? ((current.rotationY % 360) + 360) % 360
           : 0,
     };
   });
@@ -734,10 +744,7 @@ function getProjectArrangementTravelLimit(units: CabinetUnit[]) {
     0,
   );
 
-  return Math.max(
-    150,
-    round2(maxUnitSpan * Math.max(units.length, 1.25)),
-  );
+  return Math.max(150, round2(maxUnitSpan * Math.max(units.length, 1.25)));
 }
 
 function buildProjectCsv(
@@ -1171,29 +1178,52 @@ function getSheetDisplayPiece(piece: SheetLayoutPiece) {
   };
 }
 
+function clampSheetLabelFontSize(value: number, min: number, max: number) {
+  return Math.max(min, Math.min(max, round2(value)));
+}
+
 function getSheetPieceLabelMode(piece: SheetLayoutPiece) {
   const displayPiece = getSheetDisplayPiece(piece);
   const shortSide = Math.min(displayPiece.width, displayPiece.height);
   const longSide = Math.max(displayPiece.width, displayPiece.height);
   const isTallPiece = displayPiece.height > displayPiece.width * 2.05;
 
-  if (shortSide < 7 || longSide < 18) {
+  if (shortSide < 6 || longSide < 16) {
     return { displayPiece, mode: "none" as const };
   }
 
   if (shortSide >= 16 && longSide >= 34) {
+    const fullNameFontSize = isTallPiece
+      ? clampSheetLabelFontSize(
+          Math.min(shortSide / 8.6, longSide / 14.5),
+          2.8,
+          4.4,
+        )
+      : clampSheetLabelFontSize(
+          Math.min(shortSide / 5.4, longSide / 9.8),
+          3.2,
+          5.4,
+        );
+    const fullDimsFontSize = isTallPiece
+      ? clampSheetLabelFontSize(
+          Math.min(shortSide / 9.8, longSide / 16.5),
+          2.5,
+          3.8,
+        )
+      : clampSheetLabelFontSize(
+          Math.min(shortSide / 6.3, longSide / 11.4),
+          2.8,
+          4.8,
+        );
+
     return {
       displayPiece,
       mode: "full" as const,
-      nameFontSize: isTallPiece
-        ? Math.max(3.4, Math.min(4.6, shortSide / 7.2))
-        : Math.max(4.4, Math.min(5.8, shortSide / 4.4)),
-      dimsFontSize: isTallPiece
-        ? Math.max(3.2, Math.min(4.1, shortSide / 8.2))
-        : Math.max(4, Math.min(5.2, shortSide / 5.1)),
+      nameFontSize: fullNameFontSize,
+      dimsFontSize: fullDimsFontSize,
       rotate: isTallPiece,
-      nameOffset: isTallPiece ? 4.2 : 6,
-      dimsOffset: isTallPiece ? 5.2 : 7,
+      nameOffset: isTallPiece ? fullNameFontSize * 1.05 : fullNameFontSize * 1.18,
+      dimsOffset: isTallPiece ? fullDimsFontSize * 1.32 : fullDimsFontSize * 1.45,
     };
   }
 
@@ -1201,7 +1231,11 @@ function getSheetPieceLabelMode(piece: SheetLayoutPiece) {
     return {
       displayPiece,
       mode: "dims" as const,
-      fontSize: Math.max(4, Math.min(5.3, shortSide / 3.2)),
+      fontSize: clampSheetLabelFontSize(
+        Math.min(shortSide / 3.7, longSide / 6.8),
+        2.8,
+        4.8,
+      ),
       rotate: displayPiece.height > displayPiece.width * 1.8,
     };
   }
@@ -1608,9 +1642,7 @@ function App() {
       title: entry.title,
       part: applyEdgeBandOverride(
         basePart,
-        edgeBandOverrides[
-          createUnitPartOverrideKey(entry.id, basePart.id)
-        ],
+        edgeBandOverrides[createUnitPartOverrideKey(entry.id, basePart.id)],
       ),
     };
   });
@@ -1705,9 +1737,8 @@ function App() {
     units,
     projectArrangement,
   );
-  const projectArrangementTravelLimitCm = getProjectArrangementTravelLimit(
-    units,
-  );
+  const projectArrangementTravelLimitCm =
+    getProjectArrangementTravelLimit(units);
   const projectPreviewUnits = buildProjectPreviewUnits(
     units,
     normalizedProjectArrangement,
@@ -1963,19 +1994,19 @@ function App() {
               onClick: printProjectPreviewSnapshot,
               disabled: projectPreviewUnits.length === 0,
             }
-        : activeWorkspaceTab === "project"
-          ? {
-              label: "حفظ المشروع",
-              icon: Save,
-              onClick: saveCurrentProject,
-              disabled: false,
-            }
-          : {
-              label: "فتح المشاريع",
-              icon: FolderOpen,
-              onClick: () => setIsProjectLibraryOpen(true),
-              disabled: false,
-            };
+          : activeWorkspaceTab === "project"
+            ? {
+                label: "حفظ المشروع",
+                icon: Save,
+                onClick: saveCurrentProject,
+                disabled: false,
+              }
+            : {
+                label: "فتح المشاريع",
+                icon: FolderOpen,
+                onClick: () => setIsProjectLibraryOpen(true),
+                disabled: false,
+              };
 
   const projectSummary = calculatedViews.reduce(
     (summary, view) => ({
@@ -2757,7 +2788,8 @@ function App() {
                         -projectArrangementTravelLimitCm,
                         Math.min(
                           projectArrangementTravelLimitCm,
-                          (Number.isFinite(item.offsetX) ? item.offsetX : 0) + delta,
+                          (Number.isFinite(item.offsetX) ? item.offsetX : 0) +
+                            delta,
                         ),
                       ),
                     )
@@ -2769,7 +2801,8 @@ function App() {
                         -projectArrangementTravelLimitCm,
                         Math.min(
                           projectArrangementTravelLimitCm,
-                          (Number.isFinite(item.offsetY) ? item.offsetY : 0) + delta,
+                          (Number.isFinite(item.offsetY) ? item.offsetY : 0) +
+                            delta,
                         ),
                       ),
                     )
@@ -2781,7 +2814,8 @@ function App() {
                         -projectArrangementTravelLimitCm,
                         Math.min(
                           projectArrangementTravelLimitCm,
-                          (Number.isFinite(item.offsetZ) ? item.offsetZ : 0) + delta,
+                          (Number.isFinite(item.offsetZ) ? item.offsetZ : 0) +
+                            delta,
                         ),
                       ),
                     )
@@ -4547,15 +4581,15 @@ function App() {
                           />
                         </div>
                         <div className="space-y-2">
-                                  <Label>الخامة</Label>
-                                  <div className="flex h-10 items-center rounded-md border border-stone-200 bg-stone-50 px-3 text-sm text-stone-700">
-                                    {materialLabels[projectSettings.material]}
-                                  </div>
-                                  <p className="text-xs text-stone-500">
-                                    المقاس الحر يستخدم خامة المشروع الحالية ويدخل مع نفس
-                                    تقسيم اللوح.
-                                  </p>
-                                </div>
+                          <Label>الخامة</Label>
+                          <div className="flex h-10 items-center rounded-md border border-stone-200 bg-stone-50 px-3 text-sm text-stone-700">
+                            {materialLabels[projectSettings.material]}
+                          </div>
+                          <p className="text-xs text-stone-500">
+                            المقاس الحر يستخدم خامة المشروع الحالية ويدخل مع نفس
+                            تقسيم اللوح.
+                          </p>
+                        </div>
                         <div className="space-y-2">
                           <Label>فئة القطعة</Label>
                           <Select
@@ -4645,8 +4679,8 @@ function App() {
                             })}
                           </div>
                           <p className="text-xs text-stone-500">
-                            اختر أي ضلع من الطول أو العرض ليُحسب ضمن شريط
-                            الحافة للمقاس الحر.
+                            اختر أي ضلع من الطول أو العرض ليُحسب ضمن شريط الحافة
+                            للمقاس الحر.
                           </p>
                         </div>
                       </div>
@@ -5332,8 +5366,8 @@ function App() {
                               {unit.title}
                             </p>
                             <p className="mt-1 text-xs text-stone-500">
-                              ترتيب {index + 1} • جانبي {formatCm(unit.offsetX)} •
-                              ارتفاع {formatCm(unit.offsetY)} • عمق{" "}
+                              ترتيب {index + 1} • جانبي {formatCm(unit.offsetX)}{" "}
+                              • ارتفاع {formatCm(unit.offsetY)} • عمق{" "}
                               {formatCm(unit.offsetZ)} • دوران {unit.rotationY}°
                             </p>
                           </button>
@@ -5358,7 +5392,9 @@ function App() {
                               onClick={() =>
                                 moveProjectUnitOrder(unit.id, "forward")
                               }
-                              disabled={index === projectPreviewUnits.length - 1}
+                              disabled={
+                                index === projectPreviewUnits.length - 1
+                              }
                             >
                               <ArrowLeft className="size-4" />
                               تأخير
@@ -5388,7 +5424,9 @@ function App() {
                               type="button"
                               variant="secondary"
                               size="sm"
-                              onClick={() => nudgeProjectUnit(unit.id, "x", -10)}
+                              onClick={() =>
+                                nudgeProjectUnit(unit.id, "x", -10)
+                              }
                             >
                               <ArrowRight className="size-4" />
                               يمين
@@ -5406,7 +5444,9 @@ function App() {
                               type="button"
                               variant="secondary"
                               size="sm"
-                              onClick={() => nudgeProjectUnit(unit.id, "z", -10)}
+                              onClick={() =>
+                                nudgeProjectUnit(unit.id, "z", -10)
+                              }
                             >
                               <ArrowUp className="size-4" />
                               للأمام
@@ -5433,7 +5473,9 @@ function App() {
                               type="button"
                               variant="secondary"
                               size="sm"
-                              onClick={() => nudgeProjectUnit(unit.id, "y", -10)}
+                              onClick={() =>
+                                nudgeProjectUnit(unit.id, "y", -10)
+                              }
                             >
                               <ArrowDown className="size-4" />
                               لتحت
