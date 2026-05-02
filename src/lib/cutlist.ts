@@ -908,7 +908,6 @@ function buildSingleStockSheets(
   const trimMargin = Math.max(layoutOptions.trimMargin ?? 0, 0);
   const boardLength = Math.max(stockSize.length - trimMargin * 2, 0);
   const boardWidth = Math.max(stockSize.width - trimMargin * 2, 0);
-  const hasSawOptions = cutKerf > 0 || trimMargin > 0;
 
   function getAllowedOrientations(piece: FlatPiece) {
     if (!piece.allowRotation || piece.length === piece.width) {
@@ -1340,6 +1339,17 @@ function buildSingleStockSheets(
     return sheets.map((sheet) => ({
       index: sheet.index,
       pieces: sheet.pieces.map((piece) => ({ ...piece })),
+      freeRects: sheet.freeRects.map((freeRect) => ({ ...freeRect })),
+    }));
+  }
+
+  function reindexSheets(sheets: InternalSheet[]) {
+    return sheets.map((sheet, sheetIndex) => ({
+      index: sheetIndex,
+      pieces: sheet.pieces.map((piece) => ({
+        ...piece,
+        sheetIndex,
+      })),
       freeRects: sheet.freeRects.map((freeRect) => ({ ...freeRect })),
     }));
   }
@@ -2213,6 +2223,133 @@ function buildSingleStockSheets(
     ].filter((orderedPieces) => orderedPieces.length === sourcePieces.length);
   }
 
+  function buildSparseSheetSubsetCandidates(layout: InternalSheet[]) {
+    const candidates: InternalSheet[][] = [];
+    const seenKeys = new Set<string>();
+    const sparseSheets = [...layout].sort((left, right) => {
+      const leftUnusedArea = getSheetUnusedArea(left);
+      const rightUnusedArea = getSheetUnusedArea(right);
+
+      return (
+        rightUnusedArea - leftUnusedArea ||
+        left.pieces.length - right.pieces.length ||
+        left.index - right.index
+      );
+    });
+
+    for (let startIndex = 0; startIndex < sparseSheets.length; startIndex += 1) {
+      const selectedSheets: InternalSheet[] = [];
+      let totalPieces = 0;
+
+      for (
+        let currentIndex = startIndex;
+        currentIndex < sparseSheets.length && selectedSheets.length < 4;
+        currentIndex += 1
+      ) {
+        const candidateSheet = sparseSheets[currentIndex];
+        if (totalPieces + candidateSheet.pieces.length > 12) {
+          break;
+        }
+
+        selectedSheets.push(candidateSheet);
+        totalPieces += candidateSheet.pieces.length;
+
+        if (selectedSheets.length < 2) {
+          continue;
+        }
+
+        const key = selectedSheets
+          .map((sheet) => sheet.index)
+          .sort((left, right) => left - right)
+          .join(":");
+
+        if (seenKeys.has(key)) {
+          continue;
+        }
+
+        seenKeys.add(key);
+        candidates.push([...selectedSheets]);
+      }
+    }
+
+    return candidates;
+  }
+
+  function buildSparseSheetRefinementLayouts(layout: InternalSheet[]) {
+    const candidateLayouts: InternalSheet[][] = [];
+
+    for (const sheetSubset of buildSparseSheetSubsetCandidates(layout)) {
+      const subsetSheetIndexes = new Set(sheetSubset.map((sheet) => sheet.index));
+      const remainingSheets = layout
+        .filter((sheet) => !subsetSheetIndexes.has(sheet.index))
+        .map((sheet) => ({
+          index: sheet.index,
+          pieces: sheet.pieces.map((piece) => ({ ...piece })),
+          freeRects: sheet.freeRects.map((freeRect) => ({ ...freeRect })),
+        }));
+
+      const orderedSubsetPieces = sheetSubset
+        .flatMap((sheet) => sheet.pieces)
+        .map((piece) => sourcePieceMap.get(piece.id))
+        .filter((piece): piece is FlatPiece => Boolean(piece))
+        .sort(
+          (left, right) =>
+            right.length * right.width - left.length * left.width ||
+            Math.max(right.length, right.width) -
+              Math.max(left.length, left.width) ||
+            right.length - left.length ||
+            right.width - left.width ||
+            left.id.localeCompare(right.id),
+        );
+
+      const uniqueOrderedSubsetPieces = orderedSubsetPieces.filter(
+        (piece, index) =>
+          orderedSubsetPieces.findIndex(
+            (candidate) => candidate.id === piece.id,
+          ) === index,
+      );
+
+      const expectedPieceCount = sheetSubset.reduce(
+        (sum, sheet) => sum + sheet.pieces.length,
+        0,
+      );
+
+      if (uniqueOrderedSubsetPieces.length !== expectedPieceCount) {
+        continue;
+      }
+
+      const subsetLayouts = [
+        packWithExactSheets(uniqueOrderedSubsetPieces),
+        packWithShelves(uniqueOrderedSubsetPieces),
+        packWithGuillotine(uniqueOrderedSubsetPieces, true),
+        packWithFreeRects(uniqueOrderedSubsetPieces, true),
+      ];
+
+      for (const subsetLayout of subsetLayouts) {
+        if (!subsetLayout) {
+          continue;
+        }
+
+        const mergedLayout = reindexSheets([
+          ...remainingSheets,
+          ...subsetLayout.map((sheet) => ({
+            index: sheet.index,
+            pieces: sheet.pieces.map((piece) => ({ ...piece })),
+            freeRects: sheet.freeRects.map((freeRect) => ({ ...freeRect })),
+          })),
+        ]);
+
+        if (!isLayoutValid(mergedLayout)) {
+          continue;
+        }
+
+        candidateLayouts.push(mergedLayout);
+      }
+    }
+
+    return candidateLayouts;
+  }
+
   function refineBestLayout(initialBest: InternalSheet[]) {
     let refinedBest = cloneSheets(initialBest);
     let changed = true;
@@ -2229,8 +2366,8 @@ function buildSingleStockSheets(
           packWithGuillotine(orderedPieces, true),
           packWithFreeRects(orderedPieces),
           packWithFreeRects(orderedPieces, true),
-          ...(hasSawOptions ? [] : [packWithShelves(orderedPieces)]),
-          ...(hasSawOptions ? [] : [packWithExactSheets(orderedPieces)]),
+          packWithShelves(orderedPieces),
+          packWithExactSheets(orderedPieces),
         ];
 
         for (const candidateLayout of candidateLayouts) {
@@ -2242,6 +2379,13 @@ function buildSingleStockSheets(
             refinedBest = cloneSheets(candidateLayout);
             changed = true;
           }
+        }
+      }
+
+      for (const candidateLayout of buildSparseSheetRefinementLayouts(refinedBest)) {
+        if (isBetterLayout(candidateLayout, refinedBest)) {
+          refinedBest = cloneSheets(candidateLayout);
+          changed = true;
         }
       }
     }
@@ -2258,8 +2402,8 @@ function buildSingleStockSheets(
       packWithGuillotine(orderedPieces, true),
       packWithFreeRects(orderedPieces),
       packWithFreeRects(orderedPieces, true),
-      ...(hasSawOptions ? [] : [packWithShelves(orderedPieces)]),
-      ...(hasSawOptions ? [] : [packWithExactSheets(orderedPieces)]),
+      packWithShelves(orderedPieces),
+      packWithExactSheets(orderedPieces),
     ];
 
     for (const candidateLayout of candidateLayouts) {
