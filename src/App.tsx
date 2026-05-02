@@ -1029,6 +1029,15 @@ function buildPrintSheetSvg(
       const displayPiece = pieceLabel.displayPiece;
       const part = partsMap.get(piece.sourcePartId);
       const projectPartLink = projectPartLinkMap.get(piece.sourcePartId);
+      const primaryLabel = getSheetPiecePrimaryLabel(
+        piece,
+        pieceLabel,
+        projectPartLink?.code,
+      );
+      const dimsLabel =
+        pieceLabel.mode === "none"
+          ? null
+          : getSheetPieceDimsLabel(piece, pieceLabel);
       const edgeThickness = Math.max(
         1.4,
         Math.min(Math.min(displayPiece.width, displayPiece.height) * 0.08, 3.2),
@@ -1091,26 +1100,26 @@ function buildPrintSheetSvg(
                 y="${displayPiece.y + displayPiece.height / 2 - pieceLabel.nameOffset}"
                 text-anchor="middle"
                 dominant-baseline="middle"
-                font-size="${pieceLabel.nameFontSize}"
+                font-size="${primaryLabel?.fontSize ?? pieceLabel.nameFontSize}"
                 font-weight="700"
                 fill="#fff"
                 direction="rtl"
                 unicode-bidi="plaintext"
                 ${pieceLabel.rotate ? `transform="rotate(-90 ${displayPiece.x + displayPiece.width / 2} ${displayPiece.y + displayPiece.height / 2})"` : ""}
               >
-                ${projectPartLink ? `${projectPartLink.code} • ${piece.name}` : piece.name}
+                ${primaryLabel?.text ?? (projectPartLink ? `${projectPartLink.code} • ${piece.name}` : piece.name)}
               </text>
               <text
                 x="${displayPiece.x + displayPiece.width / 2}"
                 y="${displayPiece.y + displayPiece.height / 2 + pieceLabel.dimsOffset}"
                 text-anchor="middle"
                 dominant-baseline="middle"
-                font-size="${pieceLabel.dimsFontSize}"
+                font-size="${dimsLabel?.fontSize ?? pieceLabel.dimsFontSize}"
                 font-weight="700"
                 fill="#fff"
                 ${pieceLabel.rotate ? `transform="rotate(-90 ${displayPiece.x + displayPiece.width / 2} ${displayPiece.y + displayPiece.height / 2})"` : ""}
               >
-                ${round2(piece.length)} × ${round2(piece.width)} سم
+                ${dimsLabel?.text ?? `${round2(piece.length)} × ${round2(piece.width)} سم`}
               </text>
             </g>`
           : pieceLabel.mode === "dims"
@@ -1119,12 +1128,12 @@ function buildPrintSheetSvg(
                 y="${displayPiece.y + displayPiece.height / 2}"
                 text-anchor="middle"
                 dominant-baseline="middle"
-                font-size="${pieceLabel.fontSize}"
+                font-size="${dimsLabel?.fontSize ?? pieceLabel.fontSize}"
                 font-weight="600"
                 fill="#fff"
                 ${pieceLabel.rotate ? `transform="rotate(-90 ${displayPiece.x + displayPiece.width / 2} ${displayPiece.y + displayPiece.height / 2})"` : ""}
               >
-                ${round2(piece.length)} × ${round2(piece.width)}
+                ${dimsLabel?.text ?? `${round2(piece.length)} × ${round2(piece.width)}`}
               </text>`
             : "";
 
@@ -1180,6 +1189,151 @@ function getSheetDisplayPiece(piece: SheetLayoutPiece) {
 
 function clampSheetLabelFontSize(value: number, min: number, max: number) {
   return Math.max(min, Math.min(max, round2(value)));
+}
+
+function estimateSheetLabelTextWidth(text: string, fontSize: number) {
+  const normalizedText = text.trim();
+
+  if (!normalizedText) {
+    return 0;
+  }
+
+  return normalizedText.length * fontSize * 0.62;
+}
+
+function fitSheetLabelText(
+  text: string,
+  baseFontSize: number,
+  availableSpan: number,
+  minFontSize: number,
+) {
+  const safeText = text.trim();
+
+  if (!safeText) {
+    return {
+      text: "",
+      fontSize: minFontSize,
+    };
+  }
+
+  return {
+    text: safeText,
+    fontSize: clampSheetLabelFontSize(
+      Math.min(baseFontSize, availableSpan / Math.max(safeText.length * 0.62, 1)),
+      minFontSize,
+      baseFontSize,
+    ),
+  };
+}
+
+function getSheetPiecePrimaryLabel(
+  piece: SheetLayoutPiece,
+  pieceLabel: ReturnType<typeof getSheetPieceLabelMode>,
+  code?: string,
+) {
+  if (pieceLabel.mode !== "full") {
+    return null;
+  }
+
+  const availableSpan = Math.max(
+    8,
+    (pieceLabel.rotate
+      ? pieceLabel.displayPiece.height
+      : pieceLabel.displayPiece.width) - 3.4,
+  );
+  const fullText = code ? `${code} • ${piece.name}` : piece.name;
+  const fullFit = fitSheetLabelText(
+    fullText,
+    pieceLabel.nameFontSize,
+    availableSpan,
+    2.2,
+  );
+
+  if (
+    estimateSheetLabelTextWidth(fullFit.text, fullFit.fontSize) <=
+    availableSpan + 0.35
+  ) {
+    return fullFit;
+  }
+
+  if (code) {
+    const codeOnlyFit = fitSheetLabelText(
+      code,
+      pieceLabel.nameFontSize,
+      availableSpan,
+      2.2,
+    );
+    const codePrefixWidth = estimateSheetLabelTextWidth(
+      `${code} • `,
+      codeOnlyFit.fontSize,
+    );
+    const nameCapacity = Math.max(
+      0,
+      Math.floor((availableSpan - codePrefixWidth) / (codeOnlyFit.fontSize * 0.62)),
+    );
+
+    if (nameCapacity >= 4) {
+      const truncatedName =
+        piece.name.length > nameCapacity
+          ? `${piece.name.slice(0, Math.max(nameCapacity - 1, 1))}…`
+          : piece.name;
+      const truncatedFit = fitSheetLabelText(
+        `${code} • ${truncatedName}`,
+        pieceLabel.nameFontSize,
+        availableSpan,
+        2.2,
+      );
+
+      if (
+        estimateSheetLabelTextWidth(truncatedFit.text, truncatedFit.fontSize) <=
+        availableSpan + 0.35
+      ) {
+        return truncatedFit;
+      }
+    }
+
+    return codeOnlyFit;
+  }
+
+  const nameCapacity = Math.max(
+    3,
+    Math.floor(availableSpan / Math.max(pieceLabel.nameFontSize * 0.62, 1)),
+  );
+  const truncatedName =
+    piece.name.length > nameCapacity
+      ? `${piece.name.slice(0, Math.max(nameCapacity - 1, 1))}…`
+      : piece.name;
+
+  return fitSheetLabelText(
+    truncatedName,
+    pieceLabel.nameFontSize,
+    availableSpan,
+    2.2,
+  );
+}
+
+function getSheetPieceDimsLabel(
+  piece: SheetLayoutPiece,
+  pieceLabel: ReturnType<typeof getSheetPieceLabelMode>,
+) {
+  const availableSpan = Math.max(
+    8,
+    (pieceLabel.rotate
+      ? pieceLabel.displayPiece.height
+      : pieceLabel.displayPiece.width) - 3.2,
+  );
+  const dimsText =
+    pieceLabel.mode === "full"
+      ? `${round2(piece.length)} × ${round2(piece.width)} سم`
+      : `${round2(piece.length)} × ${round2(piece.width)}`;
+  const baseFontSize =
+    pieceLabel.mode === "full"
+      ? pieceLabel.dimsFontSize
+      : pieceLabel.mode === "dims"
+        ? pieceLabel.fontSize
+        : 2.2;
+
+  return fitSheetLabelText(dimsText, baseFontSize, availableSpan, 2.2);
 }
 
 function getSheetPieceLabelMode(piece: SheetLayoutPiece) {
@@ -5880,6 +6034,19 @@ function App() {
                                       projectPartLinkMap.get(
                                         piece.sourcePartId,
                                       );
+                                    const primaryLabel =
+                                      getSheetPiecePrimaryLabel(
+                                        piece,
+                                        pieceLabel,
+                                        projectPartLink?.code,
+                                      );
+                                    const dimsLabel =
+                                      pieceLabel.mode === "none"
+                                        ? null
+                                        : getSheetPieceDimsLabel(
+                                            piece,
+                                            pieceLabel,
+                                          );
                                     const edgeThickness = Math.max(
                                       1.4,
                                       Math.min(
@@ -6033,7 +6200,10 @@ function App() {
                                               }
                                               textAnchor="middle"
                                               dominantBaseline="middle"
-                                              fontSize={pieceLabel.nameFontSize}
+                                              fontSize={
+                                                primaryLabel?.fontSize ??
+                                                pieceLabel.nameFontSize
+                                              }
                                               fontWeight="700"
                                               fill="#fff"
                                               direction="rtl"
@@ -6050,9 +6220,10 @@ function App() {
                                                   : undefined
                                               }
                                             >
-                                              {projectPartLink
-                                                ? `${projectPartLink.code} • ${piece.name}`
-                                                : piece.name}
+                                              {primaryLabel?.text ??
+                                                (projectPartLink
+                                                  ? `${projectPartLink.code} • ${piece.name}`
+                                                  : piece.name)}
                                             </text>
                                             <text
                                               x={
@@ -6066,7 +6237,10 @@ function App() {
                                               }
                                               textAnchor="middle"
                                               dominantBaseline="middle"
-                                              fontSize={pieceLabel.dimsFontSize}
+                                              fontSize={
+                                                dimsLabel?.fontSize ??
+                                                pieceLabel.dimsFontSize
+                                              }
                                               fontWeight="700"
                                               fill="#fff"
                                               transform={
@@ -6081,8 +6255,8 @@ function App() {
                                                   : undefined
                                               }
                                             >
-                                              {round2(piece.length)} ×{" "}
-                                              {round2(piece.width)} سم
+                                              {dimsLabel?.text ??
+                                                `${round2(piece.length)} × ${round2(piece.width)} سم`}
                                             </text>
                                           </g>
                                         ) : pieceLabel.mode === "dims" ? (
@@ -6097,7 +6271,10 @@ function App() {
                                             }
                                             textAnchor="middle"
                                             dominantBaseline="middle"
-                                            fontSize={pieceLabel.fontSize}
+                                            fontSize={
+                                              dimsLabel?.fontSize ??
+                                              pieceLabel.fontSize
+                                            }
                                             fontWeight="600"
                                             fill="#fff"
                                             transform={
@@ -6106,8 +6283,8 @@ function App() {
                                                 : undefined
                                             }
                                           >
-                                            {round2(piece.length)} ×{" "}
-                                            {round2(piece.width)}
+                                              {dimsLabel?.text ??
+                                                `${round2(piece.length)} × ${round2(piece.width)}`}
                                           </text>
                                         ) : null}
                                       </g>
