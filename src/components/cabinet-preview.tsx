@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 
-import { Canvas } from "@react-three/fiber";
+import { Canvas, useFrame } from "@react-three/fiber";
 import { Html, OrbitControls } from "@react-three/drei";
 import {
   MOUSE,
@@ -31,6 +31,9 @@ type CabinetPreviewProps = {
 
 type CabinetModelProps = CabinetPreviewProps & {
   showPartLabels?: boolean;
+  doorsOpen?: boolean;
+  showDoorToggle?: boolean;
+  onToggleDoors?: () => void;
 };
 
 type ProjectPreviewProps = {
@@ -63,6 +66,19 @@ type PanelProps = {
   grainDirection?: CutlistPart["grainDirection"];
   lengthAxis?: "x" | "y" | "z";
   widthAxis?: "x" | "y" | "z";
+};
+
+type HingedFrontPanelProps = PanelProps & {
+  open?: boolean;
+  hingeSide?: "left" | "right";
+  closedRotationY?: number;
+  openAngle?: number;
+};
+
+type DoorToggleButtonProps = {
+  position: [number, number, number];
+  open: boolean;
+  onToggle: () => void;
 };
 
 const axisIndex = {
@@ -210,6 +226,120 @@ function Panel({
         </Html>
       ) : null}
     </group>
+  );
+}
+
+function HingedFrontPanel({
+  size,
+  position,
+  open = false,
+  hingeSide = "left",
+  closedRotationY = 0,
+  openAngle = Math.PI / 2.7,
+  ...panelProps
+}: HingedFrontPanelProps) {
+  const hingeGroupRef = useRef<Group | null>(null);
+  const isInitializedRef = useRef(false);
+  const angularVelocityRef = useRef(0);
+  const hingeOffsetX = hingeSide === "left" ? -size[0] / 2 : size[0] / 2;
+  const panelOffsetX = hingeSide === "left" ? size[0] / 2 : -size[0] / 2;
+  const targetRotationY =
+    closedRotationY + (open ? (hingeSide === "left" ? -openAngle : openAngle) : 0);
+
+  useFrame((_, delta) => {
+    const hingeGroup = hingeGroupRef.current;
+
+    if (!hingeGroup) {
+      return;
+    }
+
+    if (!isInitializedRef.current) {
+      hingeGroup.rotation.y = closedRotationY;
+      angularVelocityRef.current = 0;
+      isInitializedRef.current = true;
+    }
+
+    const rotationDelta = targetRotationY - hingeGroup.rotation.y;
+    const isClosing = !open;
+    const stiffness = isClosing ? 18 : 14;
+    const damping = isClosing ? 8.8 : 7.2;
+    const nearLatchFactor =
+      isClosing && Math.abs(rotationDelta) < 0.18
+        ? clamp(Math.abs(rotationDelta) / 0.18, 0.22, 1)
+        : 1;
+
+    angularVelocityRef.current +=
+      rotationDelta * stiffness * nearLatchFactor * delta;
+    angularVelocityRef.current *= Math.exp(-damping * delta);
+
+    const maxStep = (isClosing ? 3.2 : 4.1) * delta;
+    const rotationStep = clamp(
+      angularVelocityRef.current,
+      -maxStep,
+      maxStep,
+    );
+
+    hingeGroup.rotation.y += rotationStep;
+
+    if (
+      Math.abs(rotationDelta) < 0.0025 &&
+      Math.abs(angularVelocityRef.current) < 0.0025
+    ) {
+      hingeGroup.rotation.y = targetRotationY;
+      angularVelocityRef.current = 0;
+    }
+  });
+
+  return (
+    <group position={position}>
+      <group ref={hingeGroupRef} position={[hingeOffsetX, 0, 0]}>
+        <Panel
+          {...panelProps}
+          size={size}
+          position={[panelOffsetX, 0, 0]}
+        />
+      </group>
+    </group>
+  );
+}
+
+function DoorToggleButton({ position, open, onToggle }: DoorToggleButtonProps) {
+  return (
+    <Html position={position} center>
+      <button
+        type="button"
+        className={cn(
+          "pointer-events-auto flex h-9 w-9 items-center justify-center rounded-full border shadow-[0_12px_30px_-22px_rgba(28,25,23,0.8)] backdrop-blur-sm transition",
+          open
+            ? "border-amber-300 bg-stone-950/88 text-amber-100"
+            : "border-white/80 bg-white/88 text-stone-800",
+        )}
+        aria-label={open ? "إغلاق الدلف" : "فتح الدلف"}
+        title={open ? "إغلاق الدلف" : "فتح الدلف"}
+        onPointerDown={(event) => {
+          if (event.button !== 0) {
+            return;
+          }
+
+          event.stopPropagation();
+        }}
+        onClick={(event) => {
+          event.stopPropagation();
+          onToggle();
+        }}
+      >
+        <span className="sr-only">{open ? "إغلاق الدلف" : "فتح الدلف"}</span>
+        <span className="relative block h-4.5 w-4.5">
+          <span className="absolute inset-y-0 left-[1px] w-[5px] rounded-[2px] border border-current/70 bg-current/10" />
+          <span
+            className={cn(
+              "absolute inset-y-0 right-[1px] w-[5px] rounded-[2px] border border-current/70 bg-current/10 transition-transform duration-200",
+              open ? "origin-left rotate-[-26deg] translate-x-[1px]" : "origin-left rotate-0",
+            )}
+          />
+        </span>
+      </button>
+    </Html>
   );
 }
 
@@ -393,6 +523,9 @@ function CabinetModel({
   result,
   selectedPartId,
   showPartLabels = true,
+  doorsOpen = false,
+  showDoorToggle = false,
+  onToggleDoors,
 }: CabinetModelProps) {
   const isCornerLBase =
     input.cabinetType === "corner-l-base" ||
@@ -436,6 +569,19 @@ function CabinetModel({
   const drawerCount = result.metrics.drawerCount;
   const horizontalDoorGap = doorCount === 2 ? 0.006 : 0;
   const verticalFrontGap = 0.006;
+  const hasToggleableDoors =
+    doorCount > 0 && Boolean(mainFront || upperFront || lowerFront);
+  const doorTogglePosition: [number, number, number] = isCornerLBase
+    ? [
+        0.04,
+        cabinetBaseY + bodyHeight * 0.78,
+        Math.max(depth, returnDepth) / 2 + 0.06,
+      ]
+    : [
+        Math.min(Math.max(width * 0.18, 0.08), 0.22),
+        cabinetBaseY + bodyHeight * 0.76,
+        frontZ + 0.03,
+      ];
 
   function isSelected(part: CutlistPart | undefined) {
     return part ? part.id === selectedPartId : false;
@@ -643,10 +789,12 @@ function CabinetModel({
                   ]}
                   rotation={[0, isLeftLeaf ? Math.PI / 4 : -Math.PI / 4, 0]}
                 >
-                  <Panel
+                  <HingedFrontPanel
                     size={[cornerDoorWidth, cornerDoorHeight, board * 0.65]}
                     position={[0, 0, 0]}
                     color="#cf9860"
+                    open={doorsOpen}
+                    hingeSide={isLeftLeaf ? "left" : "right"}
                     highlighted={isSelected(cornerFront)}
                     label={
                       showPartLabels ? formatPartLabel(cornerFront) : undefined
@@ -660,6 +808,14 @@ function CabinetModel({
               );
             })
           : null}
+
+        {showDoorToggle && hasToggleableDoors && onToggleDoors ? (
+          <DoorToggleButton
+            position={doorTogglePosition}
+            open={doorsOpen}
+            onToggle={onToggleDoors}
+          />
+        ) : null}
 
         <mesh
           rotation={[-Math.PI / 2, 0, 0]}
@@ -860,13 +1016,17 @@ function CabinetModel({
               drawerFront && drawerCount > 0
                 ? cabinetBaseY + doorHeight / 2 + 0.01
                 : cabinetBaseY + bodyHeight / 2;
+            const hingeSide =
+              doorCount === 1 ? "left" : index === 0 ? "left" : "right";
 
             return (
-              <Panel
+              <HingedFrontPanel
                 key={`door-main-${index}`}
                 size={[doorWidth, doorHeight, board * 0.65]}
                 position={[x, centerY, frontZ]}
                 color="#cf9860"
+                open={doorsOpen}
+                hingeSide={hingeSide}
                 highlighted={isSelected(mainFront)}
                 label={showPartLabels ? formatPartLabel(mainFront) : undefined}
                 labelOffset={[0, 0.05, 0.03]}
@@ -920,13 +1080,21 @@ function CabinetModel({
             const lowerCenter = cabinetBaseY + lowerHeight / 2 + 0.01;
             const upperCenter =
               cabinetBaseY + bodyHeight - upperHeight / 2 - 0.01;
+            const hingeSide =
+              doorCount === 1
+                ? "left"
+                : columnIndex === 0
+                  ? "left"
+                  : "right";
 
             return (
               <group key={`door-split-${columnIndex}`}>
-                <Panel
+                <HingedFrontPanel
                   size={[upperWidth, upperHeight, board * 0.65]}
                   position={[x, upperCenter, frontZ]}
                   color="#cf9860"
+                  open={doorsOpen}
+                  hingeSide={hingeSide}
                   highlighted={isSelected(upperFront)}
                   label={
                     showPartLabels ? formatPartLabel(upperFront) : undefined
@@ -936,10 +1104,12 @@ function CabinetModel({
                   lengthAxis="x"
                   widthAxis="y"
                 />
-                <Panel
+                <HingedFrontPanel
                   size={[lowerWidth, lowerHeight, board * 0.65]}
                   position={[x, lowerCenter, frontZ]}
                   color="#b8824a"
+                  open={doorsOpen}
+                  hingeSide={hingeSide}
                   highlighted={isSelected(lowerFront)}
                   label={
                     showPartLabels ? formatPartLabel(lowerFront) : undefined
@@ -954,6 +1124,14 @@ function CabinetModel({
           })
         : null}
 
+      {showDoorToggle && hasToggleableDoors && onToggleDoors ? (
+        <DoorToggleButton
+          position={doorTogglePosition}
+          open={doorsOpen}
+          onToggle={onToggleDoors}
+        />
+      ) : null}
+
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, 0]} receiveShadow>
         <planeGeometry args={[8, 8]} />
         <shadowMaterial opacity={0.18} />
@@ -967,6 +1145,7 @@ export function CabinetPreview({
   result,
   selectedPartId,
 }: CabinetPreviewProps) {
+  const [doorsOpen, setDoorsOpen] = useState(false);
   const isCornerLBase =
     input.cabinetType === "corner-l-base" ||
     input.cabinetType === "corner-l-wall";
@@ -1085,6 +1264,9 @@ export function CabinetPreview({
             input={input}
             result={result}
             selectedPartId={selectedPartId}
+            doorsOpen={doorsOpen}
+            showDoorToggle
+            onToggleDoors={() => setDoorsOpen((current) => !current)}
           />
         </group>
         <OrbitControls
@@ -1122,6 +1304,16 @@ export function ProjectPreview({
     worldY: number;
   } | null>(null);
   const [draggingUnitId, setDraggingUnitId] = useState<string | null>(null);
+  const [openDoorUnits, setOpenDoorUnits] = useState<Record<string, boolean>>(
+    {},
+  );
+
+  function toggleUnitDoors(unitId: string) {
+    setOpenDoorUnits((current) => ({
+      ...current,
+      [unitId]: !current[unitId],
+    }));
+  }
 
   function getPlanWidth(unit: ProjectPreviewProps["units"][number]) {
     const baseWidth =
@@ -1689,6 +1881,9 @@ export function ProjectPreview({
                   result={unit.result}
                   selectedPartId={null}
                   showPartLabels={false}
+                  doorsOpen={openDoorUnits[unit.id] ?? false}
+                  showDoorToggle={unit.active}
+                  onToggleDoors={() => toggleUnitDoors(unit.id)}
                 />
                 <Html
                   position={[0, cabinetHeight + 0.18, 0]}
