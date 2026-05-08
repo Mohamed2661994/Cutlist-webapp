@@ -2388,30 +2388,6 @@ function getSheetPieceDimensionTexts(
   };
 }
 
-function getSheetPieceDimsLabel(
-  piece: SheetLayoutPiece,
-  pieceLabel: ReturnType<typeof getSheetPieceLabelMode>,
-) {
-  const availableSpan = Math.max(
-    8,
-    (pieceLabel.rotate
-      ? pieceLabel.displayPiece.height
-      : pieceLabel.displayPiece.width) - 3.2,
-  );
-  const dimsText =
-    pieceLabel.mode === "full"
-      ? `${round2(piece.length)} × ${round2(piece.width)} سم`
-      : `${round2(piece.length)} × ${round2(piece.width)}`;
-  const baseFontSize =
-    pieceLabel.mode === "full"
-      ? pieceLabel.dimsFontSize
-      : pieceLabel.mode === "dims"
-        ? pieceLabel.fontSize
-        : 2.2;
-
-  return fitSheetLabelText(dimsText, baseFontSize, availableSpan, 2.2);
-}
-
 function getSheetPieceLabelMode(piece: SheetLayoutPiece) {
   const displayPiece = getSheetDisplayPiece(piece);
   const shortSide = Math.min(displayPiece.width, displayPiece.height);
