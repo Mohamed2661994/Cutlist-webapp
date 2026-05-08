@@ -29,6 +29,7 @@ import {
 
 import { cn } from "@/lib/utils";
 import type {
+  CustomProjectPart,
   PersistedUser,
   SessionBootstrap,
 } from "@/lib/project-persistence";
@@ -136,7 +137,33 @@ type CalculatedUnitView = {
 
 type WorkshopPartCard = {
   id: string;
-  edgeBanding: EdgeBandProfile;
+  unitId: string;
+  unitTitle: string;
+  part: CutlistPart;
+};
+
+type WorkshopExecutionCard = WorkshopPartCard & {
+  operationOrder: number;
+  projectPartId: string | null;
+  partCode: string;
+  sheetReferences: string[];
+  primarySheetReference: string | null;
+};
+
+type UnitCostSummary = {
+  unitId: string;
+  unitTitle: string;
+  panelCount: number;
+  totalAreaM2: number;
+  boardSheetCount: number;
+  backSheetCount: number;
+  boardUsedAreaM2: number;
+  backUsedAreaM2: number;
+  edgeBandLengthM: number;
+  sheetCost: number;
+  laborCost: number;
+  edgeBandCost: number;
+  totalCost: number;
 };
 
 type EdgeBandOverrideMap = Record<string, EdgeBandProfile>;
@@ -144,6 +171,15 @@ type EdgeBandOverrideMap = Record<string, EdgeBandProfile>;
 type AggregatedProjectPart = {
   part: CutlistPart;
   sourceKeys: string[];
+};
+
+type ProjectPartLink = {
+  partId: string;
+  code: string;
+  sourceKeys: string[];
+  unitIds: string[];
+  sheetReferences: string[];
+  primarySheetReference: string | null;
 };
 
 type ProjectArrangementItem = {
@@ -214,6 +250,25 @@ type ProjectSettingsNumericDrafts = {
   backSheetPrice: string;
   laborPricePerSquareMeter: string;
   edgeBandPricePerMeter: string;
+};
+
+type CustomProjectPartDraft = {
+  title: string;
+  length: string;
+  width: string;
+  qty: string;
+  thickness: string;
+  material: MaterialType;
+  category: PartCategory;
+  grainDirection: GrainDirection;
+  edgeBanding: EdgeBandProfile;
+};
+
+type UnitPreset = {
+  id: string;
+  title: string;
+  description: string;
+  input: CabinetInput;
 };
 
 type WorkspaceTab = "project" | "builder" | "preview" | "results" | "library";
