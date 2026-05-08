@@ -30,6 +30,7 @@ import {
 import { cn } from "@/lib/utils";
 import type {
   CustomProjectPart,
+  CustomProjectPartThicknessMode,
   PersistedUser,
   SessionBootstrap,
 } from "@/lib/project-persistence";
@@ -74,6 +75,7 @@ import {
   frontOptionLabels,
   grainDirectionLabels,
   materialLabels,
+  normalizeSheetStockSize,
   partCategoryLabels,
   round2,
   type CabinetCutlistResult,
@@ -163,7 +165,16 @@ type UnitCostSummary = {
   sheetCost: number;
   laborCost: number;
   edgeBandCost: number;
+  hingeCount: number;
+  hingeCost: number;
   totalCost: number;
+};
+
+type ProjectOptimizationRecommendation = {
+  id: string;
+  title: string;
+  body: string;
+  tone: "info" | "action";
 };
 
 type EdgeBandOverrideMap = Record<string, EdgeBandProfile>;
@@ -220,6 +231,7 @@ type ProjectPricingSettings = {
   backSheetPrice: number;
   laborPricePerSquareMeter: number;
   edgeBandPricePerMeter: number;
+  hingePrice: number;
 };
 
 type ProjectSettings = CabinetProjectSettings & ProjectPricingSettings;
@@ -250,6 +262,7 @@ type ProjectSettingsNumericDrafts = {
   backSheetPrice: string;
   laborPricePerSquareMeter: string;
   edgeBandPricePerMeter: string;
+  hingePrice: string;
 };
 
 type CustomProjectPartDraft = {
@@ -258,6 +271,7 @@ type CustomProjectPartDraft = {
   width: string;
   qty: string;
   thickness: string;
+  thicknessMode: CustomProjectPartThicknessMode;
   material: MaterialType;
   category: PartCategory;
   grainDirection: GrainDirection;
@@ -306,6 +320,7 @@ const sheetLayoutOptimizationModeLabels: Record<
 > = {
   workshop: "وضع الورشة",
   yield: "أقل هادر",
+  smart: "المحسن الذكي",
 };
 
 const sheetLayoutOptimizationModeDescriptions: Record<
@@ -315,6 +330,8 @@ const sheetLayoutOptimizationModeDescriptions: Record<
   workshop:
     "يرجح التخطيطات الأسهل في القص والطباعة عندما يكون فرق الهدر محدودًا.",
   yield: "يركز على تقليل الهدر أولًا حتى لو زاد تعقيد خطة القص قليلًا.",
+  smart:
+    "يجرب أكثر من ترتيب وأسلوب قص ثم يوازن بين تقليل الهدر وتقليل الألواح شبه الفارغة وسهولة التنفيذ.",
 };
 
 const defaultProjectSettings: ProjectSettings = {
@@ -327,11 +344,12 @@ const defaultProjectSettings: ProjectSettings = {
   backSheetWidth: defaultBoardSheetWidth,
   cutKerf: 0,
   trimMargin: 0,
-  optimizationMode: "workshop",
+  optimizationMode: "smart",
   boardSheetPrice: 0,
   backSheetPrice: 0,
   laborPricePerSquareMeter: 0,
   edgeBandPricePerMeter: 0,
+  hingePrice: 0,
 };
 
 const unitPresets: UnitPreset[] = [
@@ -720,6 +738,156 @@ function getStockWasteAreaM2(stock: SheetLayoutStock) {
   return round2(
     Math.max(getStockAvailableAreaM2(stock) - stock.totalAreaM2, 0),
   );
+}
+
+function getStockSheetUtilizationRatio(
+  stock: SheetLayoutStock,
+  sheet: SheetLayoutStock["sheets"][number],
+) {
+  const sheetArea = stock.boardLength * stock.boardWidth;
+
+  if (sheetArea <= 0) {
+    return 0;
+  }
+
+  const usedArea = sheet.pieces.reduce(
+    (sum, piece) => sum + piece.length * piece.width,
+    0,
+  );
+
+  return usedArea / sheetArea;
+}
+
+function isBackStockPart(part: CutlistPart) {
+  return part.category === "back" && part.kind !== "custom";
+}
+
+function buildProjectOptimizationRecommendations(
+  parts: CutlistPart[],
+  sheetLayout: SheetLayoutResult | null,
+  settings: ProjectSettings,
+): ProjectOptimizationRecommendation[] {
+  if (!sheetLayout || sheetLayout.stocks.length === 0 || parts.length === 0) {
+    return [];
+  }
+
+  const recommendations: ProjectOptimizationRecommendation[] = [
+    {
+      id: "baseline",
+      title: "كيف يفكر المحرك الآن",
+      body:
+        "المحرك يفصل المشروع أولًا حسب الخامة والسماكة، ثم يحترم اتجاه الثمرة قبل أن يحاول تقليل الهدر داخل كل مجموعة لوح.",
+      tone: "info",
+    },
+  ];
+
+  const totalAvailableAreaM2 = round2(
+    sheetLayout.stocks.reduce((sum, stock) => sum + getStockAvailableAreaM2(stock), 0),
+  );
+  const totalUsedAreaM2 = round2(
+    sheetLayout.stocks.reduce((sum, stock) => sum + stock.totalAreaM2, 0),
+  );
+  const wastePercent =
+    totalAvailableAreaM2 > 0
+      ? round2(
+          ((totalAvailableAreaM2 - totalUsedAreaM2) / totalAvailableAreaM2) *
+            100,
+        )
+      : 0;
+  const sparseSheetCount = sheetLayout.stocks.reduce(
+    (sum, stock) =>
+      sum +
+      stock.sheets.filter(
+        (sheet) =>
+          sheet.pieces.length <= 2 &&
+          getStockSheetUtilizationRatio(stock, sheet) < 0.72,
+      ).length,
+    0,
+  );
+  const lockedCustomParts = parts.filter(
+    (part) => part.kind === "custom" && part.grainDirection !== "free",
+  );
+  const mostWastefulStock = [...sheetLayout.stocks]
+    .map((stock) => ({
+      stock,
+      wasteAreaM2: getStockWasteAreaM2(stock),
+    }))
+    .sort(
+      (left, right) =>
+        right.wasteAreaM2 - left.wasteAreaM2 ||
+        right.stock.sheets.length - left.stock.sheets.length,
+    )[0];
+
+  if (
+    settings.optimizationMode !== "smart" &&
+    (wastePercent >= 16 || sparseSheetCount > 0)
+  ) {
+    recommendations.push({
+      id: "switch-smart",
+      title: "جرّب المحسن الذكي",
+      body:
+        sparseSheetCount > 0
+          ? `هناك ${sparseSheetCount} لوح شبه فارغ في النتيجة الحالية، والمحسن الذكي غالبًا ينجح أكثر في دمج القطع قبل الإبقاء على هذه الألواح.`
+          : `نسبة الهدر الحالية ${wastePercent}%، ولذلك من المنطقي تجربة المحسن الذكي لأنه يوازن بين تقليل الهدر وتقليل الألواح الضعيفة الاستغلال.`,
+      tone: "action",
+    });
+  }
+
+  if (lockedCustomParts.length > 0 && sparseSheetCount > 0) {
+    const lockedLabels = [...new Set(lockedCustomParts.map((part) => part.name))]
+      .slice(0, 2)
+      .join("، ");
+    recommendations.push({
+      id: "locked-grain",
+      title: "راجع اتجاه الثمرة للمقاسات الحرة",
+      body: `بعض المقاسات الحرة ما زالت مقيدة باتجاه ثمرة ثابت، مثل ${lockedLabels}، وهذا قد يمنع تدويرها ويدفع المحرك لترك لوح شبه فارغ أو فصلها على لوح مستقل.`,
+      tone: "action",
+    });
+  }
+
+  if (mostWastefulStock && mostWastefulStock.wasteAreaM2 >= 1.2) {
+    const stock = mostWastefulStock.stock;
+    const stockParts = parts.filter((part) => {
+      if (stock.isBackStock) {
+        return isBackStockPart(part) && part.thickness === stock.thickness;
+      }
+
+      return (
+        !isBackStockPart(part) &&
+        part.material === stock.material &&
+        part.thickness === stock.thickness
+      );
+    });
+    const largestPartLength = Math.max(
+      ...stockParts.map((part) => part.length),
+      0,
+    );
+    const largestPartWidth = Math.max(...stockParts.map((part) => part.width), 0);
+    const closeToBoardLimit =
+      largestPartLength >= stock.boardLength * 0.82 ||
+      largestPartWidth >= stock.boardWidth * 0.82;
+
+    if (closeToBoardLimit) {
+      recommendations.push({
+        id: "board-size",
+        title: "راجع مقاس اللوح المتاح للورشة",
+        body: `${getStockLabel(stock.thickness, stock.isBackStock)} تهدر الآن ${mostWastefulStock.wasteAreaM2} م² تقريبًا، ومع وجود قطع كبيرة قريبة من حد اللوح الحالي قد يساعد لوح بمقاس أكبر أو خامة بديلة على تقليل الفصل والهدر.`,
+        tone: "action",
+      });
+    }
+  }
+
+  if (settings.cutKerf === 0 && settings.trimMargin === 0) {
+    recommendations.push({
+      id: "real-world-settings",
+      title: "أدخل قيم الورشة الحقيقية",
+      body:
+        "الحساب الحالي يفترض سلاح 0 مم وحافة تشطيب 0 مم. إدخال القيم الفعلية للمنشار والتشطيب يجعل توصيات التوزيع أقرب للنتيجة التنفيذية داخل الورشة.",
+      tone: "info",
+    });
+  }
+
+  return recommendations.slice(0, 4);
 }
 
 function buildProjectWasteInsight(sheetLayout: SheetLayoutResult | null) {
@@ -1116,15 +1284,18 @@ function downloadTextFile(fileName: string, content: string, mimeType: string) {
 
 function normalizeSavedProjects(projects: SavedProject[]) {
   return projects
-    .map((project) => ({
-      ...project,
-      settings: normalizeProjectSettings(project.settings),
-      customParts: (project.customParts ?? []).map((part) => ({
-        ...part,
-        edgeBanding: part.edgeBanding ?? {},
-      })),
-      edgeBandOverrides: project.edgeBandOverrides ?? {},
-    }))
+    .map((project) => {
+      const settings = normalizeProjectSettings(project.settings);
+
+      return {
+        ...project,
+        settings,
+        customParts: (project.customParts ?? []).map((part) =>
+          syncCustomProjectPartWithSettings(part, settings),
+        ),
+        edgeBandOverrides: project.edgeBandOverrides ?? {},
+      };
+    })
     .sort(
       (left, right) =>
         new Date(right.updatedAt).getTime() -
@@ -1308,6 +1479,8 @@ function buildPrintDocument(
     totalPanels: number;
     totalAreaM2: number;
     totalSheets: number;
+    totalHingeCount: number;
+    totalHingeCost: number;
     totalProjectCost: number;
   },
   parts: CutlistPart[],
@@ -1422,6 +1595,7 @@ function buildPrintDocument(
         .sheet-detail-card ol, .sheet-detail-card ul { margin: 0; padding-inline-start: 18px; }
         .sheet-detail-card li + li { margin-top: 4px; }
         .sheet-detail-meta { margin-bottom: 8px; color: #78716c; }
+        .edge-band-note { margin: 0 0 12px; border: 1px solid #d6cec2; border-radius: 12px; padding: 10px 12px; background: #fff; color: #44403c; font-size: 12px; font-weight: 700; }
         .waste-note { margin-top: 14px; border: 1px solid #f2d7a2; border-radius: 14px; padding: 12px 14px; background: #fff6df; color: #78350f; font-size: 13px; line-height: 1.8; }
         .mode-note { margin-top: 14px; border: 1px solid #d6cec2; border-radius: 14px; padding: 12px 14px; background: #faf8f4; color: #44403c; font-size: 13px; line-height: 1.8; }
         @media print {
@@ -1437,12 +1611,14 @@ function buildPrintDocument(
         <div class="card">لوح 6: ${formatSheetSize(settings.backSheetLength, settings.backSheetWidth)}</div>
         <div class="card">سلاح: ${formatOptionalMmFromCm(settings.cutKerf)} • حافة تشطيب: ${formatOptionalMmFromCm(settings.trimMargin)}</div>
         <div class="card">أسلوب التخطيط: ${optimizationModeLabel}</div>
+        <div class="card">سعر المفصلة: ${formatPrice(settings.hingePrice)}/قطعة</div>
       </div>
       <div class="summary">
         <div class="card">الوحدات: ${summary.unitCount}</div>
         <div class="card">إجمالي القطع: ${summary.totalPanels}</div>
         <div class="card">إجمالي الألواح: ${summary.totalSheets}</div>
         <div class="card">إجمالي الاستهلاك: ${summary.totalAreaM2} م²</div>
+        <div class="card">المفصلات: ${summary.totalHingeCount} قطعة • ${formatPrice(summary.totalHingeCost)}</div>
         <div class="card">التكلفة التقريبية: ${formatPrice(summary.totalProjectCost)}</div>
       </div>
       <div class="mode-note"><strong>${optimizationModeLabel}:</strong> ${optimizationModeDescription}</div>
@@ -1490,6 +1666,7 @@ function buildPrintDocument(
         printedSheetLayouts
           ? `<div class="section">
             <h2>تقسيم الألواح</h2>
+            <div class="edge-band-note">شريط الحافة يظهر بخط أسود متقطع على الضلع نفسه ليبقى واضحًا حتى في الطباعة الأبيض والأسود.</div>
             ${printedSheetLayouts}
             ${wasteInsight ? `<div class="waste-note"><strong>قراءة سريعة للهالك:</strong> ${wasteInsight}</div>` : ""}
           </div>`
@@ -1514,12 +1691,238 @@ function getSheetPieceFillColor(category: CutlistPart["category"]) {
   }
 }
 
+function getSheetSvgPresentation(
+  stock: SheetLayoutStock,
+  isRotated = false,
+) {
+  return {
+    viewBoxWidth: (isRotated ? stock.boardLength : stock.boardWidth) + 36,
+    viewBoxHeight: (isRotated ? stock.boardWidth : stock.boardLength) + 36,
+    contentTransform: isRotated
+      ? `translate(0 ${stock.boardWidth}) rotate(-90)`
+      : undefined,
+  };
+}
+
+function getSheetPieceTextTransform(
+  displayPiece: ReturnType<typeof getSheetDisplayPiece>,
+  shouldRotate: boolean | undefined,
+  isSheetRotated = false,
+  transformOrigin?: { x: number; y: number },
+) {
+  if (isSheetRotated) {
+    const originX = transformOrigin?.x ?? displayPiece.x + displayPiece.width / 2;
+    const originY = transformOrigin?.y ?? displayPiece.y + displayPiece.height / 2;
+
+    return `rotate(90 ${originX} ${originY})`;
+  }
+
+  if (!shouldRotate) {
+    return undefined;
+  }
+
+  return `rotate(-90 ${displayPiece.x + displayPiece.width / 2} ${displayPiece.y + displayPiece.height / 2})`;
+}
+
+function getSheetPieceTextPosition(
+  displayPiece: ReturnType<typeof getSheetDisplayPiece>,
+  offset: number,
+  isSheetRotated = false,
+) {
+  const centerX = displayPiece.x + displayPiece.width / 2;
+  const centerY = displayPiece.y + displayPiece.height / 2;
+
+  if (isSheetRotated) {
+    return {
+      x: centerX - offset,
+      y: centerY,
+    };
+  }
+
+  return {
+    x: centerX,
+    y: centerY + offset,
+  };
+}
+
+function getSheetLengthLabelTransform(
+  stock: SheetLayoutStock,
+) {
+  return `rotate(90 ${stock.boardWidth + 14} ${stock.boardLength / 2})`;
+}
+
+type SheetPieceVisualEdge = {
+  edge: "top" | "right" | "bottom" | "left";
+  logicalSide: EdgeBandSide;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  lineX1: number;
+  lineY1: number;
+  lineX2: number;
+  lineY2: number;
+  tickStartX1: number;
+  tickStartY1: number;
+  tickStartX2: number;
+  tickStartY2: number;
+  tickEndX1: number;
+  tickEndY1: number;
+  tickEndX2: number;
+  tickEndY2: number;
+};
+
+function getSheetPieceEdgeThickness(
+  displayPiece: ReturnType<typeof getSheetDisplayPiece>,
+) {
+  return Math.max(
+    1.4,
+    Math.min(Math.min(displayPiece.width, displayPiece.height) * 0.08, 3.2),
+  );
+}
+
+function getSheetPieceEdgeMarkerStrokeWidth(
+  displayPiece: ReturnType<typeof getSheetDisplayPiece>,
+) {
+  return Math.max(
+    0.42,
+    Math.min(Math.min(displayPiece.width, displayPiece.height) * 0.016, 0.75),
+  );
+}
+
+function getSheetPieceEdgeMarkerDash(
+  displayPiece: ReturnType<typeof getSheetDisplayPiece>,
+) {
+  const markerStrokeWidth = getSheetPieceEdgeMarkerStrokeWidth(displayPiece);
+
+  return `${Math.max(7, round2(markerStrokeWidth * 9))} ${Math.max(6, round2(markerStrokeWidth * 8))}`;
+}
+
+function getSheetPieceVisualEdges(
+  piece: SheetLayoutPiece,
+  displayPiece: ReturnType<typeof getSheetDisplayPiece>,
+) {
+  const edgeThickness = getSheetPieceEdgeThickness(displayPiece);
+  const tickLength = Math.max(
+    2.8,
+    Math.min(Math.min(displayPiece.width, displayPiece.height) * 0.18, 5.6),
+  );
+  const halfThickness = edgeThickness / 2;
+  const edgeRects = [
+    {
+      edge: "top" as const,
+      x: displayPiece.x,
+      y: displayPiece.y,
+      width: displayPiece.width,
+      height: edgeThickness,
+    },
+    {
+      edge: "right" as const,
+      x: displayPiece.x + displayPiece.width - edgeThickness,
+      y: displayPiece.y,
+      width: edgeThickness,
+      height: displayPiece.height,
+    },
+    {
+      edge: "bottom" as const,
+      x: displayPiece.x,
+      y: displayPiece.y + displayPiece.height - edgeThickness,
+      width: displayPiece.width,
+      height: edgeThickness,
+    },
+    {
+      edge: "left" as const,
+      x: displayPiece.x,
+      y: displayPiece.y,
+      width: edgeThickness,
+      height: displayPiece.height,
+    },
+  ];
+
+  return edgeRects.map((edgeRect): SheetPieceVisualEdge => {
+    const logicalSide = getVisualEdgeSide(piece, edgeRect.edge);
+
+    switch (edgeRect.edge) {
+      case "top":
+        return {
+          ...edgeRect,
+          logicalSide,
+          lineX1: edgeRect.x + halfThickness,
+          lineY1: edgeRect.y + halfThickness,
+          lineX2: edgeRect.x + edgeRect.width - halfThickness,
+          lineY2: edgeRect.y + halfThickness,
+          tickStartX1: edgeRect.x + halfThickness,
+          tickStartY1: edgeRect.y + halfThickness,
+          tickStartX2: edgeRect.x + halfThickness,
+          tickStartY2: edgeRect.y + halfThickness + tickLength,
+          tickEndX1: edgeRect.x + edgeRect.width - halfThickness,
+          tickEndY1: edgeRect.y + halfThickness,
+          tickEndX2: edgeRect.x + edgeRect.width - halfThickness,
+          tickEndY2: edgeRect.y + halfThickness + tickLength,
+        };
+      case "right":
+        return {
+          ...edgeRect,
+          logicalSide,
+          lineX1: edgeRect.x + edgeRect.width - halfThickness,
+          lineY1: edgeRect.y + halfThickness,
+          lineX2: edgeRect.x + edgeRect.width - halfThickness,
+          lineY2: edgeRect.y + edgeRect.height - halfThickness,
+          tickStartX1: edgeRect.x + edgeRect.width - halfThickness,
+          tickStartY1: edgeRect.y + halfThickness,
+          tickStartX2: edgeRect.x + edgeRect.width - halfThickness - tickLength,
+          tickStartY2: edgeRect.y + halfThickness,
+          tickEndX1: edgeRect.x + edgeRect.width - halfThickness,
+          tickEndY1: edgeRect.y + edgeRect.height - halfThickness,
+          tickEndX2: edgeRect.x + edgeRect.width - halfThickness - tickLength,
+          tickEndY2: edgeRect.y + edgeRect.height - halfThickness,
+        };
+      case "bottom":
+        return {
+          ...edgeRect,
+          logicalSide,
+          lineX1: edgeRect.x + halfThickness,
+          lineY1: edgeRect.y + edgeRect.height - halfThickness,
+          lineX2: edgeRect.x + edgeRect.width - halfThickness,
+          lineY2: edgeRect.y + edgeRect.height - halfThickness,
+          tickStartX1: edgeRect.x + halfThickness,
+          tickStartY1: edgeRect.y + edgeRect.height - halfThickness,
+          tickStartX2: edgeRect.x + halfThickness,
+          tickStartY2: edgeRect.y + edgeRect.height - halfThickness - tickLength,
+          tickEndX1: edgeRect.x + edgeRect.width - halfThickness,
+          tickEndY1: edgeRect.y + edgeRect.height - halfThickness,
+          tickEndX2: edgeRect.x + edgeRect.width - halfThickness,
+          tickEndY2: edgeRect.y + edgeRect.height - halfThickness - tickLength,
+        };
+      case "left":
+        return {
+          ...edgeRect,
+          logicalSide,
+          lineX1: edgeRect.x + halfThickness,
+          lineY1: edgeRect.y + halfThickness,
+          lineX2: edgeRect.x + halfThickness,
+          lineY2: edgeRect.y + edgeRect.height - halfThickness,
+          tickStartX1: edgeRect.x + halfThickness,
+          tickStartY1: edgeRect.y + halfThickness,
+          tickStartX2: edgeRect.x + halfThickness + tickLength,
+          tickStartY2: edgeRect.y + halfThickness,
+          tickEndX1: edgeRect.x + halfThickness,
+          tickEndY1: edgeRect.y + edgeRect.height - halfThickness,
+          tickEndX2: edgeRect.x + halfThickness + tickLength,
+          tickEndY2: edgeRect.y + edgeRect.height - halfThickness,
+        };
+    }
+  });
+}
+
 function buildPrintSheetSvg(
   stock: SheetLayoutStock,
   sheet: SheetLayoutStock["sheets"][number],
   partsMap: Map<string, CutlistPart>,
   projectPartLinkMap: Map<string, ProjectPartLink>,
+  isRotated = false,
 ) {
+  const svgPresentation = getSheetSvgPresentation(stock, isRotated);
   const piecesMarkup = sheet.pieces
     .map((piece) => {
       const pieceLabel = getSheetPieceLabelMode(piece);
@@ -1531,61 +1934,45 @@ function buildPrintSheetSvg(
         pieceLabel,
         projectPartLink?.code,
       );
-      const dimsLabel =
-        pieceLabel.mode === "none"
-          ? null
-          : getSheetPieceDimsLabel(piece, pieceLabel);
-      const edgeThickness = Math.max(
-        1.4,
-        Math.min(Math.min(displayPiece.width, displayPiece.height) * 0.08, 3.2),
+      const nameTextPosition = getSheetPieceTextPosition(
+        displayPiece,
+        0,
+        isRotated,
       );
-      const edgeRects = [
-        {
-          edge: "top" as const,
-          x: displayPiece.x,
-          y: displayPiece.y,
-          width: displayPiece.width,
-          height: edgeThickness,
-        },
-        {
-          edge: "right" as const,
-          x: displayPiece.x + displayPiece.width - edgeThickness,
-          y: displayPiece.y,
-          width: edgeThickness,
-          height: displayPiece.height,
-        },
-        {
-          edge: "bottom" as const,
-          x: displayPiece.x,
-          y: displayPiece.y + displayPiece.height - edgeThickness,
-          width: displayPiece.width,
-          height: edgeThickness,
-        },
-        {
-          edge: "left" as const,
-          x: displayPiece.x,
-          y: displayPiece.y,
-          width: edgeThickness,
-          height: displayPiece.height,
-        },
-      ];
+      const nameTextTransform = getSheetPieceTextTransform(
+        displayPiece,
+        pieceLabel.rotate,
+        isRotated,
+        nameTextPosition,
+      );
+      const dimensionTexts = getSheetPieceDimensionTexts(
+        piece,
+        pieceLabel,
+        isRotated,
+      );
+      const topDimensionTextStyle = dimensionTexts.top
+        ? getSheetPieceDimensionTextStyle(dimensionTexts.top.fontSize)
+        : null;
+      const sideDimensionTextStyle = dimensionTexts.side
+        ? getSheetPieceDimensionTextStyle(dimensionTexts.side.fontSize)
+        : null;
+      const visualEdges = getSheetPieceVisualEdges(piece, displayPiece);
+      const edgeMarkerStrokeWidth = getSheetPieceEdgeMarkerStrokeWidth(
+        displayPiece,
+      );
+      const edgeMarkerDash = getSheetPieceEdgeMarkerDash(displayPiece);
       const edgeMarkup = part
-        ? edgeRects
-            .map((edgeRect) => {
-              const logicalSide = getVisualEdgeSide(piece, edgeRect.edge);
-              const isActive = part.edgeBanding[logicalSide] ?? false;
+        ? visualEdges
+            .map((edgeInfo) => {
+              const isActive = part.edgeBanding[edgeInfo.logicalSide] ?? false;
 
-              return `<rect
-                x="${edgeRect.x}"
-                y="${edgeRect.y}"
-                width="${edgeRect.width}"
-                height="${edgeRect.height}"
-                rx="1"
-                fill="${isActive ? "#f3b04d" : "rgba(255,255,255,0.001)"}"
-                fill-opacity="${isActive ? "0.95" : "1"}"
-                stroke="${isActive ? "#fff7e7" : "rgba(255,255,255,0.45)"}"
-                stroke-width="${isActive ? "0.7" : "0.35"}"
-              />`;
+              if (!isActive) {
+                return "";
+              }
+
+              return `<g>
+                <line x1="${edgeInfo.lineX1}" y1="${edgeInfo.lineY1}" x2="${edgeInfo.lineX2}" y2="${edgeInfo.lineY2}" stroke="#111827" stroke-width="${edgeMarkerStrokeWidth}" stroke-linecap="butt" stroke-dasharray="${edgeMarkerDash}" />
+              </g>`;
             })
             .join("")
         : "";
@@ -1593,8 +1980,8 @@ function buildPrintSheetSvg(
         pieceLabel.mode === "full"
           ? `<g>
               <text
-                x="${displayPiece.x + displayPiece.width / 2}"
-                y="${displayPiece.y + displayPiece.height / 2 - pieceLabel.nameOffset}"
+                  x="${nameTextPosition.x}"
+                  y="${nameTextPosition.y}"
                 text-anchor="middle"
                 dominant-baseline="middle"
                 font-size="${primaryLabel?.fontSize ?? pieceLabel.nameFontSize}"
@@ -1602,36 +1989,18 @@ function buildPrintSheetSvg(
                 fill="#fff"
                 direction="rtl"
                 unicode-bidi="plaintext"
-                ${pieceLabel.rotate ? `transform="rotate(-90 ${displayPiece.x + displayPiece.width / 2} ${displayPiece.y + displayPiece.height / 2})"` : ""}
+                ${nameTextTransform ? `transform="${nameTextTransform}"` : ""}
               >
                 ${primaryLabel?.text ?? (projectPartLink ? `${projectPartLink.code} • ${piece.name}` : piece.name)}
               </text>
-              <text
-                x="${displayPiece.x + displayPiece.width / 2}"
-                y="${displayPiece.y + displayPiece.height / 2 + pieceLabel.dimsOffset}"
-                text-anchor="middle"
-                dominant-baseline="middle"
-                font-size="${dimsLabel?.fontSize ?? pieceLabel.dimsFontSize}"
-                font-weight="700"
-                fill="#fff"
-                ${pieceLabel.rotate ? `transform="rotate(-90 ${displayPiece.x + displayPiece.width / 2} ${displayPiece.y + displayPiece.height / 2})"` : ""}
-              >
-                ${dimsLabel?.text ?? `${round2(piece.length)} × ${round2(piece.width)} سم`}
-              </text>
+              ${dimensionTexts.top && topDimensionTextStyle ? `<text x="${dimensionTexts.top.x}" y="${dimensionTexts.top.y}" text-anchor="middle" dominant-baseline="middle" font-size="${dimensionTexts.top.fontSize}" font-weight="${topDimensionTextStyle.fontWeight}" fill="${topDimensionTextStyle.fill}" stroke="${topDimensionTextStyle.stroke}" stroke-width="${topDimensionTextStyle.strokeWidth}" stroke-linejoin="${topDimensionTextStyle.strokeLinejoin}" paint-order="${topDimensionTextStyle.paintOrder}" ${dimensionTexts.top.transform ? `transform="${dimensionTexts.top.transform}"` : ""}>${dimensionTexts.top.text}</text>` : ""}
+              ${dimensionTexts.side && sideDimensionTextStyle ? `<text x="${dimensionTexts.side.x}" y="${dimensionTexts.side.y}" text-anchor="middle" dominant-baseline="middle" font-size="${dimensionTexts.side.fontSize}" font-weight="${sideDimensionTextStyle.fontWeight}" fill="${sideDimensionTextStyle.fill}" stroke="${sideDimensionTextStyle.stroke}" stroke-width="${sideDimensionTextStyle.strokeWidth}" stroke-linejoin="${sideDimensionTextStyle.strokeLinejoin}" paint-order="${sideDimensionTextStyle.paintOrder}" ${dimensionTexts.side.transform ? `transform="${dimensionTexts.side.transform}"` : ""}>${dimensionTexts.side.text}</text>` : ""}
             </g>`
           : pieceLabel.mode === "dims"
-            ? `<text
-                x="${displayPiece.x + displayPiece.width / 2}"
-                y="${displayPiece.y + displayPiece.height / 2}"
-                text-anchor="middle"
-                dominant-baseline="middle"
-                font-size="${dimsLabel?.fontSize ?? pieceLabel.fontSize}"
-                font-weight="600"
-                fill="#fff"
-                ${pieceLabel.rotate ? `transform="rotate(-90 ${displayPiece.x + displayPiece.width / 2} ${displayPiece.y + displayPiece.height / 2})"` : ""}
-              >
-                ${dimsLabel?.text ?? `${round2(piece.length)} × ${round2(piece.width)}`}
-              </text>`
+            ? `<g>
+                ${dimensionTexts.top && topDimensionTextStyle ? `<text x="${dimensionTexts.top.x}" y="${dimensionTexts.top.y}" text-anchor="middle" dominant-baseline="middle" font-size="${dimensionTexts.top.fontSize}" font-weight="${topDimensionTextStyle.fontWeight}" fill="${topDimensionTextStyle.fill}" stroke="${topDimensionTextStyle.stroke}" stroke-width="${topDimensionTextStyle.strokeWidth}" stroke-linejoin="${topDimensionTextStyle.strokeLinejoin}" paint-order="${topDimensionTextStyle.paintOrder}" ${dimensionTexts.top.transform ? `transform="${dimensionTexts.top.transform}"` : ""}>${dimensionTexts.top.text}</text>` : ""}
+                ${dimensionTexts.side && sideDimensionTextStyle ? `<text x="${dimensionTexts.side.x}" y="${dimensionTexts.side.y}" text-anchor="middle" dominant-baseline="middle" font-size="${dimensionTexts.side.fontSize}" font-weight="${sideDimensionTextStyle.fontWeight}" fill="${sideDimensionTextStyle.fill}" stroke="${sideDimensionTextStyle.stroke}" stroke-width="${sideDimensionTextStyle.strokeWidth}" stroke-linejoin="${sideDimensionTextStyle.strokeLinejoin}" paint-order="${sideDimensionTextStyle.paintOrder}" ${dimensionTexts.side.transform ? `transform="${dimensionTexts.side.transform}"` : ""}>${dimensionTexts.side.text}</text>` : ""}
+              </g>`
             : "";
 
       return `<g>
@@ -1653,11 +2022,12 @@ function buildPrintSheetSvg(
     .join("");
 
   return `<svg
-    viewBox="-18 -18 ${stock.boardWidth + 36} ${stock.boardLength + 36}"
+    viewBox="-18 -18 ${svgPresentation.viewBoxWidth} ${svgPresentation.viewBoxHeight}"
     preserveAspectRatio="xMidYMid meet"
     role="img"
     aria-label="${stock.key} sheet ${sheet.index + 1} layout"
   >
+    <g${svgPresentation.contentTransform ? ` transform="${svgPresentation.contentTransform}"` : ""}>
     <line x1="0" y1="-10" x2="${stock.boardWidth}" y2="-10" stroke="#9b8a75" stroke-width="0.9" />
     <line x1="0" y1="-13.5" x2="0" y2="-6.5" stroke="#9b8a75" stroke-width="0.9" />
     <line x1="${stock.boardWidth}" y1="-13.5" x2="${stock.boardWidth}" y2="-6.5" stroke="#9b8a75" stroke-width="0.9" />
@@ -1667,12 +2037,83 @@ function buildPrintSheetSvg(
     <line x1="${stock.boardWidth + 10}" y1="0" x2="${stock.boardWidth + 10}" y2="${stock.boardLength}" stroke="#9b8a75" stroke-width="0.9" />
     <line x1="${stock.boardWidth + 6.5}" y1="0" x2="${stock.boardWidth + 13.5}" y2="0" stroke="#9b8a75" stroke-width="0.9" />
     <line x1="${stock.boardWidth + 6.5}" y1="${stock.boardLength}" x2="${stock.boardWidth + 13.5}" y2="${stock.boardLength}" stroke="#9b8a75" stroke-width="0.9" />
-    <text x="${stock.boardWidth + 14}" y="${stock.boardLength / 2}" text-anchor="middle" dominant-baseline="middle" font-size="5.2" font-weight="700" fill="#6b5a45" transform="rotate(90 ${stock.boardWidth + 14} ${stock.boardLength / 2})">
+    <text x="${stock.boardWidth + 14}" y="${stock.boardLength / 2}" text-anchor="middle" dominant-baseline="middle" font-size="5.2" font-weight="700" fill="#6b5a45" transform="${getSheetLengthLabelTransform(stock)}">
       طول اللوح ${formatCm(stock.boardLength)}
     </text>
     <rect x="0" y="0" width="${stock.boardWidth}" height="${stock.boardLength}" fill="#fcfaf7" stroke="#d6cec2" stroke-width="1" rx="4" />
     ${piecesMarkup}
+    </g>
   </svg>`;
+}
+
+function buildSingleSheetPrintDocument(
+  projectName: string,
+  stock: SheetLayoutStock,
+  sheet: SheetLayoutStock["sheets"][number],
+  partsMap: Map<string, CutlistPart>,
+  projectPartLinkMap: Map<string, ProjectPartLink>,
+  isRotated = false,
+) {
+  const stockLabel = getStockLabel(stock.thickness, stock.isBackStock);
+  const sheetTitle = `${stockLabel} - لوح #${sheet.index + 1}`;
+  const executionMarkup = buildSheetExecutionMarkup(
+    stock,
+    sheet,
+    projectPartLinkMap,
+  );
+  const offcutsMarkup = buildSheetOffcutsMarkup(stock, sheet);
+
+  return `<!doctype html>
+  <html lang="ar" dir="rtl">
+    <head>
+      <meta charset="utf-8" />
+      <title>${sheetTitle}</title>
+      <style>
+        @page { size: A4 portrait; margin: 14mm; }
+        body { font-family: "Segoe UI", Tahoma, sans-serif; margin: 24px; color: #1c1917; }
+        h1, h2, h3 { margin: 0; }
+        p { margin: 0; }
+        .meta { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin: 16px 0 18px; }
+        .card { border: 1px solid #d6cec2; border-radius: 14px; padding: 12px 14px; background: #faf8f4; }
+        .sheet-card { border: 1px solid #e7dfd4; border-radius: 16px; padding: 12px; background: #fff; }
+        .sheet-card-head { display: flex; justify-content: space-between; gap: 10px; font-size: 12px; color: #57534e; margin-bottom: 10px; }
+        .sheet-svg-wrap { border: 1px solid #e7dfd4; border-radius: 14px; padding: 10px; background: linear-gradient(180deg,#f8f4ee 0%,#f2ece3 100%); }
+        .sheet-svg-wrap svg { display: block; width: 100%; height: auto; border-radius: 12px; background: #fff; box-shadow: inset 0 0 0 1px rgba(214,206,194,0.9); }
+        .sheet-details { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-top: 12px; }
+        .sheet-detail-card { border: 1px solid #e7dfd4; border-radius: 14px; padding: 10px 12px; background: #fcfaf7; }
+        .sheet-detail-card h4 { margin: 0 0 8px; font-size: 13px; }
+        .sheet-detail-card p, .sheet-detail-card li { font-size: 12px; line-height: 1.8; color: #44403c; }
+        .sheet-detail-card ol, .sheet-detail-card ul { margin: 0; padding-inline-start: 18px; }
+        .sheet-detail-card li + li { margin-top: 4px; }
+        .sheet-detail-meta { margin-bottom: 8px; color: #78716c; }
+        .edge-band-note { margin: 0 0 12px; border: 1px solid #d6cec2; border-radius: 12px; padding: 10px 12px; background: #fff; color: #44403c; font-size: 12px; font-weight: 700; }
+        @media print { body { margin: 0; } }
+      </style>
+    </head>
+    <body>
+      <h1>${projectName}</h1>
+      <div class="meta">
+        <div class="card">${sheetTitle}</div>
+        <div class="card">${stock.materialSummary} • ${formatSheetSize(stock.boardLength, stock.boardWidth)}</div>
+        <div class="card">استخدام هذه المجموعة ${stock.totalAreaM2} م²</div>
+        <div class="card">${isRotated ? "تم تدوير عرض اللوح 90° قبل الطباعة." : "العرض الحالي مطابق لاتجاه اللوح الافتراضي."}</div>
+      </div>
+      <div class="edge-band-note">شريط الحافة يظهر بخط أسود متقطع على الضلع نفسه ليبقى واضحًا حتى في الطباعة الأبيض والأسود.</div>
+      <article class="sheet-card">
+        <div class="sheet-card-head">
+          <span>لوح #${sheet.index + 1}</span>
+          <span>مستخدم طوليًا ${formatCm(sheet.usedLength)} من ${formatCm(stock.boardLength)}</span>
+        </div>
+        <div class="sheet-svg-wrap">
+          ${buildPrintSheetSvg(stock, sheet, partsMap, projectPartLinkMap, isRotated)}
+        </div>
+        <div class="sheet-details">
+          ${executionMarkup}
+          ${offcutsMarkup}
+        </div>
+      </article>
+    </body>
+  </html>`;
 }
 
 function getSheetDisplayPiece(piece: SheetLayoutPiece) {
@@ -1814,6 +2255,139 @@ function getSheetPiecePrimaryLabel(
   );
 }
 
+type SheetPieceDimensionText = {
+  text: string;
+  fontSize: number;
+  x: number;
+  y: number;
+  transform?: string;
+};
+
+function getSheetPieceDimensionTextStyle(fontSize: number) {
+  return {
+    fill: "#0f172a",
+    stroke: "#ffffff",
+    strokeWidth: round2(Math.max(fontSize * 0.18, 0.34)),
+    fontWeight: 700,
+    paintOrder: "stroke fill" as const,
+    strokeLinejoin: "round" as const,
+  };
+}
+
+function getSheetEdgeDimensionTextTransform(
+  axis: "top" | "side",
+  position: { x: number; y: number },
+  isSheetRotated = false,
+) {
+  if (axis === "top") {
+    return isSheetRotated
+      ? `rotate(90 ${position.x} ${position.y})`
+      : undefined;
+  }
+
+  return isSheetRotated
+    ? undefined
+    : `rotate(-90 ${position.x} ${position.y})`;
+}
+
+function getSheetPieceDimensionTexts(
+  piece: SheetLayoutPiece,
+  pieceLabel: ReturnType<typeof getSheetPieceLabelMode>,
+  isSheetRotated = false,
+) {
+  if (pieceLabel.mode === "none") {
+    return {
+      top: null,
+      side: null,
+    } satisfies {
+      top: SheetPieceDimensionText | null;
+      side: SheetPieceDimensionText | null;
+    };
+  }
+
+  const displayPiece = pieceLabel.displayPiece;
+  const topValue = piece.rotated ? piece.width : piece.length;
+  const sideValue = piece.rotated ? piece.length : piece.width;
+  const topBaseFontSize =
+    pieceLabel.mode === "full"
+      ? clampSheetLabelFontSize(
+          Math.min(displayPiece.width / 10.5, displayPiece.height / 2.9),
+          1.9,
+          4,
+        )
+      : clampSheetLabelFontSize(
+          Math.min(displayPiece.width / 9.5, displayPiece.height / 2.5),
+          1.8,
+          3.2,
+        );
+  const sideBaseFontSize =
+    pieceLabel.mode === "full"
+      ? clampSheetLabelFontSize(
+          Math.min(displayPiece.height / 11.5, displayPiece.width / 2.8),
+          1.8,
+          3.4,
+        )
+      : clampSheetLabelFontSize(
+          Math.min(displayPiece.height / 10.5, displayPiece.width / 2.5),
+          1.7,
+          2.9,
+        );
+  const topLabel = fitSheetLabelText(
+    String(round2(topValue)),
+    topBaseFontSize,
+    Math.max(8, displayPiece.width - 4.4),
+    1.7,
+  );
+  const sideLabel = fitSheetLabelText(
+    String(round2(sideValue)),
+    sideBaseFontSize,
+    Math.max(8, displayPiece.height - 4.4),
+    1.6,
+  );
+  const topPosition = {
+    x: displayPiece.x + displayPiece.width / 2,
+    y: displayPiece.y + Math.max(topLabel.fontSize * 0.95, 2.1),
+  };
+  const sidePosition = {
+    x: displayPiece.x + Math.max(sideLabel.fontSize * 0.95, 1.9),
+    y: displayPiece.y + displayPiece.height / 2,
+  };
+
+  return {
+    top:
+      displayPiece.height >= topLabel.fontSize * 2.2
+        ? {
+            text: topLabel.text,
+            fontSize: topLabel.fontSize,
+            x: topPosition.x,
+            y: topPosition.y,
+            transform: getSheetEdgeDimensionTextTransform(
+              "top",
+              topPosition,
+              isSheetRotated,
+            ),
+          }
+        : null,
+    side:
+      displayPiece.width >= sideLabel.fontSize * 2.2
+        ? {
+            text: sideLabel.text,
+            fontSize: sideLabel.fontSize,
+            x: sidePosition.x,
+            y: sidePosition.y,
+            transform: getSheetEdgeDimensionTextTransform(
+              "side",
+              sidePosition,
+              isSheetRotated,
+            ),
+          }
+        : null,
+  } satisfies {
+    top: SheetPieceDimensionText | null;
+    side: SheetPieceDimensionText | null;
+  };
+}
+
 function getSheetPieceDimsLabel(
   piece: SheetLayoutPiece,
   pieceLabel: ReturnType<typeof getSheetPieceLabelMode>,
@@ -1849,17 +2423,19 @@ function getSheetPieceLabelMode(piece: SheetLayoutPiece) {
   }
 
   if (shortSide >= 16 && longSide >= 34) {
-    const fullNameFontSize = isTallPiece
-      ? clampSheetLabelFontSize(
-          Math.min(shortSide / 8.6, longSide / 14.5),
-          2.8,
-          4.4,
-        )
-      : clampSheetLabelFontSize(
-          Math.min(shortSide / 5.4, longSide / 9.8),
-          3.2,
-          5.4,
-        );
+    const fullNameFontSize = round2(
+      (isTallPiece
+        ? clampSheetLabelFontSize(
+            Math.min(shortSide / 9.8, longSide / 16.2),
+            2.4,
+            3.8,
+          )
+        : clampSheetLabelFontSize(
+            Math.min(shortSide / 6.2, longSide / 11.1),
+            2.7,
+            4.6,
+          )) * 0.8,
+    );
     const fullDimsFontSize = isTallPiece
       ? clampSheetLabelFontSize(
           Math.min(shortSide / 9.8, longSide / 16.5),
@@ -1929,6 +2505,29 @@ function getPartEdgeBandLengthCm(part: CutlistPart) {
   }, 0);
 }
 
+function isDoorFrontPart(part: CutlistPart) {
+  return (
+    part.kind === "front-main" ||
+    part.kind === "front-upper" ||
+    part.kind === "front-lower"
+  );
+}
+
+function getDoorLeafHingeCount(part: CutlistPart) {
+  if (!isDoorFrontPart(part)) {
+    return 0;
+  }
+
+  return Math.max(part.length, part.width) >= 120 ? 3 : 2;
+}
+
+function calculateDoorHingeCount(parts: CutlistPart[]) {
+  return parts.reduce(
+    (sum, part) => sum + getDoorLeafHingeCount(part) * part.qty,
+    0,
+  );
+}
+
 function formatPartEdgeBanding(part: CutlistPart) {
   const sides = getPartEdgeBandSides(part);
 
@@ -1981,6 +2580,68 @@ function buildProjectSettingsDrafts(
     edgeBandPricePerMeter: getResettableFieldValue(
       settings.edgeBandPricePerMeter,
     ),
+    hingePrice: getResettableFieldValue(settings.hingePrice),
+  };
+}
+
+function getCustomPartProjectThickness(
+  settings: ProjectSettings,
+  category: PartCategory,
+) {
+  return category === "back" ? settings.backThickness : settings.boardThickness;
+}
+
+function getCustomPartThicknessDraftValue(
+  settings: ProjectSettings,
+  category: PartCategory,
+) {
+  return String(round2(getCustomPartProjectThickness(settings, category) * 10));
+}
+
+function inferCustomPartThicknessMode(
+  part: Pick<CustomProjectPart, "category" | "thickness" | "thicknessMode">,
+  settings: ProjectSettings,
+): CustomProjectPartThicknessMode {
+  if (part.thicknessMode) {
+    return part.thicknessMode;
+  }
+
+  return Math.abs(
+    part.thickness - getCustomPartProjectThickness(settings, part.category),
+  ) <= 0.01
+    ? "project"
+    : "manual";
+}
+
+function syncCustomProjectPartWithSettings(
+  part: CustomProjectPart,
+  settings: ProjectSettings,
+): CustomProjectPart {
+  const thicknessMode = inferCustomPartThicknessMode(part, settings);
+
+  return {
+    ...part,
+    thickness:
+      thicknessMode === "project"
+        ? getCustomPartProjectThickness(settings, part.category)
+        : part.thickness,
+    thicknessMode,
+    material: settings.material,
+    edgeBanding: part.edgeBanding ?? {},
+  };
+}
+
+function syncCustomPartDraftWithProjectSettings(
+  draft: CustomProjectPartDraft,
+  settings: ProjectSettings,
+): CustomProjectPartDraft {
+  return {
+    ...draft,
+    material: settings.material,
+    thickness:
+      draft.thicknessMode === "project"
+        ? getCustomPartThicknessDraftValue(settings, draft.category)
+        : draft.thickness,
   };
 }
 
@@ -1992,7 +2653,8 @@ function buildEmptyCustomPartDraft(
     length: "",
     width: "",
     qty: "1",
-    thickness: String(round2(settings.boardThickness * 10)),
+    thickness: getCustomPartThicknessDraftValue(settings, "carcass"),
+    thicknessMode: "project",
     material: settings.material,
     category: "carcass",
     grainDirection: "free",
@@ -2006,32 +2668,50 @@ function createCustomPartId() {
 
 function buildCustomProjectCutlistPart(
   entry: CustomProjectPart,
-  materialOverride?: MaterialType,
+  settings: ProjectSettings,
 ): CutlistPart {
+  const normalizedEntry = syncCustomProjectPartWithSettings(entry, settings);
+
   return {
-    id: `custom-part-piece-${entry.id}`,
+    id: `custom-part-piece-${normalizedEntry.id}`,
     kind: "custom",
-    name: entry.title,
-    category: entry.category,
-    qty: entry.qty,
-    length: entry.length,
-    width: entry.width,
-    thickness: entry.thickness,
-    material: materialOverride ?? entry.material,
+    name: normalizedEntry.title,
+    category: normalizedEntry.category,
+    qty: normalizedEntry.qty,
+    length: normalizedEntry.length,
+    width: normalizedEntry.width,
+    thickness: normalizedEntry.thickness,
+    material: normalizedEntry.material,
     notes:
-      entry.category === "back"
+      normalizedEntry.category === "back"
         ? "مقاس حر خارج الوحدات على لوح ظهر"
         : "مقاس حر خارج الوحدات",
-    edgeBanding: entry.edgeBanding ?? {},
-    grainDirection: entry.grainDirection,
-    allowRotation: entry.grainDirection === "free",
+    edgeBanding: normalizedEntry.edgeBanding ?? {},
+    grainDirection: normalizedEntry.grainDirection,
+    allowRotation: normalizedEntry.grainDirection === "free",
   };
 }
 
 function normalizeProjectSettings(settings?: Partial<ProjectSettings> | null) {
-  return {
+  const mergedSettings = {
     ...defaultProjectSettings,
     ...(settings ?? {}),
+  } satisfies ProjectSettings;
+  const boardSheetSize = normalizeSheetStockSize({
+    length: mergedSettings.boardSheetLength,
+    width: mergedSettings.boardSheetWidth,
+  });
+  const backSheetSize = normalizeSheetStockSize({
+    length: mergedSettings.backSheetLength,
+    width: mergedSettings.backSheetWidth,
+  });
+
+  return {
+    ...mergedSettings,
+    boardSheetLength: boardSheetSize.length,
+    boardSheetWidth: boardSheetSize.width,
+    backSheetLength: backSheetSize.length,
+    backSheetWidth: backSheetSize.width,
   } satisfies ProjectSettings;
 }
 
@@ -2304,6 +2984,9 @@ function App() {
   const [calculatedCustomParts, setCalculatedCustomParts] = useState<
     CustomProjectPart[]
   >([]);
+  const [rotatedSheetViews, setRotatedSheetViews] = useState<
+    Record<string, boolean>
+  >({});
   const [selectedCalculatedUnitId, setSelectedCalculatedUnitId] = useState<
     string | null
   >(null);
@@ -2323,10 +3006,7 @@ function App() {
   const editorResult = calculateCabinetCutlist(editorInput);
   const editorFrontPieceCount = getFrontPieceCount(editorResult);
   const calculatedCustomPartEntries = calculatedCustomParts.map((entry) => {
-    const basePart = buildCustomProjectCutlistPart(
-      entry,
-      projectSettings.material,
-    );
+    const basePart = buildCustomProjectCutlistPart(entry, projectSettings);
 
     return {
       sourceId: entry.id,
@@ -2420,6 +3100,12 @@ function App() {
         )
       : 0;
   const projectWasteInsight = buildProjectWasteInsight(projectSheetLayout);
+  const projectOptimizationRecommendations =
+    buildProjectOptimizationRecommendations(
+      projectParts,
+      projectSheetLayout,
+      projectSettings,
+    );
   const projectFrontPieceCount = projectParts
     .filter((part) => part.category === "front")
     .reduce((sum, part) => sum + part.qty, 0);
@@ -2547,6 +3233,8 @@ function App() {
     const edgeBandCost = round2(
       edgeBandLengthM * projectSettings.edgeBandPricePerMeter,
     );
+    const hingeCount = calculateDoorHingeCount(view.result.parts);
+    const hingeCost = round2(hingeCount * projectSettings.hingePrice);
 
     return {
       unitId: view.unit.id,
@@ -2561,7 +3249,9 @@ function App() {
       sheetCost,
       laborCost,
       edgeBandCost,
-      totalCost: round2(sheetCost + laborCost + edgeBandCost),
+      hingeCount,
+      hingeCost,
+      totalCost: round2(sheetCost + laborCost + edgeBandCost + hingeCost),
     };
   });
   const activeProjectPreviewUnit =
@@ -2598,8 +3288,15 @@ function App() {
   const projectEdgeBandCost = round2(
     projectEdgeBandLengthM * projectSettings.edgeBandPricePerMeter,
   );
+  const projectHingeCount = calculateDoorHingeCount(projectParts);
+  const projectHingeCost = round2(
+    projectHingeCount * projectSettings.hingePrice,
+  );
   const projectTotalCost = round2(
-    projectSheetCost + projectLaborCost + projectEdgeBandCost,
+    projectSheetCost +
+      projectLaborCost +
+      projectEdgeBandCost +
+      projectHingeCost,
   );
   const calculatedCustomPartCount = calculatedCustomParts.reduce(
     (sum, entry) => sum + entry.qty,
@@ -2742,6 +3439,8 @@ function App() {
       totalLaborCost: projectLaborCost,
       totalEdgeBandLengthM: projectEdgeBandLengthM,
       totalEdgeBandCost: projectEdgeBandCost,
+      totalHingeCount: projectHingeCount,
+      totalHingeCost: projectHingeCost,
       totalProjectCost: projectTotalCost,
     }),
     {
@@ -2753,6 +3452,8 @@ function App() {
       totalLaborCost: 0,
       totalEdgeBandLengthM: 0,
       totalEdgeBandCost: 0,
+      totalHingeCount: 0,
+      totalHingeCost: 0,
       totalProjectCost: 0,
     },
   );
@@ -2765,6 +3466,8 @@ function App() {
   projectSummary.totalLaborCost = projectLaborCost;
   projectSummary.totalEdgeBandLengthM = projectEdgeBandLengthM;
   projectSummary.totalEdgeBandCost = projectEdgeBandCost;
+  projectSummary.totalHingeCount = projectHingeCount;
+  projectSummary.totalHingeCost = projectHingeCost;
   projectSummary.totalProjectCost = projectTotalCost;
 
   useEffect(() => {
@@ -2993,9 +3696,43 @@ function App() {
     key: K,
     value: CustomProjectPartDraft[K],
   ) {
+    setCustomPartDraft((current) => {
+      if (key === "thickness") {
+        return {
+          ...current,
+          thickness: value as CustomProjectPartDraft["thickness"],
+          thicknessMode: "manual",
+        };
+      }
+
+      if (key === "category") {
+        const category = value as PartCategory;
+
+        return {
+          ...current,
+          category,
+          thickness:
+            current.thicknessMode === "project"
+              ? getCustomPartThicknessDraftValue(projectSettings, category)
+              : current.thickness,
+        };
+      }
+
+      return {
+        ...current,
+        [key]: value,
+      };
+    });
+  }
+
+  function useProjectThicknessForCustomPartDraft() {
     setCustomPartDraft((current) => ({
       ...current,
-      [key]: value,
+      thicknessMode: "project",
+      thickness: getCustomPartThicknessDraftValue(
+        projectSettings,
+        current.category,
+      ),
     }));
   }
 
@@ -3206,6 +3943,7 @@ function App() {
   function invalidateCalculatedState() {
     setCalculatedUnits([]);
     setCalculatedCustomParts([]);
+    setRotatedSheetViews({});
     setSelectedCalculatedUnitId(null);
     setSelectedPartId(null);
   }
@@ -3215,9 +3953,15 @@ function App() {
     const length = Number(normalizeNumericInput(customPartDraft.length));
     const width = Number(normalizeNumericInput(customPartDraft.width));
     const qty = Number(normalizeNumericInput(customPartDraft.qty));
-    const thicknessMm = Number(
-      normalizeNumericInput(customPartDraft.thickness),
-    );
+    const thicknessMm =
+      customPartDraft.thicknessMode === "project"
+        ? round2(
+            getCustomPartProjectThickness(
+              projectSettings,
+              customPartDraft.category,
+            ) * 10,
+          )
+        : Number(normalizeNumericInput(customPartDraft.thickness));
 
     if (
       !Number.isFinite(length) ||
@@ -3242,6 +3986,7 @@ function App() {
       width,
       qty: Math.max(1, Math.floor(qty)),
       thickness: thicknessMm / 10,
+      thicknessMode: customPartDraft.thicknessMode,
       material: projectSettings.material,
       category: customPartDraft.category,
       grainDirection: customPartDraft.grainDirection,
@@ -3265,19 +4010,25 @@ function App() {
   }
 
   function loadCustomPartIntoEditor(entry: CustomProjectPart) {
+    const normalizedEntry = syncCustomProjectPartWithSettings(
+      entry,
+      projectSettings,
+    );
+
     setActiveWorkspaceTab("builder");
     setActiveBuilderTab("custom");
-    setEditingCustomPartId(entry.id);
+    setEditingCustomPartId(normalizedEntry.id);
     setCustomPartDraft({
-      title: entry.title,
-      length: String(round2(entry.length)),
-      width: String(round2(entry.width)),
-      qty: String(entry.qty),
-      thickness: String(round2(entry.thickness * 10)),
+      title: normalizedEntry.title,
+      length: String(round2(normalizedEntry.length)),
+      width: String(round2(normalizedEntry.width)),
+      qty: String(normalizedEntry.qty),
+      thickness: String(round2(normalizedEntry.thickness * 10)),
+      thicknessMode: inferCustomPartThicknessMode(normalizedEntry, projectSettings),
       material: projectSettings.material,
-      category: entry.category,
-      grainDirection: entry.grainDirection,
-      edgeBanding: { ...(entry.edgeBanding ?? {}) },
+      category: normalizedEntry.category,
+      grainDirection: normalizedEntry.grainDirection,
+      edgeBanding: { ...(normalizedEntry.edgeBanding ?? {}) },
     });
   }
 
@@ -3521,21 +4272,18 @@ function App() {
     setProjectSettingsDrafts(buildProjectSettingsDrafts(normalizedSettings));
     setUnits(project.units);
     setCustomParts(
-      (project.customParts ?? []).map((part) => ({
-        ...part,
-        material: normalizedSettings.material,
-        edgeBanding: part.edgeBanding ?? {},
-      })),
+      (project.customParts ?? []).map((part) =>
+        syncCustomProjectPartWithSettings(part, normalizedSettings),
+      ),
     );
     setEdgeBandOverrides(project.edgeBandOverrides ?? {});
     setCalculatedUnits(project.units.map((unit) => ({ ...unit })));
     setCalculatedCustomParts(
-      (project.customParts ?? []).map((part) => ({
-        ...part,
-        material: project.settings.material,
-        edgeBanding: part.edgeBanding ?? {},
-      })),
+      (project.customParts ?? []).map((part) =>
+        syncCustomProjectPartWithSettings(part, normalizedSettings),
+      ),
     );
+    setRotatedSheetViews({});
     setSelectedCalculatedUnitId(project.units[0]?.id ?? null);
     setProjectArrangement(nextArrangement);
     setActiveWorkspaceTab("project");
@@ -3545,8 +4293,8 @@ function App() {
     );
     setSelectedPartId(null);
     setUnitFeedback(null);
-    resetEditor(project.units.length, project.settings);
-    resetCustomPartEditor(project.settings);
+    resetEditor(project.units.length, normalizedSettings);
+    resetCustomPartEditor(normalizedSettings);
     setIsProjectLibraryOpen(false);
     announceProjectAction(`تم تحميل ${project.name}.`);
   }
@@ -3609,6 +4357,63 @@ function App() {
     );
   }
 
+  function getProjectSheetViewKey(stockKey: string, sheetIndex: number) {
+    return `${(currentProjectId ?? projectName.trim()) || "draft"}::${stockKey}::${sheetIndex}`;
+  }
+
+  function isProjectSheetRotated(stockKey: string, sheetIndex: number) {
+    return (
+      rotatedSheetViews[getProjectSheetViewKey(stockKey, sheetIndex)] ?? false
+    );
+  }
+
+  function toggleProjectSheetRotation(stockKey: string, sheetIndex: number) {
+    const viewKey = getProjectSheetViewKey(stockKey, sheetIndex);
+
+    setRotatedSheetViews((current) => ({
+      ...current,
+      [viewKey]: !current[viewKey],
+    }));
+  }
+
+  function openPrintMarkup(printMarkup: string) {
+    const printBlob = new Blob([printMarkup], {
+      type: "text/html;charset=utf-8",
+    });
+    const printUrl = window.URL.createObjectURL(printBlob);
+    const printWindow = window.open(
+      printUrl,
+      "_blank",
+      "width=1100,height=800",
+    );
+
+    if (!printWindow) {
+      window.URL.revokeObjectURL(printUrl);
+      return false;
+    }
+
+    function revokePrintUrl() {
+      window.setTimeout(() => {
+        window.URL.revokeObjectURL(printUrl);
+      }, 60_000);
+    }
+
+    printWindow.addEventListener(
+      "load",
+      () => {
+        printWindow.focus();
+        window.setTimeout(() => {
+          printWindow.print();
+        }, 250);
+      },
+      { once: true },
+    );
+    printWindow.addEventListener("afterprint", revokePrintUrl, { once: true });
+    revokePrintUrl();
+
+    return true;
+  }
+
   function exportProjectCsv() {
     if (projectParts.length === 0) {
       return;
@@ -3643,45 +4448,39 @@ function App() {
         totalPanels: projectSummary.totalPanels,
         totalAreaM2: projectSummary.totalAreaM2,
         totalSheets: projectSummary.totalSheets,
+        totalHingeCount: projectSummary.totalHingeCount,
+        totalHingeCost: projectSummary.totalHingeCost,
         totalProjectCost: projectSummary.totalProjectCost,
       },
       projectParts,
       projectSheetLayout,
       projectPartLinkMap,
     );
-    const printBlob = new Blob([printMarkup], {
-      type: "text/html;charset=utf-8",
-    });
-    const printUrl = window.URL.createObjectURL(printBlob);
-    const printWindow = window.open(
-      printUrl,
-      "_blank",
-      "width=1100,height=800",
-    );
+    openPrintMarkup(printMarkup);
+  }
 
-    if (!printWindow) {
-      window.URL.revokeObjectURL(printUrl);
+  function printProjectSheet(
+    stock: SheetLayoutStock,
+    sheet: SheetLayoutStock["sheets"][number],
+  ) {
+    if (projectParts.length === 0) {
       return;
     }
 
-    function revokePrintUrl() {
-      window.setTimeout(() => {
-        window.URL.revokeObjectURL(printUrl);
-      }, 60_000);
-    }
-
-    printWindow.addEventListener(
-      "load",
-      () => {
-        printWindow.focus();
-        window.setTimeout(() => {
-          printWindow.print();
-        }, 250);
-      },
-      { once: true },
+    const partsMap = new Map(projectParts.map((part) => [part.id, part]));
+    const isRotated = isProjectSheetRotated(stock.key, sheet.index);
+    const printMarkup = buildSingleSheetPrintDocument(
+      projectName.trim() || "مشروع",
+      stock,
+      sheet,
+      partsMap,
+      projectPartLinkMap,
+      isRotated,
     );
-    printWindow.addEventListener("afterprint", revokePrintUrl, { once: true });
-    revokePrintUrl();
+
+    if (openPrintMarkup(printMarkup)) {
+      announceProjectAction(`تم فتح طباعة لوح #${sheet.index + 1}.`);
+    }
   }
 
   const bindProjectPreviewCanvas = useCallback(
@@ -3969,26 +4768,28 @@ function App() {
     key: K,
     value: ProjectSettings[K],
   ) {
-    const nextSettings = {
+    const nextSettings = normalizeProjectSettings({
       ...projectSettings,
       [key]: value,
-    };
+    });
 
     setProjectSettings(nextSettings);
     setProjectSettingsDrafts(buildProjectSettingsDrafts(nextSettings));
     setCustomPartDraft((current) =>
-      editingCustomPartId
-        ? current
-        : {
-            ...current,
-            material:
-              key === "material" ? (value as MaterialType) : current.material,
-            thickness:
-              key === "boardThickness"
-                ? String(round2((value as number) * 10))
-                : current.thickness,
-          },
+      syncCustomPartDraftWithProjectSettings(current, nextSettings),
     );
+    if (
+      key === "material" ||
+      key === "boardThickness" ||
+      key === "backThickness"
+    ) {
+      setCustomParts((current) =>
+        current.map((part) => syncCustomProjectPartWithSettings(part, nextSettings)),
+      );
+      setCalculatedCustomParts((current) =>
+        current.map((part) => syncCustomProjectPartWithSettings(part, nextSettings)),
+      );
+    }
     setEditorInput((current) =>
       applyProjectSettingsToInput(current, nextSettings),
     );
@@ -4396,7 +5197,7 @@ function App() {
                       أسلوب التوزيع
                     </h3>
                     <p className="text-xs text-stone-500">
-                      اختر بين خطة أسهل للورشة أو خطة تميل لأقل هادر.
+                      اختر بين خطة أسهل للورشة أو خطة تميل لأقل هادر أو المحسن الذكي.
                     </p>
                   </div>
                   <div className="space-y-3">
@@ -4421,6 +5222,7 @@ function App() {
                           </SelectValue>
                         </SelectTrigger>
                         <SelectContent>
+                          <SelectItem value="smart">المحسن الذكي</SelectItem>
                           <SelectItem value="workshop">وضع الورشة</SelectItem>
                           <SelectItem value="yield">أقل هادر</SelectItem>
                         </SelectContent>
@@ -4442,7 +5244,7 @@ function App() {
                       الأسعار والمصنعية
                     </h3>
                     <p className="text-xs text-stone-500">
-                      تكلفة اللوح، المصنعية، وشريط الحافة لحساب تكلفة المشروع.
+                      تكلفة اللوح، المصنعية، شريط الحافة، والمفصلات لحساب تكلفة المشروع.
                     </p>
                   </div>
                   <div className="grid gap-3 sm:grid-cols-2 sm:gap-4 lg:grid-cols-2">
@@ -4512,6 +5314,22 @@ function App() {
                         onChange={(event) =>
                           updateProjectSettingNumber(
                             "edgeBandPricePerMeter",
+                            event.target.value,
+                          )
+                        }
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="projectHingePrice">سعر المفصلة</Label>
+                      <Input
+                        id="projectHingePrice"
+                        inputMode="decimal"
+                        className="bg-white"
+                        value={projectSettingsDrafts.hingePrice}
+                        onChange={(event) =>
+                          updateProjectSettingNumber(
+                            "hingePrice",
                             event.target.value,
                           )
                         }
@@ -5024,7 +5842,7 @@ function App() {
               </p>
               <p className="mt-1 text-xs text-stone-500">
                 شريط حافة: {formatPrice(projectSettings.edgeBandPricePerMeter)}
-                /م ط
+                /م ط • مفصلة: {formatPrice(projectSettings.hingePrice)}/قطعة
               </p>
             </div>
             <Button
@@ -5853,6 +6671,24 @@ function App() {
                               )
                             }
                           />
+                          <div className="flex items-center justify-between gap-3 text-xs text-stone-500">
+                            <span>
+                              {customPartDraft.thicknessMode === "project"
+                                ? `مرتبط تلقائيا بسمك ${customPartDraft.category === "back" ? "الظهر" : "الهيكل"} الحالي.`
+                                : "تم تثبيت السمك يدويًا ولن يتغير مع إعدادات المشروع."}
+                            </span>
+                            {customPartDraft.thicknessMode === "manual" ? (
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                className="h-auto px-2 py-1 text-xs"
+                                onClick={useProjectThicknessForCustomPartDraft}
+                              >
+                                استخدام سمك المشروع
+                              </Button>
+                            ) : null}
+                          </div>
                         </div>
                         <div className="space-y-2">
                           <Label>الخامة</Label>
@@ -6000,17 +6836,31 @@ function App() {
                                   {partCategoryLabels[part.category]} •{" "}
                                   {formatCm(part.length)} ×{" "}
                                   {formatCm(part.width)} • {part.qty} قطعة •{" "}
-                                  {formatMmFromCm(part.thickness)}
+                                  {formatMmFromCm(
+                                    syncCustomProjectPartWithSettings(
+                                      part,
+                                      projectSettings,
+                                    ).thickness,
+                                  )}
                                 </p>
                                 <p className="text-xs text-stone-500">
                                   {materialLabels[projectSettings.material]} •{" "}
                                   {grainDirectionLabels[part.grainDirection]}
                                 </p>
                                 <p className="text-xs text-stone-500">
+                                  {(part.thicknessMode ??
+                                    inferCustomPartThicknessMode(
+                                      part,
+                                      projectSettings,
+                                    )) === "project"
+                                    ? "السمك يتبع المشروع الحالي تلقائيًا"
+                                    : "السمك مضبوط يدويًا لهذا المقاس"}
+                                </p>
+                                <p className="text-xs text-stone-500">
                                   {formatPartEdgeBanding(
                                     buildCustomProjectCutlistPart(
                                       part,
-                                      projectSettings.material,
+                                      projectSettings,
                                     ),
                                   )}
                                 </p>
@@ -6764,7 +7614,7 @@ function App() {
         {activeWorkspaceTab === "results" ? (
           hasCalculatedProject ? (
             <>
-              <section className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-8">
+              <section className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-9">
                 <Card className="border-0 bg-white/88 ring-1 ring-stone-950/8">
                   <CardContent className="p-4">
                     <p className="text-xs text-stone-500">الوحدات المحسوبة</p>
@@ -6826,6 +7676,17 @@ function App() {
                     <p className="text-xs text-stone-500">تكلفة شريط الحافة</p>
                     <p className="mt-2 text-lg font-semibold text-stone-950">
                       {formatPrice(projectSummary.totalEdgeBandCost)}
+                    </p>
+                  </CardContent>
+                </Card>
+                <Card className="border-0 bg-white/88 ring-1 ring-stone-950/8">
+                  <CardContent className="p-4">
+                    <p className="text-xs text-stone-500">إجمالي المفصلات</p>
+                    <p className="mt-2 text-lg font-semibold text-stone-950">
+                      {projectSummary.totalHingeCount} مفصلة
+                    </p>
+                    <p className="mt-1 text-xs text-stone-500">
+                      التكلفة {formatPrice(projectSummary.totalHingeCost)}
                     </p>
                   </CardContent>
                 </Card>
@@ -6941,6 +7802,13 @@ function App() {
                                 {formatPrice(summary.edgeBandCost)}
                               </span>
                             </div>
+                            <div className="flex items-center justify-between gap-3">
+                              <span>المفصلات</span>
+                              <span className="font-medium text-stone-900">
+                                {summary.hingeCount} مفصلة •{" "}
+                                {formatPrice(summary.hingeCost)}
+                              </span>
+                            </div>
                           </div>
                         </div>
                       ))}
@@ -6959,6 +7827,56 @@ function App() {
                       الصفحة مخصصة للتعديل فقط.
                     </CardDescription>
                   </CardHeader>
+                </Card>
+              </section>
+
+              <section className="mt-6">
+                <Card className="border-0 bg-white/88 shadow-[0_20px_60px_-45px_rgba(63,40,12,0.55)] ring-1 ring-stone-950/8">
+                  <CardHeader>
+                    <CardTitle>توصيات المحسن الذكي</CardTitle>
+                    <CardDescription>
+                      ملاحظات عملية مبنية على توزيع الألواح الحالي لتقليل
+                      الهدر أو تفسير سبب الفصل بين بعض القطع.
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="grid gap-3 md:grid-cols-2">
+                      {projectOptimizationRecommendations.map(
+                        (recommendation) => (
+                          <div
+                            key={recommendation.id}
+                            className={cn(
+                              "rounded-[1.4rem] border p-4 shadow-[0_16px_44px_-34px_rgba(63,40,12,0.35)]",
+                              recommendation.tone === "action"
+                                ? "border-amber-200 bg-amber-50/85"
+                                : "border-stone-200 bg-stone-50/80",
+                            )}
+                          >
+                            <div className="flex items-center justify-between gap-3">
+                              <p className="text-sm font-semibold text-stone-950">
+                                {recommendation.title}
+                              </p>
+                              <Badge
+                                variant="outline"
+                                className={cn(
+                                  recommendation.tone === "action"
+                                    ? "border-amber-300 bg-white text-amber-900"
+                                    : "border-stone-200 bg-white text-stone-700",
+                                )}
+                              >
+                                {recommendation.tone === "action"
+                                  ? "تحسين مقترح"
+                                  : "معلومة ذكية"}
+                              </Badge>
+                            </div>
+                            <p className="mt-3 text-sm leading-7 text-stone-600">
+                              {recommendation.body}
+                            </p>
+                          </div>
+                        ),
+                      )}
+                    </div>
+                  </CardContent>
                 </Card>
               </section>
 
@@ -7031,26 +7949,68 @@ function App() {
                         </div>
 
                         <div className="space-y-4">
-                          {stock.sheets.map((sheet) => (
-                            <div
-                              key={`${stock.key}-${sheet.index}`}
-                              className="rounded-2xl border border-stone-200 bg-white/80 p-3"
-                            >
-                              <div className="mb-3 flex items-center justify-between text-xs text-stone-500">
-                                <span>لوح #{sheet.index + 1}</span>
-                                <span>
-                                  مستخدم طوليًا {formatCm(sheet.usedLength)} من{" "}
-                                  {formatCm(stock.boardLength)}
-                                </span>
-                              </div>
-                              <div className="rounded-xl border border-stone-200 bg-[linear-gradient(180deg,#f8f4ee_0%,#f2ece3_100%)] p-3">
-                                <svg
-                                  viewBox={`-18 -18 ${stock.boardWidth + 36} ${stock.boardLength + 36}`}
-                                  className="w-full rounded-xl bg-white shadow-[inset_0_0_0_1px_rgba(214,206,194,0.9)]"
-                                  preserveAspectRatio="xMidYMid meet"
-                                  role="img"
-                                  aria-label={`${stock.key} sheet ${sheet.index + 1} layout`}
-                                >
+                          <div className="rounded-xl border border-stone-200 bg-white px-3 py-2 text-[11px] font-medium leading-5 text-stone-600">
+                            شريط الحافة يظهر بخط أسود متقطع على الضلع نفسه ليبقى
+                            واضحًا حتى في الطباعة الأبيض والأسود.
+                          </div>
+                          {stock.sheets.map((sheet) => {
+                            const isSheetRotated = isProjectSheetRotated(
+                              stock.key,
+                              sheet.index,
+                            );
+                            const sheetSvgPresentation =
+                              getSheetSvgPresentation(stock, isSheetRotated);
+
+                            return (
+                              <div
+                                key={`${stock.key}-${sheet.index}`}
+                                className="rounded-2xl border border-stone-200 bg-white/80 p-3"
+                              >
+                                <div className="mb-3 flex flex-col gap-3 text-xs text-stone-500 sm:flex-row sm:items-center sm:justify-between">
+                                  <div className="space-y-1">
+                                    <span className="block">لوح #{sheet.index + 1}</span>
+                                    <span className="block">
+                                      مستخدم طوليًا {formatCm(sheet.usedLength)} من{" "}
+                                      {formatCm(stock.boardLength)}
+                                    </span>
+                                  </div>
+                                  <div className="flex items-center gap-2 self-start sm:self-auto">
+                                    <Button
+                                      type="button"
+                                      variant="outline"
+                                      size="sm"
+                                      className="h-8 gap-1.5 rounded-xl"
+                                      onClick={() =>
+                                        toggleProjectSheetRotation(
+                                          stock.key,
+                                          sheet.index,
+                                        )
+                                      }
+                                    >
+                                      <RotateCcw className="size-3.5" />
+                                      {isSheetRotated ? "إلغاء الدوران" : "دوران"}
+                                    </Button>
+                                    <Button
+                                      type="button"
+                                      variant="outline"
+                                      size="sm"
+                                      className="h-8 gap-1.5 rounded-xl"
+                                      onClick={() => printProjectSheet(stock, sheet)}
+                                    >
+                                      <Printer className="size-3.5" />
+                                      طباعة
+                                    </Button>
+                                  </div>
+                                </div>
+                                <div className="rounded-xl border border-stone-200 bg-[linear-gradient(180deg,#f8f4ee_0%,#f2ece3_100%)] p-3">
+                                  <svg
+                                    viewBox={`-18 -18 ${sheetSvgPresentation.viewBoxWidth} ${sheetSvgPresentation.viewBoxHeight}`}
+                                    className="w-full rounded-xl bg-white shadow-[inset_0_0_0_1px_rgba(214,206,194,0.9)]"
+                                    preserveAspectRatio="xMidYMid meet"
+                                    role="img"
+                                    aria-label={`${stock.key} sheet ${sheet.index + 1} layout`}
+                                  >
+                                  <g transform={sheetSvgPresentation.contentTransform}>
                                   <line
                                     x1="0"
                                     y1="-10"
@@ -7118,7 +8078,7 @@ function App() {
                                     fontSize="5.2"
                                     fontWeight="700"
                                     fill="#6b5a45"
-                                    transform={`rotate(90 ${stock.boardWidth + 14} ${stock.boardLength / 2})`}
+                                    transform={getSheetLengthLabelTransform(stock)}
                                   >
                                     طول اللوح {formatCm(stock.boardLength)}
                                   </text>
@@ -7151,59 +8111,50 @@ function App() {
                                         pieceLabel,
                                         projectPartLink?.code,
                                       );
-                                    const dimsLabel =
-                                      pieceLabel.mode === "none"
-                                        ? null
-                                        : getSheetPieceDimsLabel(
-                                            piece,
-                                            pieceLabel,
-                                          );
-                                    const edgeThickness = Math.max(
-                                      1.4,
-                                      Math.min(
-                                        Math.min(
-                                          displayPiece.width,
-                                          displayPiece.height,
-                                        ) * 0.08,
-                                        3.2,
-                                      ),
-                                    );
-                                    const edgeRects = [
-                                      {
-                                        edge: "top" as const,
-                                        x: displayPiece.x,
-                                        y: displayPiece.y,
-                                        width: displayPiece.width,
-                                        height: edgeThickness,
-                                      },
-                                      {
-                                        edge: "right" as const,
-                                        x:
-                                          displayPiece.x +
-                                          displayPiece.width -
-                                          edgeThickness,
-                                        y: displayPiece.y,
-                                        width: edgeThickness,
-                                        height: displayPiece.height,
-                                      },
-                                      {
-                                        edge: "bottom" as const,
-                                        x: displayPiece.x,
-                                        y:
-                                          displayPiece.y +
-                                          displayPiece.height -
-                                          edgeThickness,
-                                        width: displayPiece.width,
-                                        height: edgeThickness,
-                                      },
-                                      {
-                                        edge: "left" as const,
-                                        x: displayPiece.x,
-                                        y: displayPiece.y,
-                                        width: edgeThickness,
-                                        height: displayPiece.height,
-                                      },
-                                    ];
+                                    const nameTextPosition =
+                                      getSheetPieceTextPosition(
+                                        displayPiece,
+                                        0,
+                                        isSheetRotated,
+                                      );
+                                    const nameTextTransform =
+                                      getSheetPieceTextTransform(
+                                        displayPiece,
+                                        pieceLabel.rotate,
+                                        isSheetRotated,
+                                        nameTextPosition,
+                                      );
+                                    const dimensionTexts =
+                                      getSheetPieceDimensionTexts(
+                                        piece,
+                                        pieceLabel,
+                                        isSheetRotated,
+                                      );
+                                    const topDimensionTextStyle =
+                                      dimensionTexts.top
+                                        ? getSheetPieceDimensionTextStyle(
+                                            dimensionTexts.top.fontSize,
+                                          )
+                                        : null;
+                                    const sideDimensionTextStyle =
+                                      dimensionTexts.side
+                                        ? getSheetPieceDimensionTextStyle(
+                                            dimensionTexts.side.fontSize,
+                                          )
+                                        : null;
+                                    const visualEdges =
+                                      getSheetPieceVisualEdges(
+                                        piece,
+                                        displayPiece,
+                                      );
+                                    const edgeMarkerStrokeWidth =
+                                      getSheetPieceEdgeMarkerStrokeWidth(
+                                        displayPiece,
+                                      );
+                                    const edgeMarkerDash =
+                                      getSheetPieceEdgeMarkerDash(
+                                        displayPiece,
+                                      );
 
                                     return (
                                       <g key={piece.id}>
@@ -7250,65 +8201,55 @@ function App() {
                                           rx="1.5"
                                         />
                                         {aggregatedPart
-                                          ? edgeRects.map((edgeRect) => {
-                                              const logicalSide =
-                                                getVisualEdgeSide(
-                                                  piece,
-                                                  edgeRect.edge,
-                                                );
+                                          ? visualEdges.map((edgeInfo) => {
                                               const isActive =
                                                 aggregatedPart.part.edgeBanding[
-                                                  logicalSide
+                                                  edgeInfo.logicalSide
                                                 ] ?? false;
 
                                               return (
-                                                <rect
-                                                  key={`${piece.id}-${edgeRect.edge}`}
-                                                  x={edgeRect.x}
-                                                  y={edgeRect.y}
-                                                  width={edgeRect.width}
-                                                  height={edgeRect.height}
-                                                  rx="1"
-                                                  className="cursor-pointer"
-                                                  fill={
-                                                    isActive
-                                                      ? "#f3b04d"
-                                                      : "rgba(255,255,255,0.001)"
-                                                  }
-                                                  fillOpacity={
-                                                    isActive ? "0.95" : "1"
-                                                  }
-                                                  stroke={
-                                                    isActive
-                                                      ? "#fff7e7"
-                                                      : "rgba(255,255,255,0.45)"
-                                                  }
-                                                  strokeWidth={
-                                                    isActive ? "0.7" : "0.35"
-                                                  }
-                                                  onClick={(event) => {
-                                                    event.stopPropagation();
-                                                    toggleProjectPartEdgeBand(
-                                                      piece.sourcePartId,
-                                                      logicalSide,
-                                                    );
-                                                  }}
-                                                />
+                                                <g key={`${piece.id}-${edgeInfo.edge}`}>
+                                                  <rect
+                                                    x={edgeInfo.x}
+                                                    y={edgeInfo.y}
+                                                    width={edgeInfo.width}
+                                                    height={edgeInfo.height}
+                                                    rx="1"
+                                                    className="cursor-pointer"
+                                                    fill="rgba(255,255,255,0.001)"
+                                                    stroke="rgba(255,255,255,0.35)"
+                                                    strokeWidth="0.3"
+                                                    onClick={(event) => {
+                                                      event.stopPropagation();
+                                                      toggleProjectPartEdgeBand(
+                                                        piece.sourcePartId,
+                                                        edgeInfo.logicalSide,
+                                                      );
+                                                    }}
+                                                  />
+                                                  {isActive ? (
+                                                    <g pointerEvents="none">
+                                                      <line
+                                                        x1={edgeInfo.lineX1}
+                                                        y1={edgeInfo.lineY1}
+                                                        x2={edgeInfo.lineX2}
+                                                        y2={edgeInfo.lineY2}
+                                                        stroke="#111827"
+                                                        strokeWidth={edgeMarkerStrokeWidth}
+                                                        strokeLinecap="butt"
+                                                        strokeDasharray={edgeMarkerDash}
+                                                      />
+                                                    </g>
+                                                  ) : null}
+                                                </g>
                                               );
                                             })
                                           : null}
                                         {pieceLabel.mode === "full" ? (
                                           <g>
                                             <text
-                                              x={
-                                                displayPiece.x +
-                                                displayPiece.width / 2
-                                              }
-                                              y={
-                                                displayPiece.y +
-                                                displayPiece.height / 2 -
-                                                pieceLabel.nameOffset
-                                              }
+                                              x={nameTextPosition.x}
+                                              y={nameTextPosition.y}
                                               textAnchor="middle"
                                               dominantBaseline="middle"
                                               fontSize={
@@ -7319,92 +8260,99 @@ function App() {
                                               fill="#fff"
                                               direction="rtl"
                                               unicodeBidi="plaintext"
-                                              transform={
-                                                pieceLabel.rotate
-                                                  ? `rotate(-90 ${
-                                                      displayPiece.x +
-                                                      displayPiece.width / 2
-                                                    } ${
-                                                      displayPiece.y +
-                                                      displayPiece.height / 2
-                                                    })`
-                                                  : undefined
-                                              }
+                                              transform={nameTextTransform}
                                             >
                                               {primaryLabel?.text ??
                                                 (projectPartLink
                                                   ? `${projectPartLink.code} • ${piece.name}`
                                                   : piece.name)}
                                             </text>
-                                            <text
-                                              x={
-                                                displayPiece.x +
-                                                displayPiece.width / 2
-                                              }
-                                              y={
-                                                displayPiece.y +
-                                                displayPiece.height / 2 +
-                                                pieceLabel.dimsOffset
-                                              }
-                                              textAnchor="middle"
-                                              dominantBaseline="middle"
-                                              fontSize={
-                                                dimsLabel?.fontSize ??
-                                                pieceLabel.dimsFontSize
-                                              }
-                                              fontWeight="700"
-                                              fill="#fff"
-                                              transform={
-                                                pieceLabel.rotate
-                                                  ? `rotate(-90 ${
-                                                      displayPiece.x +
-                                                      displayPiece.width / 2
-                                                    } ${
-                                                      displayPiece.y +
-                                                      displayPiece.height / 2
-                                                    })`
-                                                  : undefined
-                                              }
-                                            >
-                                              {dimsLabel?.text ??
-                                                `${round2(piece.length)} × ${round2(piece.width)} سم`}
-                                            </text>
+                                            {dimensionTexts.top ? (
+                                              <text
+                                                x={dimensionTexts.top.x}
+                                                y={dimensionTexts.top.y}
+                                                textAnchor="middle"
+                                                dominantBaseline="middle"
+                                                fontSize={dimensionTexts.top.fontSize}
+                                                fontWeight={topDimensionTextStyle?.fontWeight}
+                                                fill={topDimensionTextStyle?.fill}
+                                                stroke={topDimensionTextStyle?.stroke}
+                                                strokeWidth={topDimensionTextStyle?.strokeWidth}
+                                                strokeLinejoin={topDimensionTextStyle?.strokeLinejoin}
+                                                paintOrder={topDimensionTextStyle?.paintOrder}
+                                                transform={dimensionTexts.top.transform}
+                                              >
+                                                {dimensionTexts.top.text}
+                                              </text>
+                                            ) : null}
+                                            {dimensionTexts.side ? (
+                                              <text
+                                                x={dimensionTexts.side.x}
+                                                y={dimensionTexts.side.y}
+                                                textAnchor="middle"
+                                                dominantBaseline="middle"
+                                                fontSize={dimensionTexts.side.fontSize}
+                                                fontWeight={sideDimensionTextStyle?.fontWeight}
+                                                fill={sideDimensionTextStyle?.fill}
+                                                stroke={sideDimensionTextStyle?.stroke}
+                                                strokeWidth={sideDimensionTextStyle?.strokeWidth}
+                                                strokeLinejoin={sideDimensionTextStyle?.strokeLinejoin}
+                                                paintOrder={sideDimensionTextStyle?.paintOrder}
+                                                transform={dimensionTexts.side.transform}
+                                              >
+                                                {dimensionTexts.side.text}
+                                              </text>
+                                            ) : null}
                                           </g>
                                         ) : pieceLabel.mode === "dims" ? (
-                                          <text
-                                            x={
-                                              displayPiece.x +
-                                              displayPiece.width / 2
-                                            }
-                                            y={
-                                              displayPiece.y +
-                                              displayPiece.height / 2
-                                            }
-                                            textAnchor="middle"
-                                            dominantBaseline="middle"
-                                            fontSize={
-                                              dimsLabel?.fontSize ??
-                                              pieceLabel.fontSize
-                                            }
-                                            fontWeight="600"
-                                            fill="#fff"
-                                            transform={
-                                              pieceLabel.rotate
-                                                ? `rotate(-90 ${displayPiece.x + displayPiece.width / 2} ${displayPiece.y + displayPiece.height / 2})`
-                                                : undefined
-                                            }
-                                          >
-                                            {dimsLabel?.text ??
-                                              `${round2(piece.length)} × ${round2(piece.width)}`}
-                                          </text>
+                                          <g>
+                                            {dimensionTexts.top ? (
+                                              <text
+                                                x={dimensionTexts.top.x}
+                                                y={dimensionTexts.top.y}
+                                                textAnchor="middle"
+                                                dominantBaseline="middle"
+                                                fontSize={dimensionTexts.top.fontSize}
+                                                fontWeight={topDimensionTextStyle?.fontWeight}
+                                                fill={topDimensionTextStyle?.fill}
+                                                stroke={topDimensionTextStyle?.stroke}
+                                                strokeWidth={topDimensionTextStyle?.strokeWidth}
+                                                strokeLinejoin={topDimensionTextStyle?.strokeLinejoin}
+                                                paintOrder={topDimensionTextStyle?.paintOrder}
+                                                transform={dimensionTexts.top.transform}
+                                              >
+                                                {dimensionTexts.top.text}
+                                              </text>
+                                            ) : null}
+                                            {dimensionTexts.side ? (
+                                              <text
+                                                x={dimensionTexts.side.x}
+                                                y={dimensionTexts.side.y}
+                                                textAnchor="middle"
+                                                dominantBaseline="middle"
+                                                fontSize={dimensionTexts.side.fontSize}
+                                                fontWeight={sideDimensionTextStyle?.fontWeight}
+                                                fill={sideDimensionTextStyle?.fill}
+                                                stroke={sideDimensionTextStyle?.stroke}
+                                                strokeWidth={sideDimensionTextStyle?.strokeWidth}
+                                                strokeLinejoin={sideDimensionTextStyle?.strokeLinejoin}
+                                                paintOrder={sideDimensionTextStyle?.paintOrder}
+                                                transform={dimensionTexts.side.transform}
+                                              >
+                                                {dimensionTexts.side.text}
+                                              </text>
+                                            ) : null}
+                                          </g>
                                         ) : null}
                                       </g>
                                     );
                                   })}
+                                  </g>
                                 </svg>
                               </div>
                             </div>
-                          ))}
+                            );
+                          })}
                         </div>
                       </div>
                     ))}
@@ -7473,6 +8421,15 @@ function App() {
                       </p>
                     </div>
                     <div className="rounded-2xl border border-stone-200 bg-stone-50 p-4">
+                      <p className="text-xs text-stone-500">المفصلات</p>
+                      <p className="mt-2 text-lg font-semibold text-stone-950">
+                        {projectSummary.totalHingeCount} × {formatPrice(projectSettings.hingePrice)}
+                      </p>
+                      <p className="mt-1 text-xs text-stone-500">
+                        الإجمالي {formatPrice(projectSummary.totalHingeCost)}
+                      </p>
+                    </div>
+                    <div className="rounded-2xl border border-stone-200 bg-stone-50 p-4">
                       <p className="text-xs text-stone-500">الهالك التقريبي</p>
                       <p className="mt-2 text-lg font-semibold text-stone-950">
                         {projectLayoutWastePercent}%
@@ -7498,6 +8455,12 @@ function App() {
                         {projectSummary.totalEdgeBandLengthM} م ط ×{" "}
                         {formatPrice(projectSettings.edgeBandPricePerMeter)} ={" "}
                         {formatPrice(projectSummary.totalEdgeBandCost)}
+                      </p>
+                    </div>
+                    <div className="rounded-2xl border border-stone-200 bg-stone-50 p-4">
+                      <p className="text-xs text-stone-500">سعر المفصلة</p>
+                      <p className="mt-2 text-lg font-semibold text-stone-950">
+                        {formatPrice(projectSettings.hingePrice)} / قطعة
                       </p>
                     </div>
                   </CardContent>

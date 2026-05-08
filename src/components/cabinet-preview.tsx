@@ -1480,9 +1480,9 @@ export function ProjectPreview({
           </p>
         </div>
         <div className="max-w-sm rounded-2xl border border-stone-900/10 bg-stone-950/70 px-3 py-2 text-[11px] leading-5 text-white/92 shadow-[0_18px_45px_-32px_rgba(28,25,23,0.7)] backdrop-blur-sm">
-          <p>حرّك الوحدة من مقبض السحب أسفلها بدل مسك جسم الدولاب نفسه.</p>
+          <p>يمكنك سحب الوحدة من جسمها مباشرة أو من مقبض السحب أسفلها.</p>
           <p>أسهم الكيبورد = حركة 10 سم، و Shift + الأسهم = حركة دقيقة 1 سم.</p>
-          <p>زر الماوس اليمين = تدوير الكاميرا، وعجلة الماوس = تقريب وإبعاد.</p>
+          <p>اسحب بالماوس على المساحة الفارغة لتدوير الكاميرا، وعجلة الماوس = تقريب وإبعاد.</p>
         </div>
       </div>
       <div className="pointer-events-none absolute inset-x-7 bottom-5 z-10 flex flex-wrap items-end justify-between gap-3">
@@ -1629,6 +1629,8 @@ export function ProjectPreview({
 
                   event.stopPropagation();
                   onSelectUnit?.(unit.id);
+
+                  startDraggingUnit(unit, event.clientX, event.clientY, event.point.y);
                 }}
               >
                 {isSelected ? (
@@ -1746,7 +1748,7 @@ export function ProjectPreview({
           maxPolarAngle={Math.PI / 2.05}
           rotateSpeed={0.78}
           mouseButtons={{
-            LEFT: MOUSE.PAN,
+            LEFT: MOUSE.ROTATE,
             MIDDLE: MOUSE.DOLLY,
             RIGHT: MOUSE.ROTATE,
           }}

@@ -131,7 +131,27 @@ export type SheetStockSize = {
   width: number;
 };
 
-export type SheetLayoutOptimizationMode = "workshop" | "yield";
+export function normalizeSheetStockSize(
+  stockSize: SheetStockSize,
+): SheetStockSize {
+  const length = Number.isFinite(stockSize.length)
+    ? Math.max(stockSize.length, 0)
+    : 0;
+  const width = Number.isFinite(stockSize.width)
+    ? Math.max(stockSize.width, 0)
+    : 0;
+
+  if (length <= 0 || width <= 0 || length >= width) {
+    return { length, width };
+  }
+
+  return {
+    length: width,
+    width: length,
+  };
+}
+
+export type SheetLayoutOptimizationMode = "workshop" | "yield" | "smart";
 
 export type SheetLayoutOptions = {
   boardStockSize?: SheetStockSize;
@@ -345,7 +365,7 @@ export function calculateCabinetCutlist(
   input: CabinetInput,
 ): CabinetCutlistResult {
   const installationClearance = 0.5;
-  const backClearancePerSide = 0.5;
+  const backClearancePerSide = 1;
 
   const profile = cabinetProfiles[input.cabinetType];
   const normalized = {
@@ -627,7 +647,7 @@ export function calculateCabinetCutlist(
       material: normalized.material,
       notes: isBlindCornerBase
         ? `ظهر خام لركنة زاوية 45° يحتاج تعليم وقص حسب اتجاه ${cornerHandLabels[normalized.cornerHand]}`
-        : "ظهر خارجي يزيد 0.5 سم في العرض من كل جنب ويقل 0.5 سم في الارتفاع من أعلى وأسفل",
+        : "ظهر خارجي يزيد 1 سم في العرض من كل جنب ويقل 1 سم في الارتفاع من أعلى وأسفل",
     }),
   );
 
@@ -909,10 +929,12 @@ function buildSingleStockSheets(
   );
   const cutKerf = Math.max(layoutOptions.cutKerf ?? 0, 0);
   const trimMargin = Math.max(layoutOptions.trimMargin ?? 0, 0);
-  const boardLength = Math.max(stockSize.length - trimMargin * 2, 0);
-  const boardWidth = Math.max(stockSize.width - trimMargin * 2, 0);
+  const normalizedStockSize = normalizeSheetStockSize(stockSize);
+  const boardLength = Math.max(normalizedStockSize.length - trimMargin * 2, 0);
+  const boardWidth = Math.max(normalizedStockSize.width - trimMargin * 2, 0);
   const optimizationMode = layoutOptions.optimizationMode ?? "workshop";
   const prefersWorkshopSimplicity = optimizationMode === "workshop";
+  const prefersSmartBalancing = optimizationMode === "smart";
 
   function getAllowedOrientations(piece: FlatPiece) {
     if (!piece.allowRotation || piece.length === piece.width) {
@@ -1222,11 +1244,39 @@ function buildSingleStockSheets(
   }
 
   function getUnusedAreaTolerance(sheetCount: number) {
-    if (!prefersWorkshopSimplicity) {
-      return 0;
+    if (prefersWorkshopSimplicity) {
+      return sheetCount * Math.max(boardLength * boardWidth * 0.0025, 25);
     }
 
-    return sheetCount * Math.max(boardLength * boardWidth * 0.0025, 25);
+    if (prefersSmartBalancing) {
+      return sheetCount * Math.max(boardLength * boardWidth * 0.0015, 15);
+    }
+
+    return 0;
+  }
+
+  function getSheetUtilizationRatio(sheet: InternalSheet) {
+    return boardLength > 0 && boardWidth > 0
+      ? getSheetPieceArea(sheet) / (boardLength * boardWidth)
+      : 0;
+  }
+
+  function isSparseSheet(sheet: InternalSheet) {
+    return (
+      sheet.pieces.length <= 2 && getSheetUtilizationRatio(sheet) < 0.72
+    );
+  }
+
+  function getSinglePieceSheetCount(sheets: InternalSheet[]) {
+    return sheets.filter((sheet) => sheet.pieces.length === 1).length;
+  }
+
+  function getSparseSheetCount(sheets: InternalSheet[]) {
+    return sheets.filter((sheet) => isSparseSheet(sheet)).length;
+  }
+
+  function getTotalFreeRectCount(sheets: InternalSheet[]) {
+    return sheets.reduce((sum, sheet) => sum + sheet.freeRects.length, 0);
   }
 
   function scoreLayout(sheets: InternalSheet[]) {
@@ -1258,12 +1308,15 @@ function buildSingleStockSheets(
 
     return {
       sheetCount: sheets.length,
+      sparseSheetCount: getSparseSheetCount(sheets),
+      singlePieceSheetCount: getSinglePieceSheetCount(sheets),
       totalBoundingArea,
       totalUnusedInsideBounds,
       totalLargestReusableGap,
       totalVerticalCuts,
       totalHorizontalCuts,
       totalRows,
+      totalFreeRectCount: getTotalFreeRectCount(sheets),
     };
   }
 
@@ -1333,6 +1386,64 @@ function buildSingleStockSheets(
     const hasMeaningfulWasteDifference =
       Math.abs(unusedAreaDifference) > unusedAreaTolerance;
 
+    if (prefersSmartBalancing) {
+      if (hasMeaningfulWasteDifference) {
+        if (
+          leftScore.totalUnusedInsideBounds !==
+          rightScore.totalUnusedInsideBounds
+        ) {
+          return (
+            leftScore.totalUnusedInsideBounds <
+            rightScore.totalUnusedInsideBounds
+          );
+        }
+      } else {
+        if (leftScore.sparseSheetCount !== rightScore.sparseSheetCount) {
+          return leftScore.sparseSheetCount < rightScore.sparseSheetCount;
+        }
+
+        if (
+          leftScore.singlePieceSheetCount !== rightScore.singlePieceSheetCount
+        ) {
+          return (
+            leftScore.singlePieceSheetCount <
+            rightScore.singlePieceSheetCount
+          );
+        }
+      }
+
+      if (leftScore.totalBoundingArea !== rightScore.totalBoundingArea) {
+        return leftScore.totalBoundingArea < rightScore.totalBoundingArea;
+      }
+
+      if (leftScore.totalVerticalCuts !== rightScore.totalVerticalCuts) {
+        return leftScore.totalVerticalCuts < rightScore.totalVerticalCuts;
+      }
+
+      if (leftScore.totalHorizontalCuts !== rightScore.totalHorizontalCuts) {
+        return leftScore.totalHorizontalCuts < rightScore.totalHorizontalCuts;
+      }
+
+      if (leftScore.totalRows !== rightScore.totalRows) {
+        return leftScore.totalRows < rightScore.totalRows;
+      }
+
+      if (leftScore.totalFreeRectCount !== rightScore.totalFreeRectCount) {
+        return leftScore.totalFreeRectCount < rightScore.totalFreeRectCount;
+      }
+
+      if (
+        leftScore.totalLargestReusableGap !== rightScore.totalLargestReusableGap
+      ) {
+        return (
+          leftScore.totalLargestReusableGap >
+          rightScore.totalLargestReusableGap
+        );
+      }
+
+      return false;
+    }
+
     if (prefersWorkshopSimplicity) {
       if (hasMeaningfulWasteDifference) {
         return (
@@ -1396,6 +1507,17 @@ function buildSingleStockSheets(
       ];
     }
 
+    if (optimizationMode === "smart") {
+      return [
+        packWithFreeRects(flatPieces, true),
+        packWithGuillotine(flatPieces, true),
+        packWithExactSheets(flatPieces),
+        packWithFreeRects(flatPieces),
+        packWithGuillotine(flatPieces),
+        packWithShelves(flatPieces),
+      ];
+    }
+
     return [
       packWithGuillotine(flatPieces, true),
       packWithGuillotine(flatPieces),
@@ -1429,6 +1551,25 @@ function buildSingleStockSheets(
         -(piece.length * piece.width),
         -Math.max(piece.length, piece.width),
       ],
+      ...(prefersSmartBalancing
+        ? ([
+            (piece: FlatPiece): [number, number, number] => [
+              -piece.length,
+              piece.width,
+              -(piece.length * piece.width),
+            ],
+            (piece: FlatPiece): [number, number, number] => [
+              piece.width,
+              -piece.length,
+              -(piece.length * piece.width),
+            ],
+            (piece: FlatPiece): [number, number, number] => [
+              Math.abs(boardWidth - piece.width),
+              -piece.length,
+              -(piece.length * piece.width),
+            ],
+          ] satisfies Array<(piece: FlatPiece) => [number, number, number]>)
+        : []),
     ];
 
   function getOrderedPieces(
@@ -2533,8 +2674,12 @@ export function buildSheetLayout(
   parts: CutlistPart[],
   options: SheetLayoutOptions = {},
 ): SheetLayoutResult {
-  const boardStockSize = options.boardStockSize ?? defaultBoardStockSize;
-  const backStockSize = options.backStockSize ?? defaultBoardStockSize;
+  const boardStockSize = normalizeSheetStockSize(
+    options.boardStockSize ?? defaultBoardStockSize,
+  );
+  const backStockSize = normalizeSheetStockSize(
+    options.backStockSize ?? defaultBoardStockSize,
+  );
   const stockGroups = new Map<string, CutlistPart[]>();
 
   function shouldUseBackStock(part: CutlistPart) {

@@ -12,6 +12,8 @@ export type CabinetUnit = CabinetInput & {
   title: string;
 };
 
+export type CustomProjectPartThicknessMode = "project" | "manual";
+
 export type CustomProjectPart = {
   id: string;
   title: string;
@@ -19,6 +21,7 @@ export type CustomProjectPart = {
   width: number;
   qty: number;
   thickness: number;
+  thicknessMode?: CustomProjectPartThicknessMode;
   material: MaterialType;
   category: PartCategory;
   grainDirection: GrainDirection;
@@ -50,6 +53,7 @@ export type ProjectPricingSettings = {
   backSheetPrice: number;
   laborPricePerSquareMeter: number;
   edgeBandPricePerMeter: number;
+  hingePrice: number;
 };
 
 export type ProjectSettings = CabinetProjectSettings & ProjectPricingSettings;
