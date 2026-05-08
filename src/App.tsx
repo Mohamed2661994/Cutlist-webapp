@@ -1,11 +1,7 @@
-import {
-  Suspense,
-  lazy,
-  useCallback,
-  useEffect,
-  useRef,
-  useState,
-} from "react";
+"use client";
+
+import { useCallback, useEffect, useRef, useState } from "react";
+import dynamic from "next/dynamic";
 import {
   ArrowDown,
   ArrowLeft,
@@ -27,10 +23,15 @@ import {
   Save,
   Settings2,
   Sparkles,
+  LogOut,
   Trash2,
 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
+import type {
+  PersistedUser,
+  SessionBootstrap,
+} from "@/lib/project-persistence";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -59,6 +60,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { UserAuthPanel } from "@/components/user-auth-panel";
 import {
   buildSheetLayout,
   calculateCabinetCutlist,
@@ -85,19 +87,40 @@ import {
   type GrainDirection,
   type MaterialType,
   type SheetLayoutPiece,
+  type SheetLayoutOptimizationMode,
   type SheetLayoutResult,
   type SheetLayoutStock,
 } from "@/lib/cutlist";
 
-const CabinetPreview = lazy(async () => {
-  const module = await import("@/components/cabinet-preview");
-  return { default: module.CabinetPreview };
-});
+function PreviewFallback() {
+  return (
+    <div className="flex h-72 w-full items-center justify-center rounded-[1.25rem] border border-dashed border-stone-300 bg-white/65 text-center text-sm text-stone-500">
+      جارٍ تحميل المعاينة ثلاثية الأبعاد...
+    </div>
+  );
+}
 
-const ProjectPreview = lazy(async () => {
-  const module = await import("@/components/cabinet-preview");
-  return { default: module.ProjectPreview };
-});
+const CabinetPreview = dynamic(
+  () =>
+    import("@/components/cabinet-preview").then(
+      (module) => module.CabinetPreview,
+    ),
+  {
+    ssr: false,
+    loading: () => <PreviewFallback />,
+  },
+);
+
+const ProjectPreview = dynamic(
+  () =>
+    import("@/components/cabinet-preview").then(
+      (module) => module.ProjectPreview,
+    ),
+  {
+    ssr: false,
+    loading: () => <PreviewFallback />,
+  },
+);
 
 type CabinetUnit = CabinetInput & {
   id: string;
@@ -113,73 +136,6 @@ type CalculatedUnitView = {
 
 type WorkshopPartCard = {
   id: string;
-  unitId: string;
-  unitTitle: string;
-  part: CutlistPart;
-};
-
-type ProjectPartLink = {
-  partId: string;
-  code: string;
-  sourceKeys: string[];
-  unitIds: string[];
-  sheetReferences: string[];
-  primarySheetReference: string | null;
-};
-
-type WorkshopExecutionCard = WorkshopPartCard & {
-  operationOrder: number;
-  projectPartId: string | null;
-  partCode: string;
-  sheetReferences: string[];
-  primarySheetReference: string | null;
-};
-
-type UnitCostSummary = {
-  unitId: string;
-  unitTitle: string;
-  panelCount: number;
-  totalAreaM2: number;
-  boardSheetCount: number;
-  backSheetCount: number;
-  boardUsedAreaM2: number;
-  backUsedAreaM2: number;
-  edgeBandLengthM: number;
-  sheetCost: number;
-  laborCost: number;
-  edgeBandCost: number;
-  totalCost: number;
-};
-
-type UnitPreset = {
-  id: string;
-  title: string;
-  description: string;
-  input: CabinetInput;
-};
-
-type CustomProjectPart = {
-  id: string;
-  title: string;
-  length: number;
-  width: number;
-  qty: number;
-  thickness: number;
-  material: MaterialType;
-  category: PartCategory;
-  grainDirection: GrainDirection;
-  edgeBanding: EdgeBandProfile;
-};
-
-type CustomProjectPartDraft = {
-  title: string;
-  length: string;
-  width: string;
-  qty: string;
-  thickness: string;
-  material: MaterialType;
-  category: PartCategory;
-  grainDirection: GrainDirection;
   edgeBanding: EdgeBandProfile;
 };
 
@@ -209,6 +165,8 @@ type SavedProject = {
   edgeBandOverrides: EdgeBandOverrideMap;
 };
 
+type ProjectArrangementAutosaveState = "idle" | "saving" | "saved" | "error";
+
 type CabinetProjectSettings = Pick<
   CabinetInput,
   "material" | "boardThickness" | "backThickness"
@@ -221,6 +179,7 @@ type ProjectPricingSettings = {
   backSheetWidth: number;
   cutKerf: number;
   trimMargin: number;
+  optimizationMode: SheetLayoutOptimizationMode;
   boardSheetPrice: number;
   backSheetPrice: number;
   laborPricePerSquareMeter: number;
@@ -263,10 +222,45 @@ type BuilderTab = "unit" | "custom" | "units";
 
 type ResultsSectionKey = "costs" | "layout" | "metrics" | "workshop" | "parts";
 
-const projectSettingsStorageKey = "cutlist.project-settings.v1";
-const savedProjectsStorageKey = "cutlist.saved-projects.v1";
+type AuthMode = "login" | "register";
+
+type AuthStatus = "loading" | "anonymous" | "authenticated";
+
+type AuthFormState = {
+  name: string;
+  email: string;
+  password: string;
+};
+
+class ApiRequestError extends Error {
+  constructor(
+    message: string,
+    readonly status: number,
+  ) {
+    super(message);
+    this.name = "ApiRequestError";
+  }
+}
+
 const defaultBoardSheetLength = 240;
 const defaultBoardSheetWidth = 120;
+
+const sheetLayoutOptimizationModeLabels: Record<
+  SheetLayoutOptimizationMode,
+  string
+> = {
+  workshop: "وضع الورشة",
+  yield: "أقل هادر",
+};
+
+const sheetLayoutOptimizationModeDescriptions: Record<
+  SheetLayoutOptimizationMode,
+  string
+> = {
+  workshop:
+    "يرجح التخطيطات الأسهل في القص والطباعة عندما يكون فرق الهدر محدودًا.",
+  yield: "يركز على تقليل الهدر أولًا حتى لو زاد تعقيد خطة القص قليلًا.",
+};
 
 const defaultProjectSettings: ProjectSettings = {
   material: defaultInput.material,
@@ -278,6 +272,7 @@ const defaultProjectSettings: ProjectSettings = {
   backSheetWidth: defaultBoardSheetWidth,
   cutKerf: 0,
   trimMargin: 0,
+  optimizationMode: "workshop",
   boardSheetPrice: 0,
   backSheetPrice: 0,
   laborPricePerSquareMeter: 0,
@@ -557,6 +552,83 @@ function buildProjectPreviewUnits(
   }));
 }
 
+type ProjectPreviewLayoutUnit = ReturnType<
+  typeof buildProjectPreviewUnits
+>[number];
+
+function getProjectPreviewFootprintCm(unit: ProjectPreviewLayoutUnit) {
+  const baseWidth =
+    unit.input.cabinetType === "corner-l-base" ||
+    unit.input.cabinetType === "corner-l-wall"
+      ? unit.input.width +
+        Math.max(unit.input.returnDepth - unit.input.boardThickness, 0)
+      : unit.input.width;
+  const baseDepth =
+    unit.input.cabinetType === "corner-l-base" ||
+    unit.input.cabinetType === "corner-l-wall"
+      ? Math.max(unit.input.depth, unit.input.returnDepth)
+      : unit.input.depth;
+  const normalizedRotation = ((unit.rotationY % 360) + 360) % 360;
+  const isQuarterTurn = normalizedRotation === 90 || normalizedRotation === 270;
+
+  return {
+    widthCm: isQuarterTurn ? baseDepth : baseWidth,
+    depthCm: isQuarterTurn ? baseWidth : baseDepth,
+  };
+}
+
+function getProjectPreviewBoundsCm(unit: ProjectPreviewLayoutUnit) {
+  const { widthCm, depthCm } = getProjectPreviewFootprintCm(unit);
+  const centerX = unit.position[0] * 100;
+  const centerZ = unit.position[2] * 100;
+  const minY = unit.position[1] * 100;
+
+  return {
+    minX: centerX - widthCm / 2,
+    maxX: centerX + widthCm / 2,
+    minY,
+    maxY: minY + unit.input.height,
+    minZ: centerZ - depthCm / 2,
+    maxZ: centerZ + depthCm / 2,
+  };
+}
+
+function findProjectPreviewOverlap(units: ProjectPreviewLayoutUnit[]) {
+  const overlapToleranceCm = 0.5;
+
+  for (let index = 0; index < units.length; index += 1) {
+    const currentUnit = units[index];
+    const currentBounds = getProjectPreviewBoundsCm(currentUnit);
+
+    for (
+      let compareIndex = index + 1;
+      compareIndex < units.length;
+      compareIndex += 1
+    ) {
+      const compareUnit = units[compareIndex];
+      const compareBounds = getProjectPreviewBoundsCm(compareUnit);
+      const overlapsX =
+        currentBounds.minX < compareBounds.maxX - overlapToleranceCm &&
+        currentBounds.maxX > compareBounds.minX + overlapToleranceCm;
+      const overlapsY =
+        currentBounds.minY < compareBounds.maxY - overlapToleranceCm &&
+        currentBounds.maxY > compareBounds.minY + overlapToleranceCm;
+      const overlapsZ =
+        currentBounds.minZ < compareBounds.maxZ - overlapToleranceCm &&
+        currentBounds.maxZ > compareBounds.minZ + overlapToleranceCm;
+
+      if (overlapsX && overlapsY && overlapsZ) {
+        return {
+          first: currentUnit,
+          second: compareUnit,
+        };
+      }
+    }
+  }
+
+  return null;
+}
+
 function createUnitId() {
   return `unit-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
@@ -619,6 +691,325 @@ function buildProjectWasteInsight(sheetLayout: SheetLayoutResult | null) {
   return `${getStockLabel(mostWastefulStock.stock.thickness, mostWastefulStock.stock.isBackStock)} هي أكبر مصدر للهالك الآن: ${mostWastefulStock.stock.sheets.length} لوح بمساحة متاحة ${mostWastefulStock.availableAreaM2} م²، المستخدم منها ${mostWastefulStock.stock.totalAreaM2} م²، فالمتبقي ${mostWastefulStock.wasteAreaM2} م² غير مستغل.`;
 }
 
+type SheetPrintRect = {
+  x: number;
+  y: number;
+  length: number;
+  width: number;
+  areaM2: number;
+};
+
+type SheetBandPlan = {
+  startX: number;
+  endX: number;
+  startY: number;
+  endY: number;
+  length: number;
+  width: number;
+  uniformLength: boolean;
+  pieces: SheetLayoutPiece[];
+};
+
+function getUniqueSortedCoords(values: number[]) {
+  return [
+    ...new Set(values.map((value) => round2(value)).filter(Number.isFinite)),
+  ].sort((left, right) => left - right);
+}
+
+function formatSheetAxisRange(start: number, end: number) {
+  return `${formatCm(start)} إلى ${formatCm(end)}`;
+}
+
+function buildSheetFreeRects(
+  stock: SheetLayoutStock,
+  sheet: SheetLayoutStock["sheets"][number],
+) {
+  if (sheet.pieces.length === 0) {
+    return [
+      {
+        x: 0,
+        y: 0,
+        length: stock.boardLength,
+        width: stock.boardWidth,
+        areaM2: round2((stock.boardLength * stock.boardWidth) / 10000),
+      },
+    ];
+  }
+
+  const tolerance = 0.05;
+  const xEdges = getUniqueSortedCoords([
+    0,
+    stock.boardLength,
+    ...sheet.pieces.flatMap((piece) => [piece.x, piece.x + piece.length]),
+  ]);
+  const yEdges = getUniqueSortedCoords([
+    0,
+    stock.boardWidth,
+    ...sheet.pieces.flatMap((piece) => [piece.y, piece.y + piece.width]),
+  ]);
+  const freeMatrix = xEdges.slice(0, -1).map((xStart, xIndex) =>
+    yEdges.slice(0, -1).map((yStart, yIndex) => {
+      const xEnd = xEdges[xIndex + 1];
+      const yEnd = yEdges[yIndex + 1];
+
+      return !sheet.pieces.some(
+        (piece) =>
+          piece.x <= xStart + tolerance &&
+          piece.x + piece.length >= xEnd - tolerance &&
+          piece.y <= yStart + tolerance &&
+          piece.y + piece.width >= yEnd - tolerance,
+      );
+    }),
+  );
+  const consumed = freeMatrix.map((row) => row.map(() => false));
+  const freeRects: SheetPrintRect[] = [];
+
+  for (let xIndex = 0; xIndex < freeMatrix.length; xIndex += 1) {
+    for (let yIndex = 0; yIndex < freeMatrix[xIndex].length; yIndex += 1) {
+      if (!freeMatrix[xIndex][yIndex] || consumed[xIndex][yIndex]) {
+        continue;
+      }
+
+      let yEndIndex = yIndex + 1;
+      while (
+        yEndIndex < freeMatrix[xIndex].length &&
+        freeMatrix[xIndex][yEndIndex] &&
+        !consumed[xIndex][yEndIndex]
+      ) {
+        yEndIndex += 1;
+      }
+
+      let xEndIndex = xIndex + 1;
+      while (xEndIndex < freeMatrix.length) {
+        let canExtend = true;
+        for (let yCursor = yIndex; yCursor < yEndIndex; yCursor += 1) {
+          if (!freeMatrix[xEndIndex][yCursor] || consumed[xEndIndex][yCursor]) {
+            canExtend = false;
+            break;
+          }
+        }
+
+        if (!canExtend) {
+          break;
+        }
+
+        xEndIndex += 1;
+      }
+
+      for (let xCursor = xIndex; xCursor < xEndIndex; xCursor += 1) {
+        for (let yCursor = yIndex; yCursor < yEndIndex; yCursor += 1) {
+          consumed[xCursor][yCursor] = true;
+        }
+      }
+
+      const length = round2(xEdges[xEndIndex] - xEdges[xIndex]);
+      const width = round2(yEdges[yEndIndex] - yEdges[yIndex]);
+      if (length <= 0 || width <= 0) {
+        continue;
+      }
+
+      freeRects.push({
+        x: xEdges[xIndex],
+        y: yEdges[yIndex],
+        length,
+        width,
+        areaM2: round2((length * width) / 10000),
+      });
+    }
+  }
+
+  return freeRects.sort(
+    (left, right) =>
+      right.areaM2 - left.areaM2 ||
+      right.length * right.width - left.length * left.width ||
+      left.x - right.x ||
+      left.y - right.y,
+  );
+}
+
+function isReusableSheetOffcut(rect: SheetPrintRect) {
+  return Math.min(rect.length, rect.width) >= 8 && rect.areaM2 >= 0.05;
+}
+
+function buildSheetBandPlan(sheet: SheetLayoutStock["sheets"][number]) {
+  if (sheet.pieces.length === 0) {
+    return [] satisfies SheetBandPlan[];
+  }
+
+  const groups = new Map<string, SheetBandPlan>();
+
+  for (const piece of sheet.pieces) {
+    const key = round2(piece.x).toFixed(2);
+    const current = groups.get(key);
+
+    if (current) {
+      current.endX = Math.max(current.endX, piece.x + piece.length);
+      current.startY = Math.min(current.startY, piece.y);
+      current.endY = Math.max(current.endY, piece.y + piece.width);
+      current.pieces.push(piece);
+      continue;
+    }
+
+    groups.set(key, {
+      startX: round2(piece.x),
+      endX: round2(piece.x + piece.length),
+      startY: round2(piece.y),
+      endY: round2(piece.y + piece.width),
+      length: round2(piece.length),
+      width: round2(piece.width),
+      uniformLength: true,
+      pieces: [piece],
+    });
+  }
+
+  const plans = [...groups.values()]
+    .map((plan) => {
+      const endX = round2(
+        Math.max(...plan.pieces.map((piece) => piece.x + piece.length)),
+      );
+
+      return {
+        ...plan,
+        endX,
+        endY: round2(
+          Math.max(...plan.pieces.map((piece) => piece.y + piece.width)),
+        ),
+        startY: round2(Math.min(...plan.pieces.map((piece) => piece.y))),
+        length: round2(endX - plan.startX),
+        width: round2(
+          Math.max(...plan.pieces.map((piece) => piece.y + piece.width)) -
+            Math.min(...plan.pieces.map((piece) => piece.y)),
+        ),
+        uniformLength: plan.pieces.every(
+          (piece) => Math.abs(piece.x + piece.length - endX) <= 0.05,
+        ),
+        pieces: [...plan.pieces].sort(
+          (left, right) =>
+            left.y - right.y ||
+            left.length - right.length ||
+            left.width - right.width,
+        ),
+      };
+    })
+    .sort(
+      (left, right) => left.startX - right.startX || left.endX - right.endX,
+    );
+
+  for (let index = 1; index < plans.length; index += 1) {
+    if (plans[index].startX < plans[index - 1].endX - 0.05) {
+      return null;
+    }
+  }
+
+  return plans;
+}
+
+function buildSheetExecutionMarkup(
+  stock: SheetLayoutStock,
+  sheet: SheetLayoutStock["sheets"][number],
+  projectPartLinkMap: Map<string, ProjectPartLink>,
+) {
+  const bandPlans = buildSheetBandPlan(sheet);
+
+  if (sheet.pieces.length === 0) {
+    return `
+      <div class="sheet-detail-card">
+        <h4>خطة التشغيل</h4>
+        <p>هذا اللوح لم يُسحب منه أي قطع بعد، ويمكن اعتباره لوحًا كاملًا متاحًا للاستخدام لاحقًا.</p>
+      </div>`;
+  }
+
+  if (bandPlans && bandPlans.length > 0) {
+    const steps = bandPlans
+      .map((plan, planIndex) => {
+        const spanLabel =
+          plan.startX <= 0.05
+            ? `من بداية الطول حتى ${formatCm(plan.endX)}`
+            : `بين ${formatCm(plan.startX)} و${formatCm(plan.endX)} من طول اللوح`;
+        const pieceLines = plan.pieces
+          .map((piece, pieceIndex) => {
+            const partCode =
+              projectPartLinkMap.get(piece.sourcePartId)?.code ?? piece.name;
+            const needsFinalTrim = Math.abs(piece.length - plan.length) > 0.05;
+
+            return `قطعة ${pieceIndex + 1}: ${partCode} ${formatCm(piece.width)} × ${formatCm(piece.length)}${needsFinalTrim ? ` ثم تشطيب نهائي على الطول إلى ${formatCm(piece.length)}` : ""}`;
+          })
+          .join("؛ ");
+
+        return `
+          <li>
+            اسحب الشريحة ${planIndex + 1} ${spanLabel} بطول تشغيلي ${formatCm(plan.length)} وعرض مستخدم ${formatCm(plan.width)}.
+            ${plan.uniformLength ? "" : " بعد ذلك افصل القطع الأقصر بتشطيب نهائي على الطول داخل نفس الشريحة."}
+            ترتيب الفصل على محور العرض: ${pieceLines}.
+          </li>`;
+      })
+      .join("");
+    const trailingLength = round2(
+      Math.max(stock.boardLength - sheet.usedLength, 0),
+    );
+
+    return `
+      <div class="sheet-detail-card">
+        <h4>خطة التشغيل</h4>
+        <p class="sheet-detail-meta">${bandPlans.length} شرائح تشغيل متتابعة على محور الطول${trailingLength > 0 ? `، والمتبقي الخلفي بعد آخر شريحة ${formatCm(trailingLength)}` : ""}.</p>
+        <ol>${steps}</ol>
+      </div>`;
+  }
+
+  const xCuts = getUniqueSortedCoords(
+    sheet.pieces.flatMap((piece) => [piece.x, piece.x + piece.length]),
+  ).filter((value) => value > 0.05 && value < stock.boardLength - 0.05);
+  const yCuts = getUniqueSortedCoords(
+    sheet.pieces.flatMap((piece) => [piece.y, piece.y + piece.width]),
+  ).filter((value) => value > 0.05 && value < stock.boardWidth - 0.05);
+
+  return `
+    <div class="sheet-detail-card">
+      <h4>خطة التشغيل</h4>
+      <p class="sheet-detail-meta">التخطيط الحالي مضغوط نسبيًا، لذلك تعذر استخلاص شرائح طولية مستقلة بدون تداخل.</p>
+      <ol>
+        <li>${xCuts.length > 0 ? `راجع خطوط القص على محور الطول عند: ${xCuts.map((value) => formatCm(value)).join("، ")}.` : "لا توجد خطوط طولية داخلية إضافية واضحة؛ اعتمد الرسم المطبوع كمرجع أساسي."}</li>
+        <li>${yCuts.length > 0 ? `راجع خطوط القص على محور العرض عند: ${yCuts.map((value) => formatCm(value)).join("، ")}.` : "لا توجد خطوط عرضية داخلية إضافية واضحة؛ الترتيب الحالي يميل إلى مسارات طولية أبسط."}</li>
+        <li>استخدم أكواد القطع داخل الرسم لتثبيت تسلسل الفصل النهائي قبل التشغيل، خصوصًا إذا اخترت وضع أقل هادر.</li>
+      </ol>
+    </div>`;
+}
+
+function buildSheetOffcutsMarkup(
+  stock: SheetLayoutStock,
+  sheet: SheetLayoutStock["sheets"][number],
+) {
+  const allOffcuts = buildSheetFreeRects(stock, sheet);
+  const reusableOffcuts = allOffcuts.filter(isReusableSheetOffcut);
+
+  if (reusableOffcuts.length === 0) {
+    return `
+      <div class="sheet-detail-card">
+        <h4>البواقي القابلة للتخزين</h4>
+        <p class="sheet-detail-meta">لا توجد بواقي كبيرة بما يكفي للتخزين المنفصل على هذا اللوح؛ المتبقي الحالي أقرب لشرائط سلاح وهوامش تشغيل صغيرة.</p>
+      </div>`;
+  }
+
+  const visibleOffcuts = reusableOffcuts.slice(0, 6);
+  const offcutLines = visibleOffcuts
+    .map(
+      (rect, index) => `
+        <li>
+          باقي ${index + 1}: ${formatSheetSize(rect.length, rect.width)} بمساحة ${rect.areaM2} م².
+          موقعه على محور الطول ${formatSheetAxisRange(rect.x, rect.x + rect.length)}، وعلى محور العرض ${formatSheetAxisRange(rect.y, rect.y + rect.width)}.
+        </li>`,
+    )
+    .join("");
+  const hiddenOffcuts = reusableOffcuts.length - visibleOffcuts.length;
+
+  return `
+    <div class="sheet-detail-card">
+      <h4>البواقي القابلة للتخزين</h4>
+      <p class="sheet-detail-meta">${reusableOffcuts.length} بواقي قابلة لإعادة الاستخدام على هذا اللوح${hiddenOffcuts > 0 ? `، تم عرض أكبر ${visibleOffcuts.length} فقط` : ""}.</p>
+      <ul>${offcutLines}</ul>
+    </div>`;
+}
+
 function getResettableFieldValue(value: number) {
   return value === 0 ? "" : String(value);
 }
@@ -668,35 +1059,22 @@ function downloadTextFile(fileName: string, content: string, mimeType: string) {
   window.URL.revokeObjectURL(url);
 }
 
-function loadSavedProjects() {
-  if (typeof window === "undefined") {
-    return [] as SavedProject[];
-  }
-
-  try {
-    const storedValue = window.localStorage.getItem(savedProjectsStorageKey);
-    if (!storedValue) {
-      return [] as SavedProject[];
-    }
-
-    const parsedValue = JSON.parse(storedValue) as SavedProject[];
-    return parsedValue
-      .map((project) => ({
-        ...project,
-        customParts: (project.customParts ?? []).map((part) => ({
-          ...part,
-          edgeBanding: part.edgeBanding ?? {},
-        })),
-        edgeBandOverrides: project.edgeBandOverrides ?? {},
-      }))
-      .sort(
-        (left, right) =>
-          new Date(right.updatedAt).getTime() -
-          new Date(left.updatedAt).getTime(),
-      );
-  } catch {
-    return [] as SavedProject[];
-  }
+function normalizeSavedProjects(projects: SavedProject[]) {
+  return projects
+    .map((project) => ({
+      ...project,
+      settings: normalizeProjectSettings(project.settings),
+      customParts: (project.customParts ?? []).map((part) => ({
+        ...part,
+        edgeBanding: part.edgeBanding ?? {},
+      })),
+      edgeBandOverrides: project.edgeBandOverrides ?? {},
+    }))
+    .sort(
+      (left, right) =>
+        new Date(right.updatedAt).getTime() -
+        new Date(left.updatedAt).getTime(),
+    );
 }
 
 function buildProjectArrangement(
@@ -735,6 +1113,52 @@ function buildProjectArrangement(
           : 0,
     };
   });
+}
+
+function buildProjectArrangementAutosaveKey(
+  projectId: string | null,
+  arrangement: ProjectArrangementItem[],
+) {
+  if (!projectId) {
+    return null;
+  }
+
+  return `${projectId}:${JSON.stringify(
+    arrangement.map((item) => ({
+      id: item.id,
+      offsetX: round2(item.offsetX),
+      offsetY: round2(item.offsetY),
+      offsetZ: round2(item.offsetZ),
+      rotationY: ((item.rotationY % 360) + 360) % 360,
+    })),
+  )}`;
+}
+
+function buildSavedProjectSnapshot(
+  projectId: string,
+  projectName: string,
+  settings: ProjectSettings,
+  units: CabinetUnit[],
+  customParts: CustomProjectPart[],
+  arrangement: ProjectArrangementItem[],
+  edgeBandOverrides: EdgeBandOverrideMap,
+) {
+  const trimmedName = projectName.trim() || "مشروع بدون اسم";
+  const snapshot: SavedProject = {
+    id: projectId,
+    name: trimmedName,
+    updatedAt: new Date().toISOString(),
+    settings,
+    units,
+    customParts,
+    arrangement,
+    edgeBandOverrides,
+  };
+
+  return {
+    trimmedName,
+    snapshot,
+  };
 }
 
 function getProjectArrangementTravelLimit(units: CabinetUnit[]) {
@@ -836,6 +1260,10 @@ function buildPrintDocument(
   projectPartLinkMap: Map<string, ProjectPartLink>,
 ) {
   const partsMap = new Map(parts.map((part) => [part.id, part]));
+  const optimizationModeLabel =
+    sheetLayoutOptimizationModeLabels[settings.optimizationMode];
+  const optimizationModeDescription =
+    sheetLayoutOptimizationModeDescriptions[settings.optimizationMode];
   const partsRows = parts
     .map(
       (part) => `
@@ -893,6 +1321,10 @@ function buildPrintDocument(
                     <div class="sheet-svg-wrap">
                       ${buildPrintSheetSvg(stock, sheet, partsMap, projectPartLinkMap)}
                     </div>
+                    <div class="sheet-details">
+                      ${buildSheetExecutionMarkup(stock, sheet, projectPartLinkMap)}
+                      ${buildSheetOffcutsMarkup(stock, sheet)}
+                    </div>
                   </article>`,
               )
               .join("")}
@@ -928,7 +1360,15 @@ function buildPrintDocument(
         .sheet-card-head { display: flex; justify-content: space-between; gap: 10px; font-size: 12px; color: #57534e; margin-bottom: 10px; }
         .sheet-svg-wrap { border: 1px solid #e7dfd4; border-radius: 14px; padding: 10px; background: linear-gradient(180deg,#f8f4ee 0%,#f2ece3 100%); }
         .sheet-svg-wrap svg { display: block; width: 100%; height: auto; border-radius: 12px; background: #fff; box-shadow: inset 0 0 0 1px rgba(214,206,194,0.9); }
+        .sheet-details { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-top: 12px; }
+        .sheet-detail-card { border: 1px solid #e7dfd4; border-radius: 14px; padding: 10px 12px; background: #fcfaf7; }
+        .sheet-detail-card h4 { margin: 0 0 8px; font-size: 13px; }
+        .sheet-detail-card p, .sheet-detail-card li { font-size: 12px; line-height: 1.8; color: #44403c; }
+        .sheet-detail-card ol, .sheet-detail-card ul { margin: 0; padding-inline-start: 18px; }
+        .sheet-detail-card li + li { margin-top: 4px; }
+        .sheet-detail-meta { margin-bottom: 8px; color: #78716c; }
         .waste-note { margin-top: 14px; border: 1px solid #f2d7a2; border-radius: 14px; padding: 12px 14px; background: #fff6df; color: #78350f; font-size: 13px; line-height: 1.8; }
+        .mode-note { margin-top: 14px; border: 1px solid #d6cec2; border-radius: 14px; padding: 12px 14px; background: #faf8f4; color: #44403c; font-size: 13px; line-height: 1.8; }
         @media print {
           body { margin: 0; }
         }
@@ -941,6 +1381,7 @@ function buildPrintDocument(
         <div class="card">لوح 18: ${formatSheetSize(settings.boardSheetLength, settings.boardSheetWidth)}</div>
         <div class="card">لوح 6: ${formatSheetSize(settings.backSheetLength, settings.backSheetWidth)}</div>
         <div class="card">سلاح: ${formatOptionalMmFromCm(settings.cutKerf)} • حافة تشطيب: ${formatOptionalMmFromCm(settings.trimMargin)}</div>
+        <div class="card">أسلوب التخطيط: ${optimizationModeLabel}</div>
       </div>
       <div class="summary">
         <div class="card">الوحدات: ${summary.unitCount}</div>
@@ -949,6 +1390,7 @@ function buildPrintDocument(
         <div class="card">إجمالي الاستهلاك: ${summary.totalAreaM2} م²</div>
         <div class="card">التكلفة التقريبية: ${formatPrice(summary.totalProjectCost)}</div>
       </div>
+      <div class="mode-note"><strong>${optimizationModeLabel}:</strong> ${optimizationModeDescription}</div>
       <div class="section">
         <h2>قائمة القطع</h2>
         <table>
@@ -1219,7 +1661,10 @@ function fitSheetLabelText(
   return {
     text: safeText,
     fontSize: clampSheetLabelFontSize(
-      Math.min(baseFontSize, availableSpan / Math.max(safeText.length * 0.62, 1)),
+      Math.min(
+        baseFontSize,
+        availableSpan / Math.max(safeText.length * 0.62, 1),
+      ),
       minFontSize,
       baseFontSize,
     ),
@@ -1269,7 +1714,9 @@ function getSheetPiecePrimaryLabel(
     );
     const nameCapacity = Math.max(
       0,
-      Math.floor((availableSpan - codePrefixWidth) / (codeOnlyFit.fontSize * 0.62)),
+      Math.floor(
+        (availableSpan - codePrefixWidth) / (codeOnlyFit.fontSize * 0.62),
+      ),
     );
 
     if (nameCapacity >= 4) {
@@ -1376,8 +1823,12 @@ function getSheetPieceLabelMode(piece: SheetLayoutPiece) {
       nameFontSize: fullNameFontSize,
       dimsFontSize: fullDimsFontSize,
       rotate: isTallPiece,
-      nameOffset: isTallPiece ? fullNameFontSize * 1.05 : fullNameFontSize * 1.18,
-      dimsOffset: isTallPiece ? fullDimsFontSize * 1.32 : fullDimsFontSize * 1.45,
+      nameOffset: isTallPiece
+        ? fullNameFontSize * 1.05
+        : fullNameFontSize * 1.18,
+      dimsOffset: isTallPiece
+        ? fullDimsFontSize * 1.32
+        : fullDimsFontSize * 1.45,
     };
   }
 
@@ -1522,26 +1973,40 @@ function buildCustomProjectCutlistPart(
   };
 }
 
-function loadProjectSettings(): ProjectSettings {
-  if (typeof window === "undefined") {
-    return defaultProjectSettings;
+function normalizeProjectSettings(settings?: Partial<ProjectSettings> | null) {
+  return {
+    ...defaultProjectSettings,
+    ...(settings ?? {}),
+  } satisfies ProjectSettings;
+}
+
+async function requestApi<T>(input: string, init?: RequestInit) {
+  const response = await fetch(input, {
+    credentials: "same-origin",
+    headers: {
+      "Content-Type": "application/json",
+      ...(init?.headers ?? {}),
+    },
+    ...init,
+  });
+
+  const isJsonResponse =
+    response.headers.get("content-type")?.includes("application/json") ?? false;
+  const payload = isJsonResponse ? ((await response.json()) as unknown) : null;
+
+  if (!response.ok) {
+    const message =
+      typeof payload === "object" &&
+      payload !== null &&
+      "message" in payload &&
+      typeof (payload as { message?: unknown }).message === "string"
+        ? String((payload as { message?: string }).message)
+        : "حدث خطأ غير متوقع.";
+
+    throw new ApiRequestError(message, response.status);
   }
 
-  try {
-    const storedValue = window.localStorage.getItem(projectSettingsStorageKey);
-    if (!storedValue) {
-      return defaultProjectSettings;
-    }
-
-    const parsedValue = JSON.parse(storedValue) as Partial<ProjectSettings>;
-
-    return {
-      ...defaultProjectSettings,
-      ...parsedValue,
-    };
-  } catch {
-    return defaultProjectSettings;
-  }
+  return payload as T;
 }
 
 function getSheetLayoutOptions(settings: ProjectSettings) {
@@ -1556,6 +2021,7 @@ function getSheetLayoutOptions(settings: ProjectSettings) {
     },
     cutKerf: settings.cutKerf,
     trimMargin: settings.trimMargin,
+    optimizationMode: settings.optimizationMode,
   };
 }
 
@@ -1713,7 +2179,10 @@ function aggregateProjectParts(
 }
 
 function App() {
-  const initialProjectSettings = loadProjectSettings();
+  const initialProjectSettings = defaultProjectSettings;
+  const skipProjectSettingsSyncRef = useRef(true);
+  const lastSavedProjectArrangementKeyRef = useRef<string | null>(null);
+  const projectArrangementAutosaveRequestIdRef = useRef(0);
   const [activeWorkspaceTab, setActiveWorkspaceTab] =
     useState<WorkspaceTab>("builder");
   const [activeBuilderTab, setActiveBuilderTab] = useState<BuilderTab>("unit");
@@ -1727,10 +2196,19 @@ function App() {
     workshop: false,
     parts: false,
   });
+  const [authStatus, setAuthStatus] = useState<AuthStatus>("loading");
+  const [authMode, setAuthMode] = useState<AuthMode>("login");
+  const [authForm, setAuthForm] = useState<AuthFormState>({
+    name: "",
+    email: "",
+    password: "",
+  });
+  const [authError, setAuthError] = useState<string | null>(null);
+  const [currentUser, setCurrentUser] = useState<PersistedUser | null>(null);
+  const [isAuthSubmitting, setIsAuthSubmitting] = useState(false);
   const [projectName, setProjectName] = useState("مشروع جديد");
   const [currentProjectId, setCurrentProjectId] = useState<string | null>(null);
-  const [savedProjects, setSavedProjects] =
-    useState<SavedProject[]>(loadSavedProjects);
+  const [savedProjects, setSavedProjects] = useState<SavedProject[]>([]);
   const [edgeBandOverrides, setEdgeBandOverrides] =
     useState<EdgeBandOverrideMap>({});
   const [isProjectLibraryOpen, setIsProjectLibraryOpen] = useState(false);
@@ -1738,6 +2216,10 @@ function App() {
   const [projectActionMessage, setProjectActionMessage] = useState<
     string | null
   >(null);
+  const [projectArrangementAutosaveState, setProjectArrangementAutosaveState] =
+    useState<ProjectArrangementAutosaveState>("idle");
+  const [projectArrangementAutosaveError, setProjectArrangementAutosaveError] =
+    useState<string | null>(null);
   const [editorTitle, setEditorTitle] = useState(createUnitTitle(0));
   const [projectSettings, setProjectSettings] = useState<ProjectSettings>(
     initialProjectSettings,
@@ -1891,11 +2373,42 @@ function App() {
     units,
     projectArrangement,
   );
+  const projectArrangementAutosaveKey = buildProjectArrangementAutosaveKey(
+    currentProjectId,
+    normalizedProjectArrangement,
+  );
   const projectArrangementTravelLimitCm =
     getProjectArrangementTravelLimit(units);
   const projectPreviewUnits = buildProjectPreviewUnits(
     units,
     normalizedProjectArrangement,
+  );
+  const projectArrangementAutosaveMessage =
+    currentProjectId && authStatus === "authenticated"
+      ? projectArrangementAutosaveState === "saving"
+        ? "جاري حفظ ترتيب الوحدات تلقائيا..."
+        : projectArrangementAutosaveState === "saved"
+          ? "تم حفظ ترتيب الوحدات تلقائيا."
+          : projectArrangementAutosaveState === "error"
+            ? (projectArrangementAutosaveError ??
+              "تعذر حفظ ترتيب الوحدات تلقائيا.")
+            : null
+      : null;
+  const projectArrangementAutosaveToneClassName =
+    projectArrangementAutosaveState === "error"
+      ? "text-amber-700"
+      : projectArrangementAutosaveState === "saving"
+        ? "text-sky-700"
+        : "text-emerald-700";
+  const syncSavedProjectsFromBootstrap = useCallback(
+    (bootstrap: SessionBootstrap) => {
+      if (bootstrap.user) {
+        setCurrentUser(bootstrap.user);
+      }
+
+      setSavedProjects(normalizeSavedProjects(bootstrap.savedProjects));
+    },
+    [],
   );
   const workshopPartCards: WorkshopPartCard[] = calculatedViews
     .flatMap((view) =>
@@ -2200,18 +2713,33 @@ function App() {
   projectSummary.totalProjectCost = projectTotalCost;
 
   useEffect(() => {
-    window.localStorage.setItem(
-      projectSettingsStorageKey,
-      JSON.stringify(projectSettings),
-    );
-  }, [projectSettings]);
+    if (authStatus !== "authenticated") {
+      skipProjectSettingsSyncRef.current = true;
+      return;
+    }
 
-  useEffect(() => {
-    window.localStorage.setItem(
-      savedProjectsStorageKey,
-      JSON.stringify(savedProjects),
-    );
-  }, [savedProjects]);
+    if (skipProjectSettingsSyncRef.current) {
+      skipProjectSettingsSyncRef.current = false;
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      void requestApi<SessionBootstrap>("/api/settings", {
+        method: "PUT",
+        body: JSON.stringify({ settings: projectSettings }),
+      }).catch((error) => {
+        announceProjectAction(
+          error instanceof Error
+            ? error.message
+            : "تعذر حفظ إعدادات المشروع الآن.",
+        );
+      });
+    }, 450);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
+  }, [authStatus, projectSettings]);
 
   useEffect(() => {
     if (!unitFeedback) {
@@ -2236,6 +2764,99 @@ function App() {
 
     return () => window.clearTimeout(timeoutId);
   }, [projectActionMessage]);
+
+  useEffect(() => {
+    if (projectArrangementAutosaveState !== "saved") {
+      return undefined;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      setProjectArrangementAutosaveState((current) =>
+        current === "saved" ? "idle" : current,
+      );
+    }, 2200);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [projectArrangementAutosaveState]);
+
+  useEffect(() => {
+    if (
+      authStatus !== "authenticated" ||
+      !currentProjectId ||
+      !projectArrangementAutosaveKey ||
+      lastSavedProjectArrangementKeyRef.current ===
+        projectArrangementAutosaveKey
+    ) {
+      return undefined;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      if (
+        lastSavedProjectArrangementKeyRef.current ===
+        projectArrangementAutosaveKey
+      ) {
+        return;
+      }
+
+      const requestId = projectArrangementAutosaveRequestIdRef.current + 1;
+      projectArrangementAutosaveRequestIdRef.current = requestId;
+      setProjectArrangementAutosaveState("saving");
+      setProjectArrangementAutosaveError(null);
+
+      const { snapshot } = buildSavedProjectSnapshot(
+        currentProjectId,
+        projectName,
+        projectSettings,
+        units,
+        customParts,
+        normalizedProjectArrangement,
+        edgeBandOverrides,
+      );
+
+      void requestApi<SessionBootstrap>("/api/projects", {
+        method: "POST",
+        body: JSON.stringify({ project: snapshot }),
+      })
+        .then((bootstrap) => {
+          if (projectArrangementAutosaveRequestIdRef.current !== requestId) {
+            return;
+          }
+
+          syncSavedProjectsFromBootstrap(bootstrap);
+          lastSavedProjectArrangementKeyRef.current =
+            buildProjectArrangementAutosaveKey(
+              snapshot.id,
+              snapshot.arrangement,
+            );
+          setProjectArrangementAutosaveState("saved");
+        })
+        .catch((error) => {
+          if (projectArrangementAutosaveRequestIdRef.current !== requestId) {
+            return;
+          }
+
+          setProjectArrangementAutosaveState("error");
+          setProjectArrangementAutosaveError(
+            error instanceof Error
+              ? error.message
+              : "تعذر حفظ ترتيب الوحدات تلقائيا.",
+          );
+        });
+    }, 850);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [
+    authStatus,
+    currentProjectId,
+    customParts,
+    edgeBandOverrides,
+    normalizedProjectArrangement,
+    projectArrangementAutosaveKey,
+    projectName,
+    projectSettings,
+    syncSavedProjectsFromBootstrap,
+    units,
+  ]);
 
   function announceUnitSaved(unitId: string, message: string) {
     setUnitFeedback({ unitId, message });
@@ -2333,6 +2954,199 @@ function App() {
   function announceProjectAction(message: string) {
     setProjectActionMessage(message);
   }
+
+  function updateAuthField(
+    field: keyof AuthFormState,
+    value: AuthFormState[keyof AuthFormState],
+  ) {
+    setAuthForm((current) => ({
+      ...current,
+      [field]: value,
+    }));
+  }
+
+  const applyAuthenticatedSession = useCallback(
+    (bootstrap: SessionBootstrap, message: string | null) => {
+      const nextSettings = normalizeProjectSettings(bootstrap.projectSettings);
+      const nextEditorInput = buildEmptyEditorInput(nextSettings);
+
+      skipProjectSettingsSyncRef.current = true;
+      lastSavedProjectArrangementKeyRef.current = null;
+      projectArrangementAutosaveRequestIdRef.current += 1;
+      setCurrentUser(bootstrap.user);
+      setSavedProjects(normalizeSavedProjects(bootstrap.savedProjects));
+      setAuthStatus("authenticated");
+      setAuthError(null);
+      setProjectName("مشروع جديد");
+      setCurrentProjectId(null);
+      setProjectArrangementAutosaveState("idle");
+      setProjectArrangementAutosaveError(null);
+      setProjectSettings(nextSettings);
+      setProjectSettingsDrafts(buildProjectSettingsDrafts(nextSettings));
+      setUnits([]);
+      setCustomParts([]);
+      setCalculatedUnits([]);
+      setCalculatedCustomParts([]);
+      setSelectedCalculatedUnitId(null);
+      setProjectArrangement([]);
+      setActiveProjectUnitId(null);
+      setActiveWorkspaceTab("builder");
+      setActiveBuilderTab("unit");
+      setEdgeBandOverrides({});
+      setUnitFeedback(null);
+      setEditorTitle(createUnitTitle(0));
+      setEditorInput(nextEditorInput);
+      setEditorNumericDrafts(buildEditorNumericDrafts(nextEditorInput));
+      setEditingUnitId(null);
+      setSelectedPartId(null);
+      setCustomPartDraft(buildEmptyCustomPartDraft(nextSettings));
+      setEditingCustomPartId(null);
+
+      if (message) {
+        setProjectActionMessage(message);
+      }
+    },
+    [],
+  );
+
+  const applyAnonymousSession = useCallback((message: string | null) => {
+    const nextEditorInput = buildEmptyEditorInput(defaultProjectSettings);
+
+    skipProjectSettingsSyncRef.current = true;
+    lastSavedProjectArrangementKeyRef.current = null;
+    projectArrangementAutosaveRequestIdRef.current += 1;
+    setAuthStatus("anonymous");
+    setCurrentUser(null);
+    setSavedProjects([]);
+    setProjectName("مشروع جديد");
+    setCurrentProjectId(null);
+    setProjectArrangementAutosaveState("idle");
+    setProjectArrangementAutosaveError(null);
+    setProjectSettings(defaultProjectSettings);
+    setProjectSettingsDrafts(
+      buildProjectSettingsDrafts(defaultProjectSettings),
+    );
+    setUnits([]);
+    setCustomParts([]);
+    setCalculatedUnits([]);
+    setCalculatedCustomParts([]);
+    setSelectedCalculatedUnitId(null);
+    setProjectArrangement([]);
+    setActiveProjectUnitId(null);
+    setActiveWorkspaceTab("builder");
+    setActiveBuilderTab("unit");
+    setEdgeBandOverrides({});
+    setUnitFeedback(null);
+    setEditorTitle(createUnitTitle(0));
+    setEditorInput(nextEditorInput);
+    setEditorNumericDrafts(buildEditorNumericDrafts(nextEditorInput));
+    setEditingUnitId(null);
+    setSelectedPartId(null);
+    setCustomPartDraft(buildEmptyCustomPartDraft(defaultProjectSettings));
+    setEditingCustomPartId(null);
+
+    if (message) {
+      setProjectActionMessage(message);
+    }
+  }, []);
+
+  async function submitAuthForm(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setIsAuthSubmitting(true);
+    setAuthError(null);
+
+    try {
+      const endpoint =
+        authMode === "register" ? "/api/auth/register" : "/api/auth/login";
+      const payload =
+        authMode === "register"
+          ? authForm
+          : {
+              email: authForm.email,
+              password: authForm.password,
+            };
+      const bootstrap = await requestApi<SessionBootstrap>(endpoint, {
+        method: "POST",
+        body: JSON.stringify(payload),
+      });
+
+      applyAuthenticatedSession(
+        bootstrap,
+        authMode === "register"
+          ? `تم إنشاء الحساب باسم ${bootstrap.user?.name ?? "المستخدم الجديد"}.`
+          : `تم تسجيل الدخول باسم ${bootstrap.user?.name ?? "المستخدم الحالي"}.`,
+      );
+      setAuthForm({ name: "", email: "", password: "" });
+      setAuthMode("login");
+    } catch (error) {
+      setAuthError(
+        error instanceof Error ? error.message : "تعذر تنفيذ العملية الآن.",
+      );
+    } finally {
+      setIsAuthSubmitting(false);
+    }
+  }
+
+  async function logoutCurrentUser() {
+    try {
+      await requestApi<{ ok: boolean }>("/api/auth/logout", {
+        method: "POST",
+      });
+      setAuthForm((current) => ({
+        ...current,
+        password: "",
+      }));
+      setIsProjectLibraryOpen(false);
+      setIsProjectSettingsOpen(false);
+      setIsUnitPresetOpen(false);
+      applyAnonymousSession("تم تسجيل الخروج.");
+    } catch (error) {
+      announceProjectAction(
+        error instanceof Error ? error.message : "تعذر تسجيل الخروج الآن.",
+      );
+    }
+  }
+
+  useEffect(() => {
+    let isCancelled = false;
+
+    async function hydrateSession() {
+      try {
+        const bootstrap = await requestApi<SessionBootstrap>(
+          "/api/auth/session",
+          { method: "GET" },
+        );
+
+        if (isCancelled) {
+          return;
+        }
+
+        if (!bootstrap.user) {
+          applyAnonymousSession(null);
+          return;
+        }
+
+        applyAuthenticatedSession(bootstrap, null);
+      } catch (error) {
+        if (isCancelled) {
+          return;
+        }
+
+        setAuthError(
+          error instanceof Error
+            ? error.message
+            : "تعذر تحميل بيانات الحساب الحالية.",
+        );
+        applyAnonymousSession(null);
+      }
+    }
+
+    void hydrateSession();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [applyAnonymousSession, applyAuthenticatedSession]);
 
   function invalidateCalculatedState() {
     setCalculatedUnits([]);
@@ -2592,71 +3406,69 @@ function App() {
       return;
     }
 
-    setProjectName("مشروع جديد");
-    setCurrentProjectId(null);
-    setProjectSettings(defaultProjectSettings);
-    setProjectSettingsDrafts(
-      buildProjectSettingsDrafts(defaultProjectSettings),
+    applyAuthenticatedSession(
+      {
+        user: currentUser,
+        projectSettings,
+        savedProjects,
+      },
+      "تم فتح مشروع جديد.",
     );
-    setUnits([]);
-    setCustomParts([]);
-    setCalculatedUnits([]);
-    setCalculatedCustomParts([]);
-    setSelectedCalculatedUnitId(null);
-    setProjectArrangement([]);
-    setActiveProjectUnitId(null);
-    setActiveWorkspaceTab("builder");
-    setActiveBuilderTab("unit");
-    setEdgeBandOverrides({});
-    setUnitFeedback(null);
-    resetEditor(0, defaultProjectSettings);
-    resetCustomPartEditor(defaultProjectSettings);
-    announceProjectAction("تم فتح مشروع جديد.");
   }
 
-  function saveCurrentProject() {
-    const trimmedName = projectName.trim() || "مشروع بدون اسم";
+  async function saveCurrentProject() {
     const nextProjectId = currentProjectId ?? createProjectId();
-    const snapshot: SavedProject = {
-      id: nextProjectId,
-      name: trimmedName,
-      updatedAt: new Date().toISOString(),
-      settings: projectSettings,
+    const { trimmedName, snapshot } = buildSavedProjectSnapshot(
+      nextProjectId,
+      projectName,
+      projectSettings,
       units,
       customParts,
-      arrangement: normalizedProjectArrangement,
+      normalizedProjectArrangement,
       edgeBandOverrides,
-    };
-
-    setSavedProjects((current) =>
-      [
-        snapshot,
-        ...current.filter((project) => project.id !== nextProjectId),
-      ].sort(
-        (left, right) =>
-          new Date(right.updatedAt).getTime() -
-          new Date(left.updatedAt).getTime(),
-      ),
     );
-    setCurrentProjectId(nextProjectId);
-    setProjectName(trimmedName);
-    announceProjectAction(`تم حفظ ${trimmedName}.`);
+
+    try {
+      const bootstrap = await requestApi<SessionBootstrap>("/api/projects", {
+        method: "POST",
+        body: JSON.stringify({ project: snapshot }),
+      });
+
+      syncSavedProjectsFromBootstrap(bootstrap);
+      lastSavedProjectArrangementKeyRef.current =
+        buildProjectArrangementAutosaveKey(snapshot.id, snapshot.arrangement);
+      setProjectArrangementAutosaveState("idle");
+      setProjectArrangementAutosaveError(null);
+      setCurrentProjectId(nextProjectId);
+      setProjectName(trimmedName);
+      announceProjectAction(`تم حفظ ${trimmedName} على الحساب الحالي.`);
+    } catch (error) {
+      announceProjectAction(
+        error instanceof Error ? error.message : "تعذر حفظ المشروع الآن.",
+      );
+    }
   }
 
   function loadSavedProject(project: SavedProject) {
+    const normalizedSettings = normalizeProjectSettings(project.settings);
     const nextArrangement = buildProjectArrangement(
       project.units,
       project.arrangement,
     );
+    lastSavedProjectArrangementKeyRef.current =
+      buildProjectArrangementAutosaveKey(project.id, nextArrangement);
+    projectArrangementAutosaveRequestIdRef.current += 1;
     setCurrentProjectId(project.id);
     setProjectName(project.name);
-    setProjectSettings(project.settings);
-    setProjectSettingsDrafts(buildProjectSettingsDrafts(project.settings));
+    setProjectArrangementAutosaveState("idle");
+    setProjectArrangementAutosaveError(null);
+    setProjectSettings(normalizedSettings);
+    setProjectSettingsDrafts(buildProjectSettingsDrafts(normalizedSettings));
     setUnits(project.units);
     setCustomParts(
       (project.customParts ?? []).map((part) => ({
         ...part,
-        material: project.settings.material,
+        material: normalizedSettings.material,
         edgeBanding: part.edgeBanding ?? {},
       })),
     );
@@ -2684,13 +3496,30 @@ function App() {
     announceProjectAction(`تم تحميل ${project.name}.`);
   }
 
-  function deleteSavedProject(projectId: string) {
-    setSavedProjects((current) =>
-      current.filter((project) => project.id !== projectId),
-    );
+  async function deleteSavedProject(projectId: string) {
+    try {
+      const bootstrap = await requestApi<SessionBootstrap>(
+        `/api/projects/${projectId}`,
+        {
+          method: "DELETE",
+        },
+      );
 
-    if (currentProjectId === projectId) {
-      setCurrentProjectId(null);
+      syncSavedProjectsFromBootstrap(bootstrap);
+
+      if (currentProjectId === projectId) {
+        lastSavedProjectArrangementKeyRef.current = null;
+        projectArrangementAutosaveRequestIdRef.current += 1;
+        setCurrentProjectId(null);
+        setProjectArrangementAutosaveState("idle");
+        setProjectArrangementAutosaveError(null);
+      }
+
+      announceProjectAction("تم حذف المشروع من حسابك.");
+    } catch (error) {
+      announceProjectAction(
+        error instanceof Error ? error.message : "تعذر حذف المشروع الآن.",
+      );
     }
   }
 
@@ -2925,53 +3754,75 @@ function App() {
     setSelectedPartId((current) => (current === partId ? null : partId));
   }
 
+  function clampProjectArrangementOffset(value: number) {
+    return round2(
+      Math.max(
+        -projectArrangementTravelLimitCm,
+        Math.min(projectArrangementTravelLimitCm, value),
+      ),
+    );
+  }
+
+  function applyProjectArrangementChange(
+    updateArrangement: (
+      arrangement: ProjectArrangementItem[],
+    ) => ProjectArrangementItem[],
+  ) {
+    let blockedOverlap: ReturnType<typeof findProjectPreviewOverlap> = null;
+
+    setProjectArrangement((current) => {
+      const normalizedArrangement = buildProjectArrangement(units, current);
+      const nextArrangement = updateArrangement(
+        normalizedArrangement.map((item) => ({ ...item })),
+      );
+      const overlap = findProjectPreviewOverlap(
+        buildProjectPreviewUnits(units, nextArrangement),
+      );
+
+      if (overlap) {
+        blockedOverlap = overlap;
+        return current;
+      }
+
+      return nextArrangement;
+    });
+
+    if (blockedOverlap) {
+      announceProjectAction(
+        `لا يمكن وضع ${blockedOverlap.first.title} فوق ${blockedOverlap.second.title}.`,
+      );
+    }
+  }
+
   function nudgeProjectUnit(
     unitId: string,
     axis: "x" | "y" | "z",
     delta: number,
   ) {
-    setProjectArrangement((current) =>
+    applyProjectArrangementChange((current) =>
       current.map((item) =>
         item.id === unitId
           ? {
               ...item,
               offsetX:
                 axis === "x"
-                  ? round2(
-                      Math.max(
-                        -projectArrangementTravelLimitCm,
-                        Math.min(
-                          projectArrangementTravelLimitCm,
-                          (Number.isFinite(item.offsetX) ? item.offsetX : 0) +
-                            delta,
-                        ),
-                      ),
+                  ? clampProjectArrangementOffset(
+                      (Number.isFinite(item.offsetX) ? item.offsetX : 0) +
+                        delta,
                     )
                   : item.offsetX,
               offsetY:
                 axis === "y"
-                  ? round2(
-                      Math.max(
-                        -projectArrangementTravelLimitCm,
-                        Math.min(
-                          projectArrangementTravelLimitCm,
-                          (Number.isFinite(item.offsetY) ? item.offsetY : 0) +
-                            delta,
-                        ),
-                      ),
+                  ? clampProjectArrangementOffset(
+                      (Number.isFinite(item.offsetY) ? item.offsetY : 0) +
+                        delta,
                     )
                   : item.offsetY,
               offsetZ:
                 axis === "z"
-                  ? round2(
-                      Math.max(
-                        -projectArrangementTravelLimitCm,
-                        Math.min(
-                          projectArrangementTravelLimitCm,
-                          (Number.isFinite(item.offsetZ) ? item.offsetZ : 0) +
-                            delta,
-                        ),
-                      ),
+                  ? clampProjectArrangementOffset(
+                      (Number.isFinite(item.offsetZ) ? item.offsetZ : 0) +
+                        delta,
                     )
                   : item.offsetZ,
             }
@@ -2984,39 +3835,36 @@ function App() {
     unitId: string,
     nextPosition: { x: number; z: number },
   ) {
-    const previewUnit = projectPreviewUnits.find((unit) => unit.id === unitId);
-    if (!previewUnit) {
-      return;
-    }
+    applyProjectArrangementChange((current) => {
+      const previewUnit = buildProjectPreviewUnits(units, current).find(
+        (unit) => unit.id === unitId,
+      );
 
-    const nextOffsetX = round2(
-      nextPosition.x - previewUnit.basePosition[0] * 100,
-    );
-    const nextOffsetZ = round2(
-      nextPosition.z - previewUnit.basePosition[2] * 100,
-    );
+      if (!previewUnit) {
+        return current;
+      }
 
-    setProjectArrangement((current) =>
-      current.map((item) =>
+      const nextOffsetX = clampProjectArrangementOffset(
+        nextPosition.x - previewUnit.basePosition[0] * 100,
+      );
+      const nextOffsetZ = clampProjectArrangementOffset(
+        nextPosition.z - previewUnit.basePosition[2] * 100,
+      );
+
+      return current.map((item) =>
         item.id === unitId
           ? {
               ...item,
-              offsetX: Math.max(
-                -projectArrangementTravelLimitCm,
-                Math.min(projectArrangementTravelLimitCm, nextOffsetX),
-              ),
-              offsetZ: Math.max(
-                -projectArrangementTravelLimitCm,
-                Math.min(projectArrangementTravelLimitCm, nextOffsetZ),
-              ),
+              offsetX: nextOffsetX,
+              offsetZ: nextOffsetZ,
             }
           : item,
-      ),
-    );
+      );
+    });
   }
 
   function rotateProjectUnit(unitId: string, delta: number) {
-    setProjectArrangement((current) =>
+    applyProjectArrangementChange((current) =>
       current.map((item) =>
         item.id === unitId
           ? {
@@ -3138,11 +3986,107 @@ function App() {
     );
   }
 
-  const previewFallback = (
-    <div className="flex h-72 w-full items-center justify-center rounded-[1.25rem] border border-dashed border-stone-300 bg-white/65 text-center text-sm text-stone-500">
-      جارٍ تحميل المعاينة ثلاثية الأبعاد...
-    </div>
-  );
+  const nudgeProjectUnitRef = useRef(nudgeProjectUnit);
+  nudgeProjectUnitRef.current = nudgeProjectUnit;
+
+  useEffect(() => {
+    if (activeWorkspaceTab !== "preview" || !activeProjectPreviewUnit) {
+      return undefined;
+    }
+
+    function isEditableHotkeyTarget(target: EventTarget | null) {
+      if (!(target instanceof HTMLElement)) {
+        return false;
+      }
+
+      return (
+        target.isContentEditable ||
+        target.tagName === "INPUT" ||
+        target.tagName === "TEXTAREA" ||
+        target.tagName === "SELECT"
+      );
+    }
+
+    function handleWindowKeyDown(event: KeyboardEvent) {
+      if (
+        event.defaultPrevented ||
+        isEditableHotkeyTarget(event.target) ||
+        isProjectLibraryOpen ||
+        isProjectSettingsOpen ||
+        isUnitPresetOpen
+      ) {
+        return;
+      }
+
+      const step = event.shiftKey ? 1 : 10;
+      let handled = true;
+
+      switch (event.key) {
+        case "ArrowRight":
+          nudgeProjectUnitRef.current(activeProjectPreviewUnit.id, "x", -step);
+          break;
+        case "ArrowLeft":
+          nudgeProjectUnitRef.current(activeProjectPreviewUnit.id, "x", step);
+          break;
+        case "ArrowUp":
+          nudgeProjectUnitRef.current(activeProjectPreviewUnit.id, "z", -step);
+          break;
+        case "ArrowDown":
+          nudgeProjectUnitRef.current(activeProjectPreviewUnit.id, "z", step);
+          break;
+        default:
+          handled = false;
+      }
+
+      if (handled) {
+        event.preventDefault();
+      }
+    }
+
+    window.addEventListener("keydown", handleWindowKeyDown);
+
+    return () => {
+      window.removeEventListener("keydown", handleWindowKeyDown);
+    };
+  }, [
+    activeProjectPreviewUnit,
+    activeWorkspaceTab,
+    isProjectLibraryOpen,
+    isProjectSettingsOpen,
+    isUnitPresetOpen,
+  ]);
+
+  if (authStatus === "loading") {
+    return (
+      <main
+        dir="rtl"
+        className="min-h-screen bg-[linear-gradient(180deg,#f7f3ed_0%,#efe6da_48%,#f8f5ef_100%)] px-4 py-10 text-stone-950 sm:px-6 lg:px-10"
+      >
+        <div className="mx-auto flex max-w-xl flex-col items-center justify-center rounded-[2rem] border border-stone-200 bg-white/90 px-8 py-16 text-center shadow-[0_30px_90px_-48px_rgba(63,40,12,0.45)]">
+          <p className="text-sm text-stone-500">جارٍ تحميل الحساب الحالي...</p>
+          <p className="mt-3 text-lg font-semibold text-stone-950">
+            لحظة واحدة، نربط المشاريع بالمستخدم.
+          </p>
+        </div>
+      </main>
+    );
+  }
+
+  if (!currentUser) {
+    return (
+      <UserAuthPanel
+        email={authForm.email}
+        error={authError}
+        isSubmitting={isAuthSubmitting}
+        mode={authMode}
+        name={authForm.name}
+        password={authForm.password}
+        onFieldChange={updateAuthField}
+        onModeChange={setAuthMode}
+        onSubmit={submitAuthForm}
+      />
+    );
+  }
 
   return (
     <main
@@ -3394,6 +4338,52 @@ function App() {
                 <div className="rounded-2xl border border-stone-200 bg-stone-50/70 p-3 sm:p-4">
                   <div className="mb-4 space-y-1">
                     <h3 className="text-sm font-semibold text-stone-950">
+                      أسلوب التوزيع
+                    </h3>
+                    <p className="text-xs text-stone-500">
+                      اختر بين خطة أسهل للورشة أو خطة تميل لأقل هادر.
+                    </p>
+                  </div>
+                  <div className="space-y-3">
+                    <div className="space-y-2">
+                      <Label>وضع التخطيط</Label>
+                      <Select
+                        value={projectSettings.optimizationMode}
+                        onValueChange={(value) =>
+                          updateProjectSetting(
+                            "optimizationMode",
+                            value as SheetLayoutOptimizationMode,
+                          )
+                        }
+                      >
+                        <SelectTrigger className="w-full bg-white">
+                          <SelectValue>
+                            {
+                              sheetLayoutOptimizationModeLabels[
+                                projectSettings.optimizationMode
+                              ]
+                            }
+                          </SelectValue>
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="workshop">وضع الورشة</SelectItem>
+                          <SelectItem value="yield">أقل هادر</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <p className="rounded-xl border border-stone-200 bg-white/85 px-3 py-2 text-xs leading-6 text-stone-600">
+                      {
+                        sheetLayoutOptimizationModeDescriptions[
+                          projectSettings.optimizationMode
+                        ]
+                      }
+                    </p>
+                  </div>
+                </div>
+
+                <div className="rounded-2xl border border-stone-200 bg-stone-50/70 p-3 sm:p-4">
+                  <div className="mb-4 space-y-1">
+                    <h3 className="text-sm font-semibold text-stone-950">
                       الأسعار والمصنعية
                     </h3>
                     <p className="text-xs text-stone-500">
@@ -3493,8 +4483,7 @@ function App() {
                     مكتبة المشاريع
                   </h2>
                   <p className="mt-1 text-sm text-stone-500">
-                    افتح مشروعًا محفوظًا أو احذف مشروعًا قديمًا من الجهاز
-                    الحالي.
+                    افتح مشروعًا محفوظًا أو احذف مشروعًا قديمًا من حسابك الحالي.
                   </p>
                 </div>
                 <Button
@@ -3820,6 +4809,24 @@ function App() {
             <div className="min-w-[18rem] flex-1 rounded-[1.6rem] border border-stone-200 bg-[linear-gradient(135deg,rgba(252,250,247,0.96),rgba(243,236,227,0.9))] p-4 shadow-[0_18px_50px_-40px_rgba(63,40,12,0.35)]">
               <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
                 <div className="space-y-2 lg:min-w-[16rem] lg:flex-1">
+                  <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-stone-500">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Badge variant="outline" className="bg-white/90">
+                        {currentUser.name}
+                      </Badge>
+                      <span dir="ltr">{currentUser.email}</span>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="bg-white/90"
+                      onClick={logoutCurrentUser}
+                    >
+                      <LogOut className="size-4" />
+                      خروج
+                    </Button>
+                  </div>
                   <Label
                     htmlFor="projectName"
                     className="text-xs text-stone-500"
@@ -3841,7 +4848,7 @@ function App() {
                     {currentProjectId ? (
                       <>
                         <span>•</span>
-                        <span>تم ربط المشروع بالحفظ المحلي</span>
+                        <span>تم ربط المشروع بحساب {currentUser.name}</span>
                       </>
                     ) : null}
                   </div>
@@ -3904,11 +4911,23 @@ function App() {
                     ? "يمكنك الآن تحديث نفس المشروع أو حفظ نسخة جديدة بالاسم الحالي."
                     : "ابدأ التسمية ثم احفظ المشروع ليظهر داخل مكتبة المشاريع."}
                 </span>
-                {projectActionMessage ? (
-                  <span className="font-medium leading-6 text-emerald-700 md:text-left">
-                    {projectActionMessage}
-                  </span>
-                ) : null}
+                <div className="flex flex-col gap-1 text-right md:items-end md:text-left">
+                  {projectActionMessage ? (
+                    <span className="font-medium leading-6 text-emerald-700">
+                      {projectActionMessage}
+                    </span>
+                  ) : null}
+                  {projectArrangementAutosaveMessage ? (
+                    <span
+                      className={cn(
+                        "font-medium leading-6",
+                        projectArrangementAutosaveToneClassName,
+                      )}
+                    >
+                      {projectArrangementAutosaveMessage}
+                    </span>
+                  ) : null}
+                </div>
               </div>
             </div>
 
@@ -3934,6 +4953,14 @@ function App() {
               <p className="mt-1 text-xs text-stone-500">
                 سلاح: {formatOptionalMmFromCm(projectSettings.cutKerf)} • حافة
                 تشطيب: {formatOptionalMmFromCm(projectSettings.trimMargin)}
+              </p>
+              <p className="mt-1 text-xs text-stone-500">
+                التخطيط:{" "}
+                {
+                  sheetLayoutOptimizationModeLabels[
+                    projectSettings.optimizationMode
+                  ]
+                }
               </p>
               <p className="mt-1 text-xs text-stone-500">
                 لوح 18: {formatPrice(projectSettings.boardSheetPrice)} • لوح 6:{" "}
@@ -4012,6 +5039,26 @@ function App() {
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
+                <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-stone-200 bg-stone-50/80 p-4 text-sm text-stone-600">
+                  <div className="space-y-1">
+                    <p className="font-medium text-stone-950">
+                      {currentUser.name}
+                    </p>
+                    <p dir="ltr" className="text-xs text-stone-500">
+                      {currentUser.email}
+                    </p>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={logoutCurrentUser}
+                  >
+                    <LogOut className="size-4" />
+                    تسجيل الخروج
+                  </Button>
+                </div>
+
                 <div className="space-y-2">
                   <Label htmlFor="projectNamePanel">اسم المشروع</Label>
                   <Input
@@ -4096,9 +5143,27 @@ function App() {
                   </Button>
                 </div>
 
-                {projectActionMessage ? (
-                  <div className="rounded-2xl border border-emerald-200 bg-emerald-50/80 p-4 text-sm text-emerald-800">
-                    {projectActionMessage}
+                {projectActionMessage || projectArrangementAutosaveMessage ? (
+                  <div className="space-y-3">
+                    {projectActionMessage ? (
+                      <div className="rounded-2xl border border-emerald-200 bg-emerald-50/80 p-4 text-sm text-emerald-800">
+                        {projectActionMessage}
+                      </div>
+                    ) : null}
+                    {projectArrangementAutosaveMessage ? (
+                      <div
+                        className={cn(
+                          "rounded-2xl border p-4 text-sm",
+                          projectArrangementAutosaveState === "error"
+                            ? "border-amber-200 bg-amber-50/80 text-amber-800"
+                            : projectArrangementAutosaveState === "saving"
+                              ? "border-sky-200 bg-sky-50/80 text-sky-800"
+                              : "border-emerald-200 bg-emerald-50/80 text-emerald-800",
+                        )}
+                      >
+                        {projectArrangementAutosaveMessage}
+                      </div>
+                    ) : null}
                   </div>
                 ) : null}
               </CardContent>
@@ -5081,13 +6146,11 @@ function App() {
                           <div className="absolute inset-x-0 top-0 h-20 bg-[radial-gradient(circle_at_top,rgba(97,74,42,0.12),transparent_60%)]" />
                           <div className="relative space-y-4">
                             {hasEditorCompleteDimensions ? (
-                              <Suspense fallback={previewFallback}>
-                                <CabinetPreview
-                                  input={editorInput}
-                                  result={editorResult}
-                                  selectedPartId={selectedPartId}
-                                />
-                              </Suspense>
+                              <CabinetPreview
+                                input={editorInput}
+                                result={editorResult}
+                                selectedPartId={selectedPartId}
+                              />
                             ) : (
                               <div className="flex h-72 w-full items-center justify-center rounded-[1.25rem] border border-dashed border-stone-300 bg-white/65 px-6 text-center text-sm leading-7 text-stone-500">
                                 أدخل المقاسات الأساسية للوحدة لتظهر المعاينة
@@ -5163,17 +6226,14 @@ function App() {
                           </div>
                         </CardHeader>
                         <CardContent className="space-y-4">
-                          <Suspense fallback={previewFallback}>
-                            <ProjectPreview
-                              units={projectPreviewUnits.map((unit) => ({
-                                ...unit,
-                                active:
-                                  unit.id === activeProjectPreviewUnit?.id,
-                              }))}
-                              onSelectUnit={setActiveProjectUnitId}
-                              onUnitPositionChange={updateProjectUnitPosition}
-                            />
-                          </Suspense>
+                          <ProjectPreview
+                            units={projectPreviewUnits.map((unit) => ({
+                              ...unit,
+                              active: unit.id === activeProjectPreviewUnit?.id,
+                            }))}
+                            onSelectUnit={setActiveProjectUnitId}
+                            onUnitPositionChange={updateProjectUnitPosition}
+                          />
 
                           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
                             {projectPreviewUnits.map((unit, index) => {
@@ -5368,16 +6428,14 @@ function App() {
                         </div>
                       </CardHeader>
                       <CardContent className="space-y-4">
-                        <Suspense fallback={previewFallback}>
-                          <ProjectPreview
-                            units={projectPreviewUnits.map((unit) => ({
-                              ...unit,
-                              active: unit.id === activeProjectPreviewUnit?.id,
-                            }))}
-                            onSelectUnit={setActiveProjectUnitId}
-                            onUnitPositionChange={updateProjectUnitPosition}
-                          />
-                        </Suspense>
+                        <ProjectPreview
+                          units={projectPreviewUnits.map((unit) => ({
+                            ...unit,
+                            active: unit.id === activeProjectPreviewUnit?.id,
+                          }))}
+                          onSelectUnit={setActiveProjectUnitId}
+                          onUnitPositionChange={updateProjectUnitPosition}
+                        />
                       </CardContent>
                     </Card>
                   ) : (
@@ -5485,17 +6543,15 @@ function App() {
                   </div>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                  <Suspense fallback={previewFallback}>
-                    <ProjectPreview
-                      units={projectPreviewUnits.map((unit) => ({
-                        ...unit,
-                        active: unit.id === activeProjectPreviewUnit?.id,
-                      }))}
-                      onSelectUnit={setActiveProjectUnitId}
-                      onUnitPositionChange={updateProjectUnitPosition}
-                      onCanvasReady={bindProjectPreviewCanvas}
-                    />
-                  </Suspense>
+                  <ProjectPreview
+                    units={projectPreviewUnits.map((unit) => ({
+                      ...unit,
+                      active: unit.id === activeProjectPreviewUnit?.id,
+                    }))}
+                    onSelectUnit={setActiveProjectUnitId}
+                    onUnitPositionChange={updateProjectUnitPosition}
+                    onCanvasReady={bindProjectPreviewCanvas}
+                  />
 
                   <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
                     {projectPreviewUnits.map((unit, index) => {
@@ -6283,8 +7339,8 @@ function App() {
                                                 : undefined
                                             }
                                           >
-                                              {dimsLabel?.text ??
-                                                `${round2(piece.length)} × ${round2(piece.width)}`}
+                                            {dimsLabel?.text ??
+                                              `${round2(piece.length)} × ${round2(piece.width)}`}
                                           </text>
                                         ) : null}
                                       </g>

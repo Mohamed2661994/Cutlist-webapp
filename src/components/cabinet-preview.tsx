@@ -75,6 +75,26 @@ function clamp(value: number, min: number, max: number) {
   return Math.min(Math.max(value, min), max);
 }
 
+function snapToStep(value: number, step: number) {
+  if (step <= 0) {
+    return round2(value);
+  }
+
+  return round2(Math.round(value / step) * step);
+}
+
+function formatPreviewDimension(valueCm: number) {
+  return `${round2(valueCm)} سم`;
+}
+
+function formatPreviewFootprint(
+  widthCm: number,
+  heightCm: number,
+  depthCm: number,
+) {
+  return `${formatPreviewDimension(widthCm)} × ${formatPreviewDimension(heightCm)} × ${formatPreviewDimension(depthCm)}`;
+}
+
 function Panel({
   size,
   position,
@@ -259,6 +279,98 @@ function AxisGuide({ planWidth, planDepth }: AxisGuideProps) {
         <div className="rounded-full border border-cyan-200/90 bg-cyan-50/95 px-2 py-1 text-[10px] font-medium text-cyan-950 shadow-sm">
           عمق
         </div>
+      </Html>
+    </group>
+  );
+}
+
+type DragHandleProps = {
+  active: boolean;
+  dragging: boolean;
+  planWidth: number;
+  planDepth: number;
+  snapStepCm: number;
+  onStartDrag: (clientX: number, clientY: number, eventPointY?: number) => void;
+};
+
+function DragHandle({
+  active,
+  dragging,
+  planWidth,
+  planDepth,
+  snapStepCm,
+  onStartDrag,
+}: DragHandleProps) {
+  const handleRadius = Math.max(
+    0.13,
+    Math.min(Math.min(planWidth, planDepth) * 0.22, 0.22),
+  );
+  const handleY = 0.052;
+
+  if (!active) {
+    return null;
+  }
+
+  return (
+    <group position={[0, handleY, 0]}>
+      <mesh
+        rotation={[-Math.PI / 2, 0, 0]}
+        onPointerDown={(event) => {
+          if (event.button !== 0) {
+            return;
+          }
+
+          event.stopPropagation();
+          onStartDrag(event.clientX, event.clientY, event.point.y);
+        }}
+      >
+        <circleGeometry args={[handleRadius, 40]} />
+        <meshStandardMaterial
+          color={dragging ? "#f59e0b" : "#111827"}
+          emissive={dragging ? "#7c2d12" : "#000000"}
+          emissiveIntensity={dragging ? 0.22 : 0}
+          transparent
+          opacity={0.88}
+          roughness={0.34}
+          metalness={0.12}
+        />
+      </mesh>
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.014, 0]}>
+        <ringGeometry args={[handleRadius * 1.15, handleRadius * 1.34, 48]} />
+        <meshBasicMaterial
+          color={dragging ? "#fbbf24" : "#f59e0b"}
+          transparent
+          opacity={dragging ? 0.72 : 0.48}
+        />
+      </mesh>
+      <mesh position={[0, 0.012, 0]}>
+        <sphereGeometry args={[handleRadius * 0.26, 20, 20]} />
+        <meshStandardMaterial
+          color="#fff7ed"
+          roughness={0.18}
+          metalness={0.2}
+        />
+      </mesh>
+      <Html position={[0, 0.16, 0]} center transform sprite>
+        <button
+          type="button"
+          className={cn(
+            "select-none rounded-full border px-3 py-1.5 text-[11px] font-medium shadow-sm backdrop-blur-sm transition",
+            dragging
+              ? "border-amber-200 bg-amber-400/95 text-stone-950"
+              : "border-stone-900/10 bg-white/88 text-stone-800",
+          )}
+          onPointerDown={(event) => {
+            if (event.button !== 0) {
+              return;
+            }
+
+            event.stopPropagation();
+            onStartDrag(event.clientX, event.clientY);
+          }}
+        >
+          اسحب • سناب {snapStepCm} سم
+        </button>
       </Html>
     </group>
   );
@@ -858,47 +970,112 @@ export function CabinetPreview({
   const isCornerLBase =
     input.cabinetType === "corner-l-base" ||
     input.cabinetType === "corner-l-wall";
-  const cameraPosition = isCornerLBase ? [0, 2.1, 3.45] : [2.9, 2.2, 3.2];
   const previewRotationY = isCornerLBase
     ? input.cornerHand === "left"
       ? 0.22
       : -0.22
     : -0.45;
   const previewOffsetX = 0;
-  const previewOffsetZ = isCornerLBase ? 0.06 : 0;
-  const previewScale = isCornerLBase ? 1.24 : 1;
+  const previewOffsetZ = isCornerLBase ? 0.08 : 0.02;
+  const previewScale = isCornerLBase ? 1.3 : 1.08;
+  const cameraPosition = isCornerLBase ? [1.2, 1.95, 2.65] : [2.35, 2.05, 2.5];
+  const previewDepthCm = isCornerLBase
+    ? Math.max(input.depth, input.returnDepth)
+    : input.depth;
+  const selectedPart = result.parts.find((part) => part.id === selectedPartId);
+  const previewFootprint = formatPreviewFootprint(
+    input.width,
+    input.height,
+    previewDepthCm,
+  );
 
   return (
-    <div className="h-72 w-full overflow-hidden rounded-[1.25rem] border border-stone-200 bg-[radial-gradient(circle_at_top,_rgba(255,255,255,0.95),_rgba(233,225,212,0.92)_55%,_rgba(216,202,180,0.86)_100%)]">
+    <div className="group relative isolate h-80 w-full overflow-hidden rounded-[1.5rem] border border-stone-950/10 bg-[radial-gradient(circle_at_top,_rgba(255,252,248,0.98),_rgba(233,221,203,0.94)_52%,_rgba(205,181,146,0.9)_100%)] shadow-[0_28px_70px_-42px_rgba(74,48,18,0.55)]">
+      <div className="pointer-events-none absolute inset-x-4 top-4 z-10 flex flex-wrap items-start justify-between gap-3">
+        <div className="rounded-2xl border border-white/70 bg-white/78 px-3 py-2 shadow-[0_18px_45px_-32px_rgba(64,41,16,0.45)] backdrop-blur-sm">
+          <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-stone-500">
+            عرض الاستديو
+          </p>
+          <p className="mt-1 text-sm font-semibold text-stone-950">
+            {previewFootprint}
+          </p>
+          <p className="mt-1 text-[11px] text-stone-600">
+            {result.metrics.totalPanels} قطعة محسوبة داخل المشهد
+          </p>
+        </div>
+        <div className="rounded-2xl border border-stone-900/10 bg-stone-950/68 px-3 py-2 text-[11px] leading-5 text-white/90 shadow-[0_18px_45px_-32px_rgba(28,25,23,0.7)] backdrop-blur-sm">
+          <p>اسحب للتدوير، وعجلة الماوس للتقريب.</p>
+          <p>
+            {selectedPart
+              ? `القطعة المظللة الآن: ${selectedPart.name}`
+              : "اضغط على أي جزء من الجدول لتراجع تموضعه داخل الموديل."}
+          </p>
+        </div>
+      </div>
+      <div className="pointer-events-none absolute inset-x-0 top-0 z-[1] h-28 bg-[radial-gradient(circle_at_top,_rgba(255,255,255,0.55),_transparent_68%)]" />
+      <div className="pointer-events-none absolute inset-x-8 bottom-5 z-10 flex justify-end">
+        <div className="rounded-full border border-white/65 bg-white/76 px-3 py-1.5 text-[11px] font-medium text-stone-700 shadow-sm backdrop-blur-sm">
+          منظور أقرب وخلفية stage أوضح لقراءة الشكل بسرعة
+        </div>
+      </div>
       <Canvas
         camera={{
           position: cameraPosition as [number, number, number],
-          fov: isCornerLBase ? 32 : 35,
+          fov: isCornerLBase ? 30 : 33,
         }}
         shadows="basic"
         dpr={[1, 1.5]}
       >
-        <color attach="background" args={["#f4ede4"]} />
-        <fog attach="fog" args={["#f4ede4", 4.5, 8]} />
-        <ambientLight intensity={1.15} />
+        <color attach="background" args={["#eadbc6"]} />
+        <fog attach="fog" args={["#eadbc6", 3.6, 7.4]} />
+        <ambientLight intensity={1.22} />
         <hemisphereLight
-          intensity={0.55}
-          groundColor="#cabca8"
-          color="#fff8ee"
+          intensity={0.68}
+          groundColor="#b9a58c"
+          color="#fff6eb"
         />
         <directionalLight
           castShadow
-          intensity={1.5}
-          position={[4, 6, 5]}
+          intensity={1.8}
+          position={[3.8, 6.2, 4.5]}
           shadow-mapSize-width={1024}
           shadow-mapSize-height={1024}
         />
         <spotLight
-          intensity={0.8}
-          position={[-4, 5, 4]}
-          angle={0.35}
-          penumbra={0.8}
+          intensity={0.95}
+          position={[-3.2, 4.8, 3.8]}
+          angle={0.42}
+          penumbra={0.9}
         />
+        <pointLight
+          intensity={0.45}
+          position={[0, 1.8, -2.4]}
+          color="#ffe9c8"
+        />
+        <mesh
+          rotation={[-Math.PI / 2, 0, 0]}
+          position={[0, -0.502, 0]}
+          receiveShadow
+        >
+          <planeGeometry args={[7.4, 7.4]} />
+          <meshStandardMaterial
+            color="#f0e2cf"
+            roughness={0.98}
+            metalness={0.02}
+          />
+        </mesh>
+        <gridHelper
+          args={[5.8, 18, "#c89d63", "#e6d4bc"]}
+          position={[0, -0.495, 0]}
+        />
+        <mesh position={[0, 1.1, -1.85]} receiveShadow>
+          <planeGeometry args={[5.8, 2.8]} />
+          <meshStandardMaterial
+            color="#efe3d4"
+            roughness={1}
+            metalness={0.01}
+          />
+        </mesh>
         <group
           position={[previewOffsetX, -0.5, previewOffsetZ]}
           rotation={[0, previewRotationY, 0]}
@@ -911,9 +1088,11 @@ export function CabinetPreview({
           />
         </group>
         <OrbitControls
+          enableDamping
+          dampingFactor={0.08}
           enablePan={false}
-          minDistance={isCornerLBase ? 2.8 : 2.2}
-          maxDistance={isCornerLBase ? 7 : 6}
+          minDistance={isCornerLBase ? 2.2 : 1.9}
+          maxDistance={isCornerLBase ? 6.2 : 5.4}
           maxPolarAngle={isCornerLBase ? Math.PI / 1.95 : Math.PI / 2.05}
         />
       </Canvas>
@@ -927,6 +1106,7 @@ export function ProjectPreview({
   onUnitPositionChange,
   onCanvasReady,
 }: ProjectPreviewProps) {
+  const positionSnapCm = 10;
   const controlsRef = useRef<OrbitControlsImpl | null>(null);
   const sceneRef = useRef<Group | null>(null);
   const cameraRef = useRef<Camera | null>(null);
@@ -981,38 +1161,107 @@ export function ProjectPreview({
     return isQuarterTurn ? baseWidth / 100 : baseDepth / 100;
   }
 
-  const layoutWidth = units.reduce(
-    (max, unit) =>
-      Math.max(max, Math.abs(unit.basePosition[0]) * 2 + getPlanWidth(unit)),
-    0,
+  const activeUnit = units.find((unit) => unit.active) ?? units[0] ?? null;
+  const layoutBounds = units.reduce(
+    (bounds, unit) => {
+      const planWidth = getPlanWidth(unit);
+      const planDepth = getPlanDepth(unit);
+
+      return {
+        minX: Math.min(bounds.minX, unit.position[0] - planWidth / 2),
+        maxX: Math.max(bounds.maxX, unit.position[0] + planWidth / 2),
+        minZ: Math.min(bounds.minZ, unit.position[2] - planDepth / 2),
+        maxZ: Math.max(bounds.maxZ, unit.position[2] + planDepth / 2),
+      };
+    },
+    {
+      minX: Number.POSITIVE_INFINITY,
+      maxX: Number.NEGATIVE_INFINITY,
+      minZ: Number.POSITIVE_INFINITY,
+      maxZ: Number.NEGATIVE_INFINITY,
+    },
   );
-  const layoutDepth = units.reduce(
-    (max, unit) =>
-      Math.max(max, Math.abs(unit.basePosition[2]) * 2 + getPlanDepth(unit)),
-    0,
+  const anchorBounds = units.reduce(
+    (bounds, unit) => {
+      const planWidth = getPlanWidth(unit);
+      const planDepth = getPlanDepth(unit);
+
+      return {
+        minX: Math.min(bounds.minX, unit.basePosition[0] - planWidth / 2),
+        maxX: Math.max(bounds.maxX, unit.basePosition[0] + planWidth / 2),
+        minZ: Math.min(bounds.minZ, unit.basePosition[2] - planDepth / 2),
+        maxZ: Math.max(bounds.maxZ, unit.basePosition[2] + planDepth / 2),
+      };
+    },
+    {
+      minX: Number.POSITIVE_INFINITY,
+      maxX: Number.NEGATIVE_INFINITY,
+      minZ: Number.POSITIVE_INFINITY,
+      maxZ: Number.NEGATIVE_INFINITY,
+    },
   );
-  const sceneWidth = Math.max(8, layoutWidth + 2);
-  const sceneDepth = Math.max(6, layoutDepth + 2);
+  const safeLayoutBounds = Number.isFinite(layoutBounds.minX)
+    ? layoutBounds
+    : { minX: -0.6, maxX: 0.6, minZ: -0.6, maxZ: 0.6 };
+  const safeAnchorBounds = Number.isFinite(anchorBounds.minX)
+    ? anchorBounds
+    : { minX: -0.6, maxX: 0.6, minZ: -0.6, maxZ: 0.6 };
+
+  const layoutWidth = round2(safeLayoutBounds.maxX - safeLayoutBounds.minX);
+  const layoutDepth = round2(safeLayoutBounds.maxZ - safeLayoutBounds.minZ);
+  const sceneCenterX = round2(
+    (safeAnchorBounds.minX + safeAnchorBounds.maxX) / 2,
+  );
+  const sceneCenterZ = round2(
+    (safeAnchorBounds.minZ + safeAnchorBounds.maxZ) / 2,
+  );
+  const isSingleUnit = units.length === 1;
+  const farthestXFromCenter = Math.max(
+    Math.abs(safeLayoutBounds.minX - sceneCenterX),
+    Math.abs(safeLayoutBounds.maxX - sceneCenterX),
+  );
+  const farthestZFromCenter = Math.max(
+    Math.abs(safeLayoutBounds.minZ - sceneCenterZ),
+    Math.abs(safeLayoutBounds.maxZ - sceneCenterZ),
+  );
+  const sceneWidth = Math.max(
+    isSingleUnit ? 3.8 : 4.8,
+    round2(farthestXFromCenter * 2 + (isSingleUnit ? 1.8 : 2.4)),
+  );
+  const sceneDepth = Math.max(
+    isSingleUnit ? 3.4 : 4.4,
+    round2(farthestZFromCenter * 2 + (isSingleUnit ? 1.9 : 2.5)),
+  );
   const sceneHeight = Math.max(
-    4,
+    3.2,
     units.reduce(
       (max, unit) =>
         Math.max(max, unit.position[1] + unit.input.height / 100 + 0.8),
       0,
     ),
   );
-  const sceneSpan = Math.max(sceneWidth, sceneDepth, sceneHeight * 1.12);
-  const baseCameraDistance = Math.max(
-    6.5,
-    sceneSpan / (2 * Math.tan((34 * Math.PI) / 360)) + 1.6,
-  );
-  const minCameraDistance = Math.max(3.8, round2(baseCameraDistance * 0.52));
-  const maxCameraDistance = Math.max(12, round2(baseCameraDistance * 2.4));
-  const targetY = Math.max(0.95, round2(sceneHeight * 0.28));
-  const fogNear = Math.max(10, round2(baseCameraDistance * 0.95));
-  const fogFar = Math.max(fogNear + 16, round2(maxCameraDistance * 1.9));
+  const sceneSpan = Math.max(sceneWidth * 0.92, sceneDepth, sceneHeight * 1.04);
+  const baseCameraDistance = isSingleUnit
+    ? 4.35
+    : Math.max(6, round2(sceneSpan * 0.92 + 1.85));
+  const minCameraDistance = isSingleUnit
+    ? 2.45
+    : Math.max(3.6, round2(baseCameraDistance * 0.56));
+  const maxCameraDistance = isSingleUnit
+    ? 8.4
+    : Math.max(11.5, round2(baseCameraDistance * 2.05));
+  const targetY = Math.max(0.86, round2(sceneHeight * 0.32));
+  const fogNear = Math.max(7, round2(baseCameraDistance * 0.82));
+  const fogFar = Math.max(fogNear + 13, round2(maxCameraDistance * 1.7));
   const dragLimitX = Math.max(160, round2((layoutWidth * 100) / 2 + 60));
   const dragLimitZ = Math.max(160, round2((layoutDepth * 100) / 2 + 60));
+  const activeUnitFootprint = activeUnit
+    ? formatPreviewFootprint(
+        round2(getPlanWidth(activeUnit) * 100),
+        activeUnit.input.height,
+        round2(getPlanDepth(activeUnit) * 100),
+      )
+    : null;
 
   function getScenePointFromClient(
     clientX: number,
@@ -1091,12 +1340,18 @@ export function ProjectPreview({
       }
 
       const nextX = clamp(
-        (scenePoint.x - dragState.pointerOffsetX) * 100,
+        snapToStep(
+          (scenePoint.x - dragState.pointerOffsetX) * 100,
+          positionSnapCm,
+        ),
         -dragLimitX,
         dragLimitX,
       );
       const nextZ = clamp(
-        (scenePoint.z - dragState.pointerOffsetZ) * 100,
+        snapToStep(
+          (scenePoint.z - dragState.pointerOffsetZ) * 100,
+          positionSnapCm,
+        ),
         -dragLimitZ,
         dragLimitZ,
       );
@@ -1120,7 +1375,13 @@ export function ProjectPreview({
       window.removeEventListener("pointerup", handleWindowPointerUp);
       window.removeEventListener("pointercancel", handleWindowPointerUp);
     };
-  }, [dragLimitX, dragLimitZ, draggingUnitId, onUnitPositionChange]);
+  }, [
+    dragLimitX,
+    dragLimitZ,
+    draggingUnitId,
+    onUnitPositionChange,
+    positionSnapCm,
+  ]);
 
   useEffect(() => {
     onCanvasReady?.(canvasElementRef.current);
@@ -1140,10 +1401,12 @@ export function ProjectPreview({
 
     controls.target.set(0, targetY, 0);
     camera.position.set(
-      round2(baseCameraDistance * 0.72),
-      Math.max(3.1, round2(sceneHeight * 0.62 + 1.4)),
-      round2(baseCameraDistance * 0.92),
+      sceneCenterX + round2(baseCameraDistance * (isSingleUnit ? 0.54 : 0.68)),
+      Math.max(2.5, round2(sceneHeight * (isSingleUnit ? 0.48 : 0.62) + 0.95)),
+      sceneCenterZ + round2(baseCameraDistance * (isSingleUnit ? 0.66 : 0.88)),
     );
+
+    controls.target.set(sceneCenterX, targetY, sceneCenterZ);
 
     if (camera instanceof PerspectiveCamera) {
       camera.near = 0.1;
@@ -1154,15 +1417,29 @@ export function ProjectPreview({
     controls.minDistance = minCameraDistance;
     controls.maxDistance = maxCameraDistance;
     controls.update();
-  }, [baseCameraDistance, maxCameraDistance, minCameraDistance, sceneHeight, targetY, units.length]);
+  }, [
+    baseCameraDistance,
+    isSingleUnit,
+    maxCameraDistance,
+    minCameraDistance,
+    sceneCenterX,
+    sceneCenterZ,
+    sceneHeight,
+    targetY,
+    units.length,
+  ]);
 
   function startDraggingUnit(
     unit: ProjectPreviewProps["units"][number],
     clientX: number,
     clientY: number,
+    dragPlaneWorldY = unit.position[1] - 0.55,
   ) {
-    const worldY = unit.position[1] - 0.55;
-    const scenePoint = getScenePointFromClient(clientX, clientY, worldY);
+    const scenePoint = getScenePointFromClient(
+      clientX,
+      clientY,
+      dragPlaneWorldY,
+    );
 
     if (!scenePoint) {
       return;
@@ -1172,7 +1449,7 @@ export function ProjectPreview({
       unitId: unit.id,
       pointerOffsetX: scenePoint.x - unit.position[0],
       pointerOffsetZ: scenePoint.z - unit.position[2],
-      worldY,
+      worldY: dragPlaneWorldY,
     };
     setDraggingUnitId(unit.id);
 
@@ -1184,11 +1461,46 @@ export function ProjectPreview({
   return (
     <div
       className={cn(
-        "h-[34rem] w-full overflow-hidden rounded-[1.5rem] border border-stone-200 bg-[radial-gradient(circle_at_top,_rgba(255,255,255,0.96),_rgba(233,225,212,0.92)_58%,_rgba(216,202,180,0.9)_100%)] lg:h-[38rem]",
+        "group relative isolate h-[35rem] w-full overflow-hidden rounded-[1.75rem] border border-stone-950/10 bg-[radial-gradient(circle_at_top,_rgba(255,252,248,0.98),_rgba(233,220,201,0.94)_50%,_rgba(204,179,144,0.92)_100%)] shadow-[0_32px_90px_-46px_rgba(74,48,18,0.58)] lg:h-[40rem]",
         draggingUnitId ? "cursor-grabbing" : "cursor-grab",
       )}
       onContextMenu={(event) => event.preventDefault()}
     >
+      <div className="pointer-events-none absolute inset-x-5 top-5 z-10 flex flex-wrap items-start justify-between gap-3">
+        <div className="rounded-2xl border border-white/75 bg-white/78 px-3 py-2 shadow-[0_18px_45px_-32px_rgba(64,41,16,0.45)] backdrop-blur-sm">
+          <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-stone-500">
+            مسرح الترتيب
+          </p>
+          <p className="mt-1 text-sm font-semibold text-stone-950">
+            {units.length} وحدة داخل المشهد
+          </p>
+          <p className="mt-1 text-[11px] text-stone-600">
+            مجال العرض {formatPreviewDimension(sceneWidth * 100)} ×{" "}
+            {formatPreviewDimension(sceneDepth * 100)}
+          </p>
+        </div>
+        <div className="max-w-sm rounded-2xl border border-stone-900/10 bg-stone-950/70 px-3 py-2 text-[11px] leading-5 text-white/92 shadow-[0_18px_45px_-32px_rgba(28,25,23,0.7)] backdrop-blur-sm">
+          <p>حرّك الوحدة من مقبض السحب أسفلها بدل مسك جسم الدولاب نفسه.</p>
+          <p>أسهم الكيبورد = حركة 10 سم، و Shift + الأسهم = حركة دقيقة 1 سم.</p>
+          <p>زر الماوس اليمين = تدوير الكاميرا، وعجلة الماوس = تقريب وإبعاد.</p>
+        </div>
+      </div>
+      <div className="pointer-events-none absolute inset-x-7 bottom-5 z-10 flex flex-wrap items-end justify-between gap-3">
+        <div className="rounded-full border border-white/65 bg-white/76 px-3 py-1.5 text-[11px] font-medium text-stone-700 shadow-sm backdrop-blur-sm">
+          {draggingUnitId
+            ? `أنت الآن تحرك الوحدة داخل المسرح بخطوات ${positionSnapCm} سم`
+            : `الحركة الآن تمسك على شبكة ${positionSnapCm} سم لتفادي الاهتزاز والقفز`}
+        </div>
+        {activeUnit && activeUnitFootprint ? (
+          <div className="rounded-2xl border border-white/70 bg-white/80 px-3 py-2 text-right text-[11px] leading-5 text-stone-700 shadow-sm backdrop-blur-sm">
+            <p className="font-semibold text-stone-950">
+              الوحدة النشطة: {activeUnit.title}
+            </p>
+            <p>{activeUnitFootprint}</p>
+          </div>
+        ) : null}
+      </div>
+      <div className="pointer-events-none absolute inset-x-0 top-0 z-[1] h-36 bg-[radial-gradient(circle_at_top,_rgba(255,255,255,0.58),_transparent_68%)]" />
       <Canvas
         camera={{ position: [0, 3, 7.2], fov: 34 }}
         shadows="basic"
@@ -1200,38 +1512,102 @@ export function ProjectPreview({
           onCanvasReady?.(gl.domElement);
         }}
       >
-        <color attach="background" args={["#f4ede4"]} />
-        <fog attach="fog" args={["#f4ede4", fogNear, fogFar]} />
-        <ambientLight intensity={1.1} />
+        <color attach="background" args={["#e9dbc7"]} />
+        <fog attach="fog" args={["#e9dbc7", fogNear, fogFar]} />
+        <ambientLight intensity={1.18} />
         <hemisphereLight
-          intensity={0.55}
-          groundColor="#cabca8"
-          color="#fff8ee"
+          intensity={0.66}
+          groundColor="#bba78c"
+          color="#fff7ec"
         />
         <directionalLight
           castShadow
-          intensity={1.45}
-          position={[5, 7, 6]}
+          intensity={1.82}
+          position={[4.8, 7.2, 5.4]}
           shadow-mapSize-width={1024}
           shadow-mapSize-height={1024}
         />
         <spotLight
-          intensity={0.75}
-          position={[-4, 5, 5]}
-          angle={0.35}
-          penumbra={0.8}
+          intensity={0.95}
+          position={[-4.2, 5.4, 5.2]}
+          angle={0.42}
+          penumbra={0.9}
+        />
+        <pointLight
+          intensity={0.36}
+          position={[sceneCenterX, 2.2, sceneCenterZ - sceneDepth / 2]}
+          color="#ffe5bf"
         />
 
         <group ref={sceneRef} position={[0, -0.55, 0]}>
           <mesh
-            position={[0, sceneHeight / 2 - 0.2, -sceneDepth / 2 + 0.02]}
+            rotation={[-Math.PI / 2, 0, 0]}
+            position={[sceneCenterX, -0.004, sceneCenterZ]}
+            receiveShadow
+          >
+            <planeGeometry args={[sceneWidth + 1.4, sceneDepth + 1.4]} />
+            <meshStandardMaterial
+              color="#f0e3d1"
+              roughness={0.98}
+              metalness={0.02}
+            />
+          </mesh>
+          <gridHelper
+            args={[
+              Math.max(sceneWidth, sceneDepth) + 0.8,
+              Math.max(14, Math.round(Math.max(sceneWidth, sceneDepth) * 4)),
+              "#c79b61",
+              "#e6d6c1",
+            ]}
+            position={[sceneCenterX, 0.012, sceneCenterZ]}
+          />
+          <mesh
+            position={[
+              sceneCenterX,
+              sceneHeight / 2 - 0.2,
+              sceneCenterZ - sceneDepth / 2 + 0.02,
+            ]}
             receiveShadow
           >
             <planeGeometry args={[sceneWidth, sceneHeight]} />
             <meshStandardMaterial
-              color="#ece3d4"
-              roughness={0.95}
+              color="#eee4d6"
+              roughness={0.98}
               metalness={0.02}
+            />
+          </mesh>
+          <mesh
+            position={[
+              sceneCenterX - sceneWidth / 2 + 0.02,
+              sceneHeight / 2 - 0.2,
+              sceneCenterZ,
+            ]}
+            rotation={[0, Math.PI / 2, 0]}
+          >
+            <planeGeometry args={[sceneDepth, sceneHeight]} />
+            <meshStandardMaterial
+              color="#f4ecdf"
+              roughness={1}
+              metalness={0.01}
+              transparent
+              opacity={0.76}
+            />
+          </mesh>
+          <mesh
+            position={[
+              sceneCenterX + sceneWidth / 2 - 0.02,
+              sceneHeight / 2 - 0.2,
+              sceneCenterZ,
+            ]}
+            rotation={[0, -Math.PI / 2, 0]}
+          >
+            <planeGeometry args={[sceneDepth, sceneHeight]} />
+            <meshStandardMaterial
+              color="#f6efe5"
+              roughness={1}
+              metalness={0.01}
+              transparent
+              opacity={0.44}
             />
           </mesh>
 
@@ -1253,7 +1629,6 @@ export function ProjectPreview({
 
                   event.stopPropagation();
                   onSelectUnit?.(unit.id);
-                  startDraggingUnit(unit, event.clientX, event.clientY);
                 }}
               >
                 {isSelected ? (
@@ -1289,6 +1664,22 @@ export function ProjectPreview({
                       />
                     </mesh>
                     <AxisGuide planWidth={planWidth} planDepth={planDepth} />
+                    <DragHandle
+                      active={isSelected}
+                      dragging={draggingUnitId === unit.id}
+                      planWidth={planWidth}
+                      planDepth={planDepth}
+                      snapStepCm={positionSnapCm}
+                      onStartDrag={(clientX, clientY, dragPlaneWorldY) => {
+                        onSelectUnit?.(unit.id);
+                        startDraggingUnit(
+                          unit,
+                          clientX,
+                          clientY,
+                          dragPlaneWorldY ?? unit.position[1] - 0.49,
+                        );
+                      }}
+                    />
                   </>
                 ) : null}
                 <CabinetModel
@@ -1306,10 +1697,10 @@ export function ProjectPreview({
                 >
                   <div
                     className={cn(
-                      "select-none rounded-full border px-3 py-1 text-xs font-medium shadow-sm transition",
+                      "select-none rounded-full border px-3.5 py-1.5 text-xs font-medium shadow-sm backdrop-blur-sm transition",
                       unit.active
-                        ? "border-amber-300 bg-amber-50 text-amber-950 shadow-[0_0_0_4px_rgba(245,158,11,0.18)]"
-                        : "border-stone-200 bg-white/92 text-stone-800",
+                        ? "border-amber-300 bg-stone-950/82 text-white shadow-[0_0_0_4px_rgba(245,158,11,0.18)]"
+                        : "border-white/70 bg-white/80 text-stone-800",
                     )}
                     onPointerDown={(event) => {
                       if (event.button !== 0) {
@@ -1318,7 +1709,14 @@ export function ProjectPreview({
 
                       event.stopPropagation();
                       onSelectUnit?.(unit.id);
-                      startDraggingUnit(unit, event.clientX, event.clientY);
+                      startDraggingUnit(
+                        unit,
+                        event.clientX,
+                        event.clientY,
+                        unit.position[1] -
+                          0.55 +
+                          Math.min(unit.input.height / 200, 0.45),
+                      );
                     }}
                   >
                     {unit.title}
@@ -1330,11 +1728,11 @@ export function ProjectPreview({
 
           <mesh
             rotation={[-Math.PI / 2, 0, 0]}
-            position={[0, 0, 0]}
+            position={[sceneCenterX, 0, sceneCenterZ]}
             receiveShadow
           >
             <planeGeometry args={[sceneWidth, sceneDepth]} />
-            <shadowMaterial opacity={0.16} />
+            <shadowMaterial opacity={0.18} />
           </mesh>
         </group>
 
@@ -1342,10 +1740,11 @@ export function ProjectPreview({
           ref={controlsRef}
           enablePan={false}
           enableDamping
-          dampingFactor={0.08}
+          dampingFactor={0.09}
           minDistance={minCameraDistance}
           maxDistance={maxCameraDistance}
           maxPolarAngle={Math.PI / 2.05}
+          rotateSpeed={0.78}
           mouseButtons={{
             LEFT: MOUSE.PAN,
             MIDDLE: MOUSE.DOLLY,

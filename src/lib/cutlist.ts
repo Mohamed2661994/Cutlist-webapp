@@ -131,11 +131,14 @@ export type SheetStockSize = {
   width: number;
 };
 
+export type SheetLayoutOptimizationMode = "workshop" | "yield";
+
 export type SheetLayoutOptions = {
   boardStockSize?: SheetStockSize;
   backStockSize?: SheetStockSize;
   cutKerf?: number;
   trimMargin?: number;
+  optimizationMode?: SheetLayoutOptimizationMode;
 };
 
 export type SheetLayoutResult = {
@@ -908,6 +911,8 @@ function buildSingleStockSheets(
   const trimMargin = Math.max(layoutOptions.trimMargin ?? 0, 0);
   const boardLength = Math.max(stockSize.length - trimMargin * 2, 0);
   const boardWidth = Math.max(stockSize.width - trimMargin * 2, 0);
+  const optimizationMode = layoutOptions.optimizationMode ?? "workshop";
+  const prefersWorkshopSimplicity = optimizationMode === "workshop";
 
   function getAllowedOrientations(piece: FlatPiece) {
     if (!piece.allowRotation || piece.length === piece.width) {
@@ -1191,6 +1196,39 @@ function buildSingleStockSheets(
     );
   }
 
+  function getDistinctCutCoordinateCount(
+    sheet: InternalSheet,
+    axis: "x" | "y",
+  ) {
+    const usedSpan = axis === "x" ? getUsedLength(sheet) : getUsedWidth(sheet);
+    const sheetStart = trimMargin;
+    const sheetEnd = sheetStart + usedSpan;
+    const cutCoordinates = new Set<string>();
+
+    for (const piece of sheet.pieces) {
+      const start = axis === "x" ? piece.x : piece.y;
+      const end = axis === "x" ? piece.x + piece.length : piece.y + piece.width;
+
+      if (start > sheetStart && start < sheetEnd) {
+        cutCoordinates.add(start.toFixed(2));
+      }
+
+      if (end > sheetStart && end < sheetEnd) {
+        cutCoordinates.add(end.toFixed(2));
+      }
+    }
+
+    return cutCoordinates.size;
+  }
+
+  function getUnusedAreaTolerance(sheetCount: number) {
+    if (!prefersWorkshopSimplicity) {
+      return 0;
+    }
+
+    return sheetCount * Math.max(boardLength * boardWidth * 0.0025, 25);
+  }
+
   function scoreLayout(sheets: InternalSheet[]) {
     const totalBoundingArea = sheets.reduce(
       (sum, sheet) => sum + getUsedLength(sheet) * getUsedWidth(sheet),
@@ -1205,6 +1243,14 @@ function buildSingleStockSheets(
       (sum, sheet) => sum + getLargestFreeRectArea(sheet),
       0,
     );
+    const totalVerticalCuts = sheets.reduce(
+      (sum, sheet) => sum + getDistinctCutCoordinateCount(sheet, "x"),
+      0,
+    );
+    const totalHorizontalCuts = sheets.reduce(
+      (sum, sheet) => sum + getDistinctCutCoordinateCount(sheet, "y"),
+      0,
+    );
     const totalRows = sheets.reduce(
       (sum, sheet) => sum + getRowCount(sheet),
       0,
@@ -1215,6 +1261,8 @@ function buildSingleStockSheets(
       totalBoundingArea,
       totalUnusedInsideBounds,
       totalLargestReusableGap,
+      totalVerticalCuts,
+      totalHorizontalCuts,
       totalRows,
     };
   }
@@ -1269,28 +1317,93 @@ function buildSingleStockSheets(
     const leftScore = scoreLayout(left);
     const rightScore = scoreLayout(right);
 
-    return (
-      leftScore.sheetCount < rightScore.sheetCount ||
-      (leftScore.sheetCount === rightScore.sheetCount &&
-        leftScore.totalBoundingArea < rightScore.totalBoundingArea) ||
-      (leftScore.sheetCount === rightScore.sheetCount &&
-        leftScore.totalBoundingArea === rightScore.totalBoundingArea &&
-        leftScore.totalUnusedInsideBounds <
-          rightScore.totalUnusedInsideBounds) ||
-      (leftScore.sheetCount === rightScore.sheetCount &&
-        leftScore.totalBoundingArea === rightScore.totalBoundingArea &&
-        leftScore.totalUnusedInsideBounds ===
-          rightScore.totalUnusedInsideBounds &&
-        leftScore.totalLargestReusableGap >
-          rightScore.totalLargestReusableGap) ||
-      (leftScore.sheetCount === rightScore.sheetCount &&
-        leftScore.totalBoundingArea === rightScore.totalBoundingArea &&
-        leftScore.totalUnusedInsideBounds ===
-          rightScore.totalUnusedInsideBounds &&
-        leftScore.totalLargestReusableGap ===
-          rightScore.totalLargestReusableGap &&
-        leftScore.totalRows < rightScore.totalRows)
+    if (leftScore.sheetCount !== rightScore.sheetCount) {
+      return leftScore.sheetCount < rightScore.sheetCount;
+    }
+
+    if (leftScore.totalBoundingArea !== rightScore.totalBoundingArea) {
+      return leftScore.totalBoundingArea < rightScore.totalBoundingArea;
+    }
+
+    const unusedAreaDifference =
+      leftScore.totalUnusedInsideBounds - rightScore.totalUnusedInsideBounds;
+    const unusedAreaTolerance = getUnusedAreaTolerance(
+      Math.max(leftScore.sheetCount, rightScore.sheetCount),
     );
+    const hasMeaningfulWasteDifference =
+      Math.abs(unusedAreaDifference) > unusedAreaTolerance;
+
+    if (prefersWorkshopSimplicity) {
+      if (hasMeaningfulWasteDifference) {
+        return (
+          leftScore.totalUnusedInsideBounds < rightScore.totalUnusedInsideBounds
+        );
+      }
+
+      if (leftScore.totalVerticalCuts !== rightScore.totalVerticalCuts) {
+        return leftScore.totalVerticalCuts < rightScore.totalVerticalCuts;
+      }
+
+      if (leftScore.totalHorizontalCuts !== rightScore.totalHorizontalCuts) {
+        return leftScore.totalHorizontalCuts < rightScore.totalHorizontalCuts;
+      }
+
+      if (leftScore.totalRows !== rightScore.totalRows) {
+        return leftScore.totalRows < rightScore.totalRows;
+      }
+    }
+
+    if (
+      leftScore.totalUnusedInsideBounds !== rightScore.totalUnusedInsideBounds
+    ) {
+      return (
+        leftScore.totalUnusedInsideBounds < rightScore.totalUnusedInsideBounds
+      );
+    }
+
+    if (
+      leftScore.totalLargestReusableGap !== rightScore.totalLargestReusableGap
+    ) {
+      return (
+        leftScore.totalLargestReusableGap > rightScore.totalLargestReusableGap
+      );
+    }
+
+    if (leftScore.totalVerticalCuts !== rightScore.totalVerticalCuts) {
+      return leftScore.totalVerticalCuts < rightScore.totalVerticalCuts;
+    }
+
+    if (leftScore.totalHorizontalCuts !== rightScore.totalHorizontalCuts) {
+      return leftScore.totalHorizontalCuts < rightScore.totalHorizontalCuts;
+    }
+
+    if (leftScore.totalRows !== rightScore.totalRows) {
+      return leftScore.totalRows < rightScore.totalRows;
+    }
+
+    return false;
+  }
+
+  function buildCandidateLayouts(flatPieces: FlatPiece[]) {
+    if (optimizationMode === "yield") {
+      return [
+        packWithExactSheets(flatPieces),
+        packWithFreeRects(flatPieces, true),
+        packWithFreeRects(flatPieces),
+        packWithGuillotine(flatPieces, true),
+        packWithGuillotine(flatPieces),
+        packWithShelves(flatPieces),
+      ];
+    }
+
+    return [
+      packWithGuillotine(flatPieces, true),
+      packWithGuillotine(flatPieces),
+      packWithShelves(flatPieces),
+      packWithExactSheets(flatPieces),
+      packWithFreeRects(flatPieces, true),
+      packWithFreeRects(flatPieces),
+    ];
   }
 
   const pieceOrderings: Array<(piece: FlatPiece) => [number, number, number]> =
@@ -2237,7 +2350,11 @@ function buildSingleStockSheets(
       );
     });
 
-    for (let startIndex = 0; startIndex < sparseSheets.length; startIndex += 1) {
+    for (
+      let startIndex = 0;
+      startIndex < sparseSheets.length;
+      startIndex += 1
+    ) {
       const selectedSheets: InternalSheet[] = [];
       let totalPieces = 0;
 
@@ -2279,7 +2396,9 @@ function buildSingleStockSheets(
     const candidateLayouts: InternalSheet[][] = [];
 
     for (const sheetSubset of buildSparseSheetSubsetCandidates(layout)) {
-      const subsetSheetIndexes = new Set(sheetSubset.map((sheet) => sheet.index));
+      const subsetSheetIndexes = new Set(
+        sheetSubset.map((sheet) => sheet.index),
+      );
       const remainingSheets = layout
         .filter((sheet) => !subsetSheetIndexes.has(sheet.index))
         .map((sheet) => ({
@@ -2318,12 +2437,7 @@ function buildSingleStockSheets(
         continue;
       }
 
-      const subsetLayouts = [
-        packWithExactSheets(uniqueOrderedSubsetPieces),
-        packWithShelves(uniqueOrderedSubsetPieces),
-        packWithGuillotine(uniqueOrderedSubsetPieces, true),
-        packWithFreeRects(uniqueOrderedSubsetPieces, true),
-      ];
+      const subsetLayouts = buildCandidateLayouts(uniqueOrderedSubsetPieces);
 
       for (const subsetLayout of subsetLayouts) {
         if (!subsetLayout) {
@@ -2361,14 +2475,7 @@ function buildSingleStockSheets(
       const refinementOrderings = buildRefinementOrderings(refinedBest);
 
       for (const orderedPieces of refinementOrderings) {
-        const candidateLayouts = [
-          packWithGuillotine(orderedPieces),
-          packWithGuillotine(orderedPieces, true),
-          packWithFreeRects(orderedPieces),
-          packWithFreeRects(orderedPieces, true),
-          packWithShelves(orderedPieces),
-          packWithExactSheets(orderedPieces),
-        ];
+        const candidateLayouts = buildCandidateLayouts(orderedPieces);
 
         for (const candidateLayout of candidateLayouts) {
           if (!candidateLayout || !isLayoutValid(candidateLayout)) {
@@ -2382,7 +2489,9 @@ function buildSingleStockSheets(
         }
       }
 
-      for (const candidateLayout of buildSparseSheetRefinementLayouts(refinedBest)) {
+      for (const candidateLayout of buildSparseSheetRefinementLayouts(
+        refinedBest,
+      )) {
         if (isBetterLayout(candidateLayout, refinedBest)) {
           refinedBest = cloneSheets(candidateLayout);
           changed = true;
@@ -2397,14 +2506,7 @@ function buildSingleStockSheets(
 
   for (const getOrderingKey of pieceOrderings) {
     const orderedPieces = getOrderedPieces(getOrderingKey);
-    const candidateLayouts = [
-      packWithGuillotine(orderedPieces),
-      packWithGuillotine(orderedPieces, true),
-      packWithFreeRects(orderedPieces),
-      packWithFreeRects(orderedPieces, true),
-      packWithShelves(orderedPieces),
-      packWithExactSheets(orderedPieces),
-    ];
+    const candidateLayouts = buildCandidateLayouts(orderedPieces);
 
     for (const candidateLayout of candidateLayouts) {
       if (!candidateLayout || !isLayoutValid(candidateLayout)) {
