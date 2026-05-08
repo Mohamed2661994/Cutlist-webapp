@@ -2305,8 +2305,10 @@ function getSheetPieceDimensionTexts(
   }
 
   const displayPiece = pieceLabel.displayPiece;
-  const topValue = piece.rotated ? piece.width : piece.length;
-  const sideValue = piece.rotated ? piece.length : piece.width;
+  const logicalTopValue = piece.rotated ? piece.width : piece.length;
+  const logicalSideValue = piece.rotated ? piece.length : piece.width;
+  const topValue = isSheetRotated ? logicalSideValue : logicalTopValue;
+  const sideValue = isSheetRotated ? logicalTopValue : logicalSideValue;
   const topBaseFontSize =
     pieceLabel.mode === "full"
       ? clampSheetLabelFontSize(
@@ -5697,15 +5699,6 @@ function App() {
                   type="button"
                   variant="outline"
                   className="rounded-full bg-white/82"
-                  onClick={() => setActiveWorkspaceTab("preview")}
-                >
-                  <PanelsTopLeft className="size-4" />
-                  فتح الدلف
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="rounded-full bg-white/82"
                   onClick={printProjectPreviewSnapshot}
                   disabled={projectPreviewUnits.length === 0}
                 >
@@ -5782,15 +5775,6 @@ function App() {
                   >
                     <PanelsTopLeft className="size-4" />
                     مسرح 3D مباشر
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    className="rounded-full bg-white/82"
-                    onClick={() => setActiveWorkspaceTab("preview")}
-                  >
-                    <PanelsTopLeft className="size-4" />
-                    فتح الدلف
                   </Button>
                   <Button
                     type="button"
@@ -5917,15 +5901,21 @@ function App() {
         <section className="mt-4 xl:hidden">
           <Card className="border-0 bg-white/88 shadow-[0_20px_56px_-40px_rgba(20,27,33,0.24)] ring-1 ring-slate-900/5">
             <CardContent className="space-y-4 p-4">
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-slate-500">
-                    Stage + Drawer
-                  </p>
-                  <p className="mt-2 text-lg font-semibold text-slate-950">
-                    {dashboardFocusTitle}
-                  </p>
-                  <p className="mt-1 text-xs leading-6 text-slate-600">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Badge
+                      variant="outline"
+                      className="flex items-center gap-1.5 border-slate-200 bg-white/85 text-slate-700"
+                    >
+                      <ActiveWorkspaceIcon className="size-3.5" />
+                      {dashboardFocusTitle}
+                    </Badge>
+                    <span className="text-[11px] text-slate-500">
+                      {stageDrawerSceneStatusLabel}
+                    </span>
+                  </div>
+                  <p className="mt-3 text-xs leading-6 text-slate-600">
                     {dashboardFocusDescription}
                   </p>
                 </div>
@@ -6013,21 +6003,23 @@ function App() {
                   </div>
                 </div>
 
-                <div className="mt-3 grid grid-cols-2 gap-2">
-                  {dashboardTopMetrics.slice(0, 2).map((metric) => (
-                    <div
-                      key={metric.label}
-                      className="rounded-[1rem] border border-slate-200/80 bg-white/82 p-3"
-                    >
-                      <p className="text-[11px] text-slate-500">
-                        {metric.label}
-                      </p>
-                      <p className="mt-2 text-lg font-semibold text-slate-950">
-                        {metric.value}
-                      </p>
-                    </div>
-                  ))}
-                </div>
+                {activeWorkspaceTab !== "results" ? (
+                  <div className="mt-3 grid grid-cols-2 gap-2">
+                    {dashboardTopMetrics.slice(0, 2).map((metric) => (
+                      <div
+                        key={metric.label}
+                        className="rounded-[1rem] border border-slate-200/80 bg-white/82 p-3"
+                      >
+                        <p className="text-[11px] text-slate-500">
+                          {metric.label}
+                        </p>
+                        <p className="mt-2 text-lg font-semibold text-slate-950">
+                          {metric.value}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
               </div>
 
               <details className="rounded-[1.35rem] border border-slate-200 bg-slate-50/80 p-4">
