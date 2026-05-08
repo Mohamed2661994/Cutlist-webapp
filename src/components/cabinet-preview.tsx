@@ -87,6 +87,51 @@ const axisIndex = {
   z: 2,
 } as const;
 
+const previewPalette = {
+  highlight: "#a9bfcb",
+  highlightEmissive: "#35515f",
+  grain: "#5b7483",
+  axisX: "#6f8c9c",
+  axisZ: "#4a6572",
+  handleIdle: "#162026",
+  handleActive: "#5b8699",
+  handleEmissive: "#35515f",
+  handleRingIdle: "#6f8c9c",
+  handleRingActive: "#adc2cd",
+  handleCore: "#f4f8f8",
+  sceneBackground: "#dbe7ea",
+  sceneFog: "#dbe7ea",
+  sceneGroundLight: "#7f99a8",
+  sceneSkyLight: "#f7fafb",
+  scenePointLight: "#a2bdca",
+  sceneFloor: "#edf3f4",
+  sceneWall: "#e6edef",
+  sceneWallSoft: "#f3f7f8",
+  sceneWallGhost: "#f7fafb",
+  sceneGridStrong: "#7e98a8",
+  sceneGridSoft: "#d7e1e6",
+  selectionFill: "#a1b8c5",
+  selectionRing: "#4a6572",
+} as const;
+
+const previewPanelColorMap: Record<string, string> = {
+  "#a07751": "#617c8d",
+  "#b88d60": "#7b95a5",
+  "#8b6a49": "#435b69",
+  "#8093a1": "#8ea9b8",
+  "#d8bd87": "#bccdd6",
+  "#cf9860": "#678391",
+  "#c98952": "#587483",
+  "#bca16e": "#8ca5b4",
+  "#6c7d89": "#708999",
+  "#70553a": "#344954",
+  "#b8824a": "#516d7d",
+};
+
+function resolvePreviewPanelColor(color: string) {
+  return previewPanelColorMap[color.toLowerCase()] ?? color;
+}
+
 function clamp(value: number, min: number, max: number) {
   return Math.min(Math.max(value, min), max);
 }
@@ -185,8 +230,12 @@ function Panel({
         <mesh castShadow receiveShadow>
           <boxGeometry args={size} />
           <meshStandardMaterial
-            color={highlighted ? "#f1c27d" : color}
-            emissive={highlighted ? "#5b3510" : "#000000"}
+            color={
+              highlighted
+                ? previewPalette.highlight
+                : resolvePreviewPanelColor(color)
+            }
+            emissive={highlighted ? previewPalette.highlightEmissive : "#000000"}
             emissiveIntensity={highlighted ? 0.5 : 0}
             roughness={0.55}
             metalness={0.05}
@@ -198,11 +247,19 @@ function Panel({
           <group key={line.key}>
             <mesh position={line.frontPosition}>
               <boxGeometry args={line.size} />
-              <meshBasicMaterial color="#6f4c2f" transparent opacity={0.28} />
+              <meshBasicMaterial
+                color={previewPalette.grain}
+                transparent
+                opacity={0.28}
+              />
             </mesh>
             <mesh position={line.backPosition}>
               <boxGeometry args={line.size} />
-              <meshBasicMaterial color="#6f4c2f" transparent opacity={0.18} />
+              <meshBasicMaterial
+                color={previewPalette.grain}
+                transparent
+                opacity={0.18}
+              />
             </mesh>
           </group>
         ))}
@@ -220,7 +277,7 @@ function Panel({
           sprite
           occlude
         >
-          <div className="min-w-16 rounded-md border border-stone-200/80 bg-white/92 px-2 py-1 text-center text-[10px] leading-4 text-stone-900 shadow-sm">
+          <div className="min-w-16 rounded-md border border-slate-200/80 bg-white/92 px-2 py-1 text-center text-[10px] leading-4 text-slate-900 shadow-sm">
             {label}
           </div>
         </Html>
@@ -311,8 +368,8 @@ function DoorToggleButton({ position, open, onToggle }: DoorToggleButtonProps) {
         className={cn(
           "pointer-events-auto flex h-9 w-9 items-center justify-center rounded-full border shadow-[0_12px_30px_-22px_rgba(28,25,23,0.8)] backdrop-blur-sm transition",
           open
-            ? "border-amber-300 bg-stone-950/88 text-amber-100"
-            : "border-white/80 bg-white/88 text-stone-800",
+            ? "border-slate-200 bg-slate-950/88 text-slate-100"
+            : "border-white/80 bg-white/88 text-slate-800",
         )}
         aria-label={open ? "إغلاق الدلف" : "فتح الدلف"}
         title={open ? "إغلاق الدلف" : "فتح الدلف"}
@@ -356,57 +413,57 @@ function AxisGuide({ planWidth, planDepth }: AxisGuideProps) {
     <group position={[0, 0.016, 0]}>
       <mesh position={[arrowLengthX / 2, 0, 0]}>
         <boxGeometry args={[arrowLengthX, 0.012, 0.016]} />
-        <meshBasicMaterial color="#d97706" transparent opacity={0.92} />
+        <meshBasicMaterial color={previewPalette.axisX} transparent opacity={0.92} />
       </mesh>
       <mesh
         position={[arrowLengthX + 0.06, 0, 0]}
         rotation={[0, 0, -Math.PI / 2]}
       >
         <coneGeometry args={[0.032, 0.09, 18]} />
-        <meshBasicMaterial color="#d97706" />
+        <meshBasicMaterial color={previewPalette.axisX} />
       </mesh>
       <mesh position={[-arrowLengthX / 2, 0, 0]}>
         <boxGeometry args={[arrowLengthX, 0.012, 0.016]} />
-        <meshBasicMaterial color="#d97706" transparent opacity={0.45} />
+        <meshBasicMaterial color={previewPalette.axisX} transparent opacity={0.45} />
       </mesh>
       <mesh
         position={[-arrowLengthX - 0.06, 0, 0]}
         rotation={[0, 0, Math.PI / 2]}
       >
         <coneGeometry args={[0.028, 0.08, 18]} />
-        <meshBasicMaterial color="#d97706" transparent opacity={0.55} />
+        <meshBasicMaterial color={previewPalette.axisX} transparent opacity={0.55} />
       </mesh>
 
       <mesh position={[0, 0, arrowLengthZ / 2]} rotation={[0, Math.PI / 2, 0]}>
         <boxGeometry args={[arrowLengthZ, 0.012, 0.016]} />
-        <meshBasicMaterial color="#0891b2" transparent opacity={0.92} />
+        <meshBasicMaterial color={previewPalette.axisZ} transparent opacity={0.92} />
       </mesh>
       <mesh
         position={[0, 0, arrowLengthZ + 0.06]}
         rotation={[Math.PI / 2, 0, 0]}
       >
         <coneGeometry args={[0.032, 0.09, 18]} />
-        <meshBasicMaterial color="#0891b2" />
+        <meshBasicMaterial color={previewPalette.axisZ} />
       </mesh>
       <mesh position={[0, 0, -arrowLengthZ / 2]} rotation={[0, Math.PI / 2, 0]}>
         <boxGeometry args={[arrowLengthZ, 0.012, 0.016]} />
-        <meshBasicMaterial color="#0891b2" transparent opacity={0.45} />
+        <meshBasicMaterial color={previewPalette.axisZ} transparent opacity={0.45} />
       </mesh>
       <mesh
         position={[0, 0, -arrowLengthZ - 0.06]}
         rotation={[-Math.PI / 2, 0, 0]}
       >
         <coneGeometry args={[0.028, 0.08, 18]} />
-        <meshBasicMaterial color="#0891b2" transparent opacity={0.55} />
+        <meshBasicMaterial color={previewPalette.axisZ} transparent opacity={0.55} />
       </mesh>
 
       <Html position={[arrowLengthX + 0.17, 0.02, 0]} center transform sprite>
-        <div className="rounded-full border border-amber-200/90 bg-amber-50/95 px-2 py-1 text-[10px] font-medium text-amber-950 shadow-sm">
+        <div className="rounded-full border border-slate-200/90 bg-slate-50/95 px-2 py-1 text-[10px] font-medium text-slate-900 shadow-sm">
           جانبي
         </div>
       </Html>
       <Html position={[0, 0.02, arrowLengthZ + 0.18]} center transform sprite>
-        <div className="rounded-full border border-cyan-200/90 bg-cyan-50/95 px-2 py-1 text-[10px] font-medium text-cyan-950 shadow-sm">
+        <div className="rounded-full border border-slate-300/90 bg-slate-100/95 px-2 py-1 text-[10px] font-medium text-slate-900 shadow-sm">
           عمق
         </div>
       </Html>
@@ -456,8 +513,8 @@ function DragHandle({
       >
         <circleGeometry args={[handleRadius, 40]} />
         <meshStandardMaterial
-          color={dragging ? "#f59e0b" : "#111827"}
-          emissive={dragging ? "#7c2d12" : "#000000"}
+          color={dragging ? previewPalette.handleActive : previewPalette.handleIdle}
+          emissive={dragging ? previewPalette.handleEmissive : "#000000"}
           emissiveIntensity={dragging ? 0.22 : 0}
           transparent
           opacity={0.88}
@@ -468,7 +525,9 @@ function DragHandle({
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.014, 0]}>
         <ringGeometry args={[handleRadius * 1.15, handleRadius * 1.34, 48]} />
         <meshBasicMaterial
-          color={dragging ? "#fbbf24" : "#f59e0b"}
+          color={
+            dragging ? previewPalette.handleRingActive : previewPalette.handleRingIdle
+          }
           transparent
           opacity={dragging ? 0.72 : 0.48}
         />
@@ -476,7 +535,7 @@ function DragHandle({
       <mesh position={[0, 0.012, 0]}>
         <sphereGeometry args={[handleRadius * 0.26, 20, 20]} />
         <meshStandardMaterial
-          color="#fff7ed"
+          color={previewPalette.handleCore}
           roughness={0.18}
           metalness={0.2}
         />
@@ -487,8 +546,8 @@ function DragHandle({
           className={cn(
             "select-none rounded-full border px-3 py-1.5 text-[11px] font-medium shadow-sm backdrop-blur-sm transition",
             dragging
-              ? "border-amber-200 bg-amber-400/95 text-stone-950"
-              : "border-stone-900/10 bg-white/88 text-stone-800",
+              ? "border-slate-200 bg-slate-300/95 text-slate-950"
+              : "border-slate-900/10 bg-white/88 text-slate-800",
           )}
           onPointerDown={(event) => {
             if (event.button !== 0) {
@@ -1169,20 +1228,20 @@ export function CabinetPreview({
   );
 
   return (
-    <div className="group relative isolate h-80 w-full overflow-hidden rounded-[1.5rem] border border-stone-950/10 bg-[radial-gradient(circle_at_top,_rgba(255,252,248,0.98),_rgba(233,221,203,0.94)_52%,_rgba(205,181,146,0.9)_100%)] shadow-[0_28px_70px_-42px_rgba(74,48,18,0.55)]">
+    <div className="group relative isolate h-80 w-full overflow-hidden rounded-[1.5rem] border border-slate-950/10 bg-[radial-gradient(circle_at_top,_rgba(255,255,255,0.8),_rgba(228,237,241,0.96)_52%,_rgba(210,222,228,0.98)_100%)] shadow-[0_28px_70px_-42px_rgba(26,42,51,0.36)]">
       <div className="pointer-events-none absolute inset-x-4 top-4 z-10 flex flex-wrap items-start justify-between gap-3">
-        <div className="rounded-2xl border border-white/70 bg-white/78 px-3 py-2 shadow-[0_18px_45px_-32px_rgba(64,41,16,0.45)] backdrop-blur-sm">
-          <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-stone-500">
+        <div className="rounded-2xl border border-white/70 bg-white/78 px-3 py-2 shadow-[0_18px_45px_-32px_rgba(26,42,51,0.26)] backdrop-blur-sm">
+          <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-slate-500">
             عرض الاستديو
           </p>
-          <p className="mt-1 text-sm font-semibold text-stone-950">
+          <p className="mt-1 text-sm font-semibold text-slate-950">
             {previewFootprint}
           </p>
-          <p className="mt-1 text-[11px] text-stone-600">
+          <p className="mt-1 text-[11px] text-slate-600">
             {result.metrics.totalPanels} قطعة محسوبة داخل المشهد
           </p>
         </div>
-        <div className="rounded-2xl border border-stone-900/10 bg-stone-950/68 px-3 py-2 text-[11px] leading-5 text-white/90 shadow-[0_18px_45px_-32px_rgba(28,25,23,0.7)] backdrop-blur-sm">
+        <div className="rounded-2xl border border-slate-900/10 bg-slate-950/68 px-3 py-2 text-[11px] leading-5 text-white/90 shadow-[0_18px_45px_-32px_rgba(28,25,23,0.7)] backdrop-blur-sm">
           <p>اسحب للتدوير، وعجلة الماوس للتقريب.</p>
           <p>
             {selectedPart
@@ -1193,7 +1252,7 @@ export function CabinetPreview({
       </div>
       <div className="pointer-events-none absolute inset-x-0 top-0 z-[1] h-28 bg-[radial-gradient(circle_at_top,_rgba(255,255,255,0.55),_transparent_68%)]" />
       <div className="pointer-events-none absolute inset-x-8 bottom-5 z-10 flex justify-end">
-        <div className="rounded-full border border-white/65 bg-white/76 px-3 py-1.5 text-[11px] font-medium text-stone-700 shadow-sm backdrop-blur-sm">
+        <div className="rounded-full border border-white/65 bg-white/76 px-3 py-1.5 text-[11px] font-medium text-slate-700 shadow-sm backdrop-blur-sm">
           منظور أقرب وخلفية stage أوضح لقراءة الشكل بسرعة
         </div>
       </div>
@@ -1205,13 +1264,13 @@ export function CabinetPreview({
         shadows="basic"
         dpr={[1, 1.5]}
       >
-        <color attach="background" args={["#eadbc6"]} />
-        <fog attach="fog" args={["#eadbc6", 3.6, 7.4]} />
+        <color attach="background" args={[previewPalette.sceneBackground]} />
+        <fog attach="fog" args={[previewPalette.sceneFog, 3.6, 7.4]} />
         <ambientLight intensity={1.22} />
         <hemisphereLight
           intensity={0.68}
-          groundColor="#b9a58c"
-          color="#fff6eb"
+          groundColor={previewPalette.sceneGroundLight}
+          color={previewPalette.sceneSkyLight}
         />
         <directionalLight
           castShadow
@@ -1229,7 +1288,7 @@ export function CabinetPreview({
         <pointLight
           intensity={0.45}
           position={[0, 1.8, -2.4]}
-          color="#ffe9c8"
+          color={previewPalette.scenePointLight}
         />
         <mesh
           rotation={[-Math.PI / 2, 0, 0]}
@@ -1238,19 +1297,19 @@ export function CabinetPreview({
         >
           <planeGeometry args={[7.4, 7.4]} />
           <meshStandardMaterial
-            color="#f0e2cf"
+            color={previewPalette.sceneFloor}
             roughness={0.98}
             metalness={0.02}
           />
         </mesh>
         <gridHelper
-          args={[5.8, 18, "#c89d63", "#e6d4bc"]}
+          args={[5.8, 18, previewPalette.sceneGridStrong, previewPalette.sceneGridSoft]}
           position={[0, -0.495, 0]}
         />
         <mesh position={[0, 1.1, -1.85]} receiveShadow>
           <planeGeometry args={[5.8, 2.8]} />
           <meshStandardMaterial
-            color="#efe3d4"
+            color={previewPalette.sceneWall}
             roughness={1}
             metalness={0.01}
           />
@@ -1653,39 +1712,39 @@ export function ProjectPreview({
   return (
     <div
       className={cn(
-        "group relative isolate h-[35rem] w-full overflow-hidden rounded-[1.75rem] border border-stone-950/10 bg-[radial-gradient(circle_at_top,_rgba(255,252,248,0.98),_rgba(233,220,201,0.94)_50%,_rgba(204,179,144,0.92)_100%)] shadow-[0_32px_90px_-46px_rgba(74,48,18,0.58)] lg:h-[40rem]",
+        "group relative isolate h-[35rem] w-full overflow-hidden rounded-[1.75rem] border border-slate-950/10 bg-[radial-gradient(circle_at_top,_rgba(255,255,255,0.82),_rgba(228,237,241,0.96)_50%,_rgba(209,222,228,0.98)_100%)] shadow-[0_32px_90px_-46px_rgba(26,42,51,0.38)] lg:h-[40rem]",
         draggingUnitId ? "cursor-grabbing" : "cursor-grab",
       )}
       onContextMenu={(event) => event.preventDefault()}
     >
       <div className="pointer-events-none absolute inset-x-5 top-5 z-10 flex flex-wrap items-start justify-between gap-3">
-        <div className="rounded-2xl border border-white/75 bg-white/78 px-3 py-2 shadow-[0_18px_45px_-32px_rgba(64,41,16,0.45)] backdrop-blur-sm">
-          <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-stone-500">
+        <div className="rounded-2xl border border-white/75 bg-white/78 px-3 py-2 shadow-[0_18px_45px_-32px_rgba(26,42,51,0.26)] backdrop-blur-sm">
+          <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-slate-500">
             مسرح الترتيب
           </p>
-          <p className="mt-1 text-sm font-semibold text-stone-950">
+          <p className="mt-1 text-sm font-semibold text-slate-950">
             {units.length} وحدة داخل المشهد
           </p>
-          <p className="mt-1 text-[11px] text-stone-600">
+          <p className="mt-1 text-[11px] text-slate-600">
             مجال العرض {formatPreviewDimension(sceneWidth * 100)} ×{" "}
             {formatPreviewDimension(sceneDepth * 100)}
           </p>
         </div>
-        <div className="max-w-sm rounded-2xl border border-stone-900/10 bg-stone-950/70 px-3 py-2 text-[11px] leading-5 text-white/92 shadow-[0_18px_45px_-32px_rgba(28,25,23,0.7)] backdrop-blur-sm">
+        <div className="max-w-sm rounded-2xl border border-slate-900/10 bg-slate-950/70 px-3 py-2 text-[11px] leading-5 text-white/92 shadow-[0_18px_45px_-32px_rgba(28,25,23,0.7)] backdrop-blur-sm">
           <p>يمكنك سحب الوحدة من جسمها مباشرة أو من مقبض السحب أسفلها.</p>
           <p>أسهم الكيبورد = حركة 10 سم، و Shift + الأسهم = حركة دقيقة 1 سم.</p>
           <p>اسحب بالماوس على المساحة الفارغة لتدوير الكاميرا، وعجلة الماوس = تقريب وإبعاد.</p>
         </div>
       </div>
       <div className="pointer-events-none absolute inset-x-7 bottom-5 z-10 flex flex-wrap items-end justify-between gap-3">
-        <div className="rounded-full border border-white/65 bg-white/76 px-3 py-1.5 text-[11px] font-medium text-stone-700 shadow-sm backdrop-blur-sm">
+        <div className="rounded-full border border-white/65 bg-white/76 px-3 py-1.5 text-[11px] font-medium text-slate-700 shadow-sm backdrop-blur-sm">
           {draggingUnitId
             ? `أنت الآن تحرك الوحدة داخل المسرح بخطوات ${positionSnapCm} سم`
             : `الحركة الآن تمسك على شبكة ${positionSnapCm} سم لتفادي الاهتزاز والقفز`}
         </div>
         {activeUnit && activeUnitFootprint ? (
-          <div className="rounded-2xl border border-white/70 bg-white/80 px-3 py-2 text-right text-[11px] leading-5 text-stone-700 shadow-sm backdrop-blur-sm">
-            <p className="font-semibold text-stone-950">
+          <div className="rounded-2xl border border-white/70 bg-white/80 px-3 py-2 text-right text-[11px] leading-5 text-slate-700 shadow-sm backdrop-blur-sm">
+            <p className="font-semibold text-slate-950">
               الوحدة النشطة: {activeUnit.title}
             </p>
             <p>{activeUnitFootprint}</p>
@@ -1704,13 +1763,13 @@ export function ProjectPreview({
           onCanvasReady?.(gl.domElement);
         }}
       >
-        <color attach="background" args={["#e9dbc7"]} />
-        <fog attach="fog" args={["#e9dbc7", fogNear, fogFar]} />
+        <color attach="background" args={[previewPalette.sceneBackground]} />
+        <fog attach="fog" args={[previewPalette.sceneFog, fogNear, fogFar]} />
         <ambientLight intensity={1.18} />
         <hemisphereLight
           intensity={0.66}
-          groundColor="#bba78c"
-          color="#fff7ec"
+          groundColor={previewPalette.sceneGroundLight}
+          color={previewPalette.sceneSkyLight}
         />
         <directionalLight
           castShadow
@@ -1728,7 +1787,7 @@ export function ProjectPreview({
         <pointLight
           intensity={0.36}
           position={[sceneCenterX, 2.2, sceneCenterZ - sceneDepth / 2]}
-          color="#ffe5bf"
+          color={previewPalette.scenePointLight}
         />
 
         <group ref={sceneRef} position={[0, -0.55, 0]}>
@@ -1739,7 +1798,7 @@ export function ProjectPreview({
           >
             <planeGeometry args={[sceneWidth + 1.4, sceneDepth + 1.4]} />
             <meshStandardMaterial
-              color="#f0e3d1"
+              color={previewPalette.sceneFloor}
               roughness={0.98}
               metalness={0.02}
             />
@@ -1748,8 +1807,8 @@ export function ProjectPreview({
             args={[
               Math.max(sceneWidth, sceneDepth) + 0.8,
               Math.max(14, Math.round(Math.max(sceneWidth, sceneDepth) * 4)),
-              "#c79b61",
-              "#e6d6c1",
+              previewPalette.sceneGridStrong,
+              previewPalette.sceneGridSoft,
             ]}
             position={[sceneCenterX, 0.012, sceneCenterZ]}
           />
@@ -1763,7 +1822,7 @@ export function ProjectPreview({
           >
             <planeGeometry args={[sceneWidth, sceneHeight]} />
             <meshStandardMaterial
-              color="#eee4d6"
+              color={previewPalette.sceneWall}
               roughness={0.98}
               metalness={0.02}
             />
@@ -1778,7 +1837,7 @@ export function ProjectPreview({
           >
             <planeGeometry args={[sceneDepth, sceneHeight]} />
             <meshStandardMaterial
-              color="#f4ecdf"
+              color={previewPalette.sceneWallSoft}
               roughness={1}
               metalness={0.01}
               transparent
@@ -1795,7 +1854,7 @@ export function ProjectPreview({
           >
             <planeGeometry args={[sceneDepth, sceneHeight]} />
             <meshStandardMaterial
-              color="#f6efe5"
+              color={previewPalette.sceneWallGhost}
               roughness={1}
               metalness={0.01}
               transparent
@@ -1835,7 +1894,7 @@ export function ProjectPreview({
                         args={[planWidth + 0.18, planDepth + 0.18]}
                       />
                       <meshBasicMaterial
-                        color="#f1b24a"
+                        color={previewPalette.selectionFill}
                         transparent
                         opacity={0.16}
                       />
@@ -1852,7 +1911,7 @@ export function ProjectPreview({
                         ]}
                       />
                       <meshBasicMaterial
-                        color="#c9801f"
+                        color={previewPalette.selectionRing}
                         transparent
                         opacity={0.18}
                       />
@@ -1896,8 +1955,8 @@ export function ProjectPreview({
                     className={cn(
                       "select-none rounded-full border px-3.5 py-1.5 text-xs font-medium shadow-sm backdrop-blur-sm transition",
                       unit.active
-                        ? "border-amber-300 bg-stone-950/82 text-white shadow-[0_0_0_4px_rgba(245,158,11,0.18)]"
-                        : "border-white/70 bg-white/80 text-stone-800",
+                        ? "border-slate-200 bg-slate-950/82 text-white shadow-[0_0_0_4px_rgba(245,158,11,0.18)]"
+                        : "border-white/70 bg-white/80 text-slate-800",
                     )}
                     onPointerDown={(event) => {
                       if (event.button !== 0) {

@@ -43,40 +43,40 @@ export function UserAuthPanel({
   return (
     <main
       dir="rtl"
-      className="min-h-screen bg-[radial-gradient(circle_at_top,rgba(119,78,31,0.16),transparent_36%),linear-gradient(180deg,#f7f3ed_0%,#efe6da_45%,#f8f5ef_100%)] px-4 py-10 text-stone-950 sm:px-6 lg:px-10"
+      className="min-h-screen bg-[radial-gradient(circle_at_top,rgba(112,154,169,0.18),transparent_36%),linear-gradient(180deg,#eef3f4_0%,#e4ebea_45%,#eef3f4_100%)] px-4 py-10 text-slate-950 sm:px-6 lg:px-10"
     >
       <div className="mx-auto grid max-w-6xl gap-6 lg:grid-cols-[minmax(0,1.15fr)_minmax(24rem,0.85fr)] lg:items-center">
-        <Card className="border-stone-200/80 bg-white/88 shadow-[0_32px_90px_-48px_rgba(63,40,12,0.48)] backdrop-blur-sm">
+        <Card className="border-slate-200/80 bg-white/88 shadow-[0_32px_90px_-48px_rgba(24,32,40,0.48)] backdrop-blur-sm">
           <CardHeader className="space-y-4">
-            <div className="inline-flex size-12 items-center justify-center rounded-2xl bg-stone-900 text-stone-50 shadow-[0_18px_40px_-28px_rgba(28,25,23,0.9)]">
+            <div className="inline-flex size-12 items-center justify-center rounded-2xl bg-slate-900 text-slate-50 shadow-[0_18px_40px_-28px_rgba(26,42,51,0.48)]">
               <ShieldCheck className="size-6" />
             </div>
             <div className="space-y-2">
               <CardTitle className="text-3xl leading-tight sm:text-4xl">
                 احفظ مشاريعك على الحساب بدل المتصفح
               </CardTitle>
-              <CardDescription className="max-w-2xl text-sm leading-7 text-stone-600 sm:text-base">
+              <CardDescription className="max-w-2xl text-sm leading-7 text-slate-600 sm:text-base">
                 أنشئ حسابًا أو سجّل الدخول، وسيتم ربط المشاريع والإعدادات باسم
                 المستخدم الحالي بدل التخزين المحلي على نفس الجهاز فقط.
               </CardDescription>
             </div>
           </CardHeader>
-          <CardContent className="grid gap-4 text-sm text-stone-600 sm:grid-cols-3">
-            <div className="rounded-2xl border border-stone-200 bg-stone-50/80 p-4">
+          <CardContent className="grid gap-4 text-sm text-slate-600 sm:grid-cols-3">
+            <div className="rounded-2xl border border-slate-200 bg-slate-50/80 p-4">
               نفس المشروع يظهر بعد الرجوع أو تحديث الصفحة.
             </div>
-            <div className="rounded-2xl border border-stone-200 bg-stone-50/80 p-4">
+            <div className="rounded-2xl border border-slate-200 bg-slate-50/80 p-4">
               مكتبة المشاريع والإعدادات تصبح مرتبطة بالمستخدم الحالي.
             </div>
-            <div className="rounded-2xl border border-stone-200 bg-stone-50/80 p-4">
+            <div className="rounded-2xl border border-slate-200 bg-slate-50/80 p-4">
               لا حاجة لاستخدام `localStorage` في الحفظ الرئيسي بعد الآن.
             </div>
           </CardContent>
         </Card>
 
-        <Card className="border-stone-200/80 bg-white/92 shadow-[0_36px_100px_-54px_rgba(63,40,12,0.52)] backdrop-blur-sm">
+        <Card className="border-slate-200/80 bg-white/92 shadow-[0_36px_100px_-54px_rgba(24,32,40,0.52)] backdrop-blur-sm">
           <CardHeader className="space-y-4">
-            <div className="flex flex-wrap gap-2 rounded-2xl border border-stone-200 bg-stone-50/80 p-1.5">
+            <div className="flex flex-wrap gap-2 rounded-2xl border border-slate-200 bg-slate-50/80 p-1.5">
               <Button
                 type="button"
                 variant={isRegisterMode ? "ghost" : "default"}
@@ -100,7 +100,7 @@ export function UserAuthPanel({
               <CardTitle>
                 {isRegisterMode ? "ابدأ بحساب جديد" : "الدخول إلى حسابك"}
               </CardTitle>
-              <CardDescription className="mt-1 text-sm leading-6 text-stone-500">
+              <CardDescription className="mt-1 text-sm leading-6 text-slate-500">
                 {isRegisterMode
                   ? "استخدم اسمًا واضحًا وبريدًا صحيحًا لربط المشاريع بك."
                   : "سجّل الدخول للوصول إلى المشاريع المحفوظة والإعدادات الخاصة بك."}
@@ -154,7 +154,7 @@ export function UserAuthPanel({
                     onFieldChange("password", event.target.value)
                   }
                 />
-                <p className="text-xs text-stone-500">
+                <p className="text-xs text-slate-500">
                   الحد الأدنى الحالي 8 أحرف.
                 </p>
               </div>

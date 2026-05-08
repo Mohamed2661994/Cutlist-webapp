@@ -16,7 +16,6 @@ import {
   PanelsTopLeft,
   Plus,
   Printer,
-  Ruler,
   RotateCcw,
   RotateCw,
   ScanSearch,
@@ -97,7 +96,7 @@ import {
 
 function PreviewFallback() {
   return (
-    <div className="flex h-72 w-full items-center justify-center rounded-[1.25rem] border border-dashed border-stone-300 bg-white/65 text-center text-sm text-stone-500">
+    <div className="flex h-72 w-full items-center justify-center rounded-[1.25rem] border border-dashed border-slate-300 bg-white/65 text-center text-sm text-slate-500">
       جارٍ تحميل المعاينة ثلاثية الأبعاد...
     </div>
   );
@@ -1586,8 +1585,8 @@ function buildPrintDocument(
         .sheet-grid { display: grid; gap: 14px; margin-top: 14px; }
         .sheet-card { border: 1px solid #e7dfd4; border-radius: 16px; padding: 12px; background: #fff; page-break-inside: avoid; }
         .sheet-card-head { display: flex; justify-content: space-between; gap: 10px; font-size: 12px; color: #57534e; margin-bottom: 10px; }
-        .sheet-svg-wrap { border: 1px solid #e7dfd4; border-radius: 14px; padding: 10px; background: linear-gradient(180deg,#f8f4ee 0%,#f2ece3 100%); }
-        .sheet-svg-wrap svg { display: block; width: 100%; height: auto; border-radius: 12px; background: #fff; box-shadow: inset 0 0 0 1px rgba(214,206,194,0.9); }
+        .sheet-svg-wrap { border: 1px solid #e7dfd4; border-radius: 14px; padding: 10px; background: linear-gradient(180deg,#edf3f4 0%,#dbe7e7 100%); }
+        .sheet-svg-wrap svg { display: block; width: 100%; height: auto; border-radius: 12px; background: #fff; box-shadow: inset 0 0 0 1px rgba(201,215,222,0.96); }
         .sheet-details { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-top: 12px; }
         .sheet-detail-card { border: 1px solid #e7dfd4; border-radius: 14px; padding: 10px 12px; background: #fcfaf7; }
         .sheet-detail-card h4 { margin: 0 0 8px; font-size: 13px; }
@@ -2077,8 +2076,8 @@ function buildSingleSheetPrintDocument(
         .card { border: 1px solid #d6cec2; border-radius: 14px; padding: 12px 14px; background: #faf8f4; }
         .sheet-card { border: 1px solid #e7dfd4; border-radius: 16px; padding: 12px; background: #fff; }
         .sheet-card-head { display: flex; justify-content: space-between; gap: 10px; font-size: 12px; color: #57534e; margin-bottom: 10px; }
-        .sheet-svg-wrap { border: 1px solid #e7dfd4; border-radius: 14px; padding: 10px; background: linear-gradient(180deg,#f8f4ee 0%,#f2ece3 100%); }
-        .sheet-svg-wrap svg { display: block; width: 100%; height: auto; border-radius: 12px; background: #fff; box-shadow: inset 0 0 0 1px rgba(214,206,194,0.9); }
+        .sheet-svg-wrap { border: 1px solid #e7dfd4; border-radius: 14px; padding: 10px; background: linear-gradient(180deg,#edf3f4 0%,#dbe7e7 100%); }
+        .sheet-svg-wrap svg { display: block; width: 100%; height: auto; border-radius: 12px; background: #fff; box-shadow: inset 0 0 0 1px rgba(201,215,222,0.96); }
         .sheet-details { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-top: 12px; }
         .sheet-detail-card { border: 1px solid #e7dfd4; border-radius: 14px; padding: 10px 12px; background: #fcfaf7; }
         .sheet-detail-card h4 { margin: 0 0 8px; font-size: 13px; }
@@ -2897,7 +2896,13 @@ function App() {
   const [activeWorkspaceTab, setActiveWorkspaceTab] =
     useState<WorkspaceTab>("builder");
   const [activeBuilderTab, setActiveBuilderTab] = useState<BuilderTab>("unit");
-  const [isTopPanelExpanded, setIsTopPanelExpanded] = useState(false);
+  const [stageDrawerMobilePanel, setStageDrawerMobilePanel] = useState<
+    "details" | "actions" | null
+  >(null);
+  const [stageDrawerDesktopLeftOpen, setStageDrawerDesktopLeftOpen] =
+    useState(true);
+  const [stageDrawerDesktopRightOpen, setStageDrawerDesktopRightOpen] =
+    useState(true);
   const [openResultsSections, setOpenResultsSections] = useState<
     Record<ResultsSectionKey, boolean>
   >({
@@ -2960,9 +2965,6 @@ function App() {
   const [calculatedCustomParts, setCalculatedCustomParts] = useState<
     CustomProjectPart[]
   >([]);
-  const [rotatedSheetViews, setRotatedSheetViews] = useState<
-    Record<string, boolean>
-  >({});
   const [selectedCalculatedUnitId, setSelectedCalculatedUnitId] = useState<
     string | null
   >(null);
@@ -3113,10 +3115,10 @@ function App() {
       : null;
   const projectArrangementAutosaveToneClassName =
     projectArrangementAutosaveState === "error"
-      ? "text-amber-700"
+      ? "text-slate-700"
       : projectArrangementAutosaveState === "saving"
         ? "text-sky-700"
-        : "text-emerald-700";
+        : "text-teal-700";
   const syncSavedProjectsFromBootstrap = useCallback(
     (bootstrap: SessionBootstrap) => {
       if (bootstrap.user) {
@@ -3445,6 +3447,156 @@ function App() {
   projectSummary.totalHingeCount = projectHingeCount;
   projectSummary.totalHingeCost = projectHingeCost;
   projectSummary.totalProjectCost = projectTotalCost;
+  const activeWorkspaceTabConfig =
+    workspaceTabs.find((tab) => tab.id === activeWorkspaceTab) ??
+    workspaceTabs[0];
+  const ActiveWorkspaceIcon = activeWorkspaceTabConfig.icon;
+  const dashboardRecommendations: ProjectOptimizationRecommendation[] =
+    projectOptimizationRecommendations.length > 0
+      ? projectOptimizationRecommendations.slice(0, 3)
+      : [
+          {
+            id: "dashboard-start",
+            title: "ابدأ من الوحدات الأساسية",
+            body: "أضف أول وحدة أو مقاس حر، ثم احسب المشروع لتبدأ الألواح والتكلفة في الظهور داخل لوحة التنفيذ.",
+            tone: "info",
+          },
+          {
+            id: "dashboard-grain",
+            title: "ثبت اتجاه الثمرة قبل القص",
+            body: "إذا كانت الخامة كونتر أو ميلامين، راجع اتجاه الثمرة مبكرًا حتى لا تتغير نتيجة التوزيع لاحقًا داخل الورشة.",
+            tone: "action",
+          },
+          {
+            id: "dashboard-cost",
+            title: "أدخل أسعار الورشة من البداية",
+            body: "سعر اللوح، شريط الحافة، والمفصلة يجعل لوحة المشروع أقرب للقرار الحقيقي بدل مجرد مقاسات هندسية.",
+            tone: "info",
+          },
+        ];
+  const dashboardRailUnits = units.slice(0, 3);
+  const dashboardRecentProjects = savedProjects.slice(0, 2);
+  const dashboardLeadUnit = activeProjectPreviewUnit ?? projectPreviewUnits[0];
+  const dashboardLeadUnitSizeLabel = dashboardLeadUnit
+    ? `${round2(dashboardLeadUnit.input.width)} × ${round2(dashboardLeadUnit.input.height)} × ${round2(dashboardLeadUnit.input.depth)} سم`
+    : null;
+  const dashboardFocusTitle =
+    activeWorkspaceTab === "builder"
+      ? "محطة الإدخال"
+      : activeWorkspaceTab === "preview"
+        ? "مسرح المشروع"
+        : activeWorkspaceTab === "results"
+          ? "لوحة التنفيذ"
+          : activeWorkspaceTab === "project"
+            ? "إدارة المشروع"
+            : "مكتبة المشروع";
+  const dashboardFocusDescription =
+    activeWorkspaceTab === "builder"
+      ? "أدخل الوحدات والمقاسات الحرة من نفس المحطة، ثم انتقل مباشرة للمعاينة أو النتائج بدون فقد سياق المشروع."
+      : activeWorkspaceTab === "preview"
+        ? "راجع تموضع الوحدات، افتح الدلف، وحرّك المشهد قبل اعتماد القص النهائي أو الطباعة."
+        : activeWorkspaceTab === "results"
+          ? "نتائج الألواح والتكلفة والتوصيات العملية أصبحت في واجهة أقرب لمنطق التنفيذ اليومي داخل الورشة."
+          : activeWorkspaceTab === "project"
+            ? "مركز المشروع يجمع الحفظ، الإعدادات، والإجراءات الرئيسية بدل توزيعها في عدة أماكن منفصلة."
+            : "الوحدات الجاهزة والمشاريع المحفوظة تبقى ضمن نفس لغة الواجهة بدل شاشة منفصلة عن بقية النظام.";
+  const dashboardTopMetrics = [
+    {
+      label: "إجمالي الألواح",
+      value: hasCalculatedProject ? `${projectSummary.totalSheets}` : "--",
+      note: hasCalculatedProject ? `${projectMaterialSummary}` : "بعد الحساب",
+    },
+    {
+      label: "الهالك التقريبي",
+      value: hasCalculatedProject ? `${projectLayoutWastePercent}%` : "--",
+      note: hasCalculatedProject ? (projectWasteInsight ?? "قراءة سريعة للهالك") : "سيظهر بعد التوزيع",
+    },
+    {
+      label: "المفصلات",
+      value: hasCalculatedProject ? `${projectSummary.totalHingeCount}` : "--",
+      note: hasCalculatedProject ? formatPrice(projectSummary.totalHingeCost) : "مرتبطة بنوع الواجهة",
+    },
+    {
+      label: "إجمالي التكلفة",
+      value: hasCalculatedProject
+        ? formatPrice(projectSummary.totalProjectCost)
+        : "--",
+      note: hasCalculatedProject ? "خامة + شريط + مفصلات + مصنعية" : "يظهر بعد الحساب",
+    },
+  ] as const;
+  const dashboardProjectRailSettings = [
+    {
+      label: "الخامة",
+      value: projectMaterialSummary,
+    },
+    {
+      label: "سمك اللوح",
+      value: formatMmFromCm(projectSettings.boardThickness),
+    },
+    {
+      label: "لوح القص",
+      value: formatSheetSize(
+        projectSettings.boardSheetLength,
+        projectSettings.boardSheetWidth,
+      ),
+    },
+    {
+      label: "سعر المفصلة",
+      value: `${formatPrice(projectSettings.hingePrice)}/قطعة`,
+    },
+  ] as const;
+  const stageDrawerSceneUnits =
+    dashboardRailUnits.length > 0
+      ? dashboardRailUnits.map((unit) => ({
+          id: unit.id,
+          title: unit.title,
+          width: unit.width,
+          height: unit.height,
+          depth: unit.depth,
+          frontLabel: frontOptionLabels[unit.frontOption as FrontOption],
+        }))
+      : hasEditorCompleteDimensions
+        ? [
+            {
+              id: "draft-stage-unit",
+              title: editorTitle || "الوحدة الحالية",
+              width: editorInput.width,
+              height: editorInput.height,
+              depth: editorInput.depth,
+              frontLabel: frontOptionLabels[editorInput.frontOption],
+            },
+          ]
+        : [];
+  const stageDrawerLeadRecommendation = dashboardRecommendations[0] ?? null;
+  const stageDrawerSupportRecommendation = dashboardRecommendations[1] ?? null;
+  const stageDrawerSceneStatusLabel =
+    projectPreviewUnits.length > 1
+      ? `المشروع • ${projectPreviewUnits.length} وحدات`
+      : stageDrawerSceneUnits.length === 1
+        ? "الوحدة النشطة"
+        : "بانتظار الإدخال";
+  const stageDrawerNavTabs = [
+    {
+      id: "builder",
+      label: "الإضافة",
+      icon: Plus,
+    },
+    {
+      id: "preview",
+      label: "3D",
+      icon: PanelsTopLeft,
+    },
+    {
+      id: "results",
+      label: "النتائج",
+      icon: Printer,
+    },
+    {
+      id: "project",
+      label: "المشروع",
+      icon: Settings2,
+    },
+  ] as const;
 
   useEffect(() => {
     if (authStatus !== "authenticated") {
@@ -3919,7 +4071,6 @@ function App() {
   function invalidateCalculatedState() {
     setCalculatedUnits([]);
     setCalculatedCustomParts([]);
-    setRotatedSheetViews({});
     setSelectedCalculatedUnitId(null);
     setSelectedPartId(null);
   }
@@ -4259,7 +4410,6 @@ function App() {
         syncCustomProjectPartWithSettings(part, normalizedSettings),
       ),
     );
-    setRotatedSheetViews({});
     setSelectedCalculatedUnitId(project.units[0]?.id ?? null);
     setProjectArrangement(nextArrangement);
     setActiveWorkspaceTab("project");
@@ -4331,25 +4481,6 @@ function App() {
     announceProjectAction(
       `${nextValue ? "تمت إضافة" : "تم إلغاء"} الحافة ${edgeBandSideLabels[side]} لقطعة ${aggregatedPart.part.name}.`,
     );
-  }
-
-  function getProjectSheetViewKey(stockKey: string, sheetIndex: number) {
-    return `${(currentProjectId ?? projectName.trim()) || "draft"}::${stockKey}::${sheetIndex}`;
-  }
-
-  function isProjectSheetRotated(stockKey: string, sheetIndex: number) {
-    return (
-      rotatedSheetViews[getProjectSheetViewKey(stockKey, sheetIndex)] ?? false
-    );
-  }
-
-  function toggleProjectSheetRotation(stockKey: string, sheetIndex: number) {
-    const viewKey = getProjectSheetViewKey(stockKey, sheetIndex);
-
-    setRotatedSheetViews((current) => ({
-      ...current,
-      [viewKey]: !current[viewKey],
-    }));
   }
 
   function openPrintMarkup(printMarkup: string) {
@@ -4444,7 +4575,7 @@ function App() {
     }
 
     const partsMap = new Map(projectParts.map((part) => [part.id, part]));
-    const isRotated = isProjectSheetRotated(stock.key, sheet.index);
+    const isRotated = stock.boardLength >= stock.boardWidth;
     const printMarkup = buildSingleSheetPrintDocument(
       projectName.trim() || "مشروع",
       stock,
@@ -4892,11 +5023,11 @@ function App() {
     return (
       <main
         dir="rtl"
-        className="min-h-screen bg-[linear-gradient(180deg,#f7f3ed_0%,#efe6da_48%,#f8f5ef_100%)] px-4 py-10 text-stone-950 sm:px-6 lg:px-10"
+        className="min-h-screen bg-[linear-gradient(180deg,#eef3f4_0%,#e4ebea_48%,#eef3f4_100%)] px-4 py-10 text-slate-950 sm:px-6 lg:px-10"
       >
-        <div className="mx-auto flex max-w-xl flex-col items-center justify-center rounded-[2rem] border border-stone-200 bg-white/90 px-8 py-16 text-center shadow-[0_30px_90px_-48px_rgba(63,40,12,0.45)]">
-          <p className="text-sm text-stone-500">جارٍ تحميل الحساب الحالي...</p>
-          <p className="mt-3 text-lg font-semibold text-stone-950">
+        <div className="mx-auto flex max-w-xl flex-col items-center justify-center rounded-[2rem] border border-slate-200 bg-white/90 px-8 py-16 text-center shadow-[0_30px_90px_-48px_rgba(24,32,40,0.45)]">
+          <p className="text-sm text-slate-500">جارٍ تحميل الحساب الحالي...</p>
+          <p className="mt-3 text-lg font-semibold text-slate-950">
             لحظة واحدة، نربط المشاريع بالمستخدم.
           </p>
         </div>
@@ -4923,18 +5054,18 @@ function App() {
   return (
     <main
       dir="rtl"
-      className="min-h-screen bg-[radial-gradient(circle_at_top,_rgba(194,165,116,0.18),_transparent_32%),linear-gradient(180deg,#f6f1e7_0%,#f2ece1_34%,#ebe3d5_100%)] text-foreground"
+      className="min-h-screen bg-[radial-gradient(circle_at_top,_rgba(112,154,169,0.18),_transparent_32%),linear-gradient(145deg,#0d1216_0%,#172028_52%,#0d1216_100%)] text-foreground"
     >
-      <div className="mx-auto flex min-h-screen w-full max-w-7xl flex-col px-4 py-6 pb-28 sm:px-6 sm:pb-8 lg:px-8">
+      <div className="mx-auto flex min-h-screen w-full max-w-[94rem] flex-col px-4 py-6 pb-28 sm:px-6 sm:pb-8 lg:px-8">
         {isProjectSettingsOpen ? (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-stone-950/45 p-4 backdrop-blur-sm">
-            <div className="flex max-h-[calc(100vh-2rem)] w-full max-w-xl flex-col overflow-hidden rounded-[1.75rem] border border-stone-200 bg-white shadow-[0_30px_90px_-40px_rgba(63,40,12,0.55)] sm:max-h-[calc(100vh-3rem)]">
-              <div className="sticky top-0 z-10 flex items-start justify-between gap-3 border-b border-stone-200 bg-white px-4 py-4 sm:px-6 sm:py-5">
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 p-4 backdrop-blur-sm">
+            <div className="flex max-h-[calc(100vh-2rem)] w-full max-w-xl flex-col overflow-hidden rounded-[1.75rem] border border-slate-200 bg-white shadow-[0_30px_90px_-40px_rgba(24,32,40,0.55)] sm:max-h-[calc(100vh-3rem)]">
+              <div className="sticky top-0 z-10 flex items-start justify-between gap-3 border-b border-slate-200 bg-white px-4 py-4 sm:px-6 sm:py-5">
                 <div>
-                  <h2 className="text-lg font-semibold text-stone-950">
+                  <h2 className="text-lg font-semibold text-slate-950">
                     إعدادات المشروع
                   </h2>
-                  <p className="mt-1 text-sm text-stone-500">
+                  <p className="mt-1 text-sm text-slate-500">
                     الخامة وسمك اللوح وسمك الظهر ستُطبق على كل الوحدات داخل هذا
                     المشروع.
                   </p>
@@ -4951,12 +5082,12 @@ function App() {
               </div>
 
               <div className="space-y-4 overflow-y-auto px-4 py-4 pb-[calc(1rem+env(safe-area-inset-bottom,0px))] sm:px-6 sm:py-5 sm:pb-5">
-                <div className="rounded-2xl border border-stone-200 bg-stone-50/70 p-3 sm:p-4">
+                <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-3 sm:p-4">
                   <div className="mb-4 space-y-1">
-                    <h3 className="text-sm font-semibold text-stone-950">
+                    <h3 className="text-sm font-semibold text-slate-950">
                       الخامة والسماكات
                     </h3>
-                    <p className="text-xs text-stone-500">
+                    <p className="text-xs text-slate-500">
                       إعدادات الخامة الأساسية التي تُسحب تلقائيًا على كل
                       الوحدات.
                     </p>
@@ -5024,18 +5155,18 @@ function App() {
                   </div>
                 </div>
 
-                <div className="rounded-2xl border border-stone-200 bg-stone-50/70 p-3 sm:p-4">
+                <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-3 sm:p-4">
                   <div className="mb-4 space-y-1">
-                    <h3 className="text-sm font-semibold text-stone-950">
+                    <h3 className="text-sm font-semibold text-slate-950">
                       مقاسات الألواح
                     </h3>
-                    <p className="text-xs text-stone-500">
+                    <p className="text-xs text-slate-500">
                       هذه المقاسات هي التي يعتمد عليها توزيع القص لكل نوع لوح.
                     </p>
                   </div>
                   <div className="grid gap-3 sm:grid-cols-2 sm:gap-4">
-                    <div className="rounded-xl border border-stone-200 bg-white/85 p-3">
-                      <p className="mb-3 text-sm font-medium text-stone-900">
+                    <div className="rounded-xl border border-slate-200 bg-white/85 p-3">
+                      <p className="mb-3 text-sm font-medium text-slate-900">
                         لوح 18 مم
                       </p>
                       <div className="grid gap-3 sm:grid-cols-2 sm:gap-4">
@@ -5077,8 +5208,8 @@ function App() {
                       </div>
                     </div>
 
-                    <div className="rounded-xl border border-stone-200 bg-white/85 p-3">
-                      <p className="mb-3 text-sm font-medium text-stone-900">
+                    <div className="rounded-xl border border-slate-200 bg-white/85 p-3">
+                      <p className="mb-3 text-sm font-medium text-slate-900">
                         لوح 6 مم
                       </p>
                       <div className="grid gap-3 sm:grid-cols-2 sm:gap-4">
@@ -5122,12 +5253,12 @@ function App() {
                   </div>
                 </div>
 
-                <div className="rounded-2xl border border-stone-200 bg-stone-50/70 p-3 sm:p-4">
+                <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-3 sm:p-4">
                   <div className="mb-4 space-y-1">
-                    <h3 className="text-sm font-semibold text-stone-950">
+                    <h3 className="text-sm font-semibold text-slate-950">
                       إعدادات القص
                     </h3>
-                    <p className="text-xs text-stone-500">
+                    <p className="text-xs text-slate-500">
                       سمك السلاح وحواف التشطيب التي تُخصم من المساحة القابلة
                       للقص.
                     </p>
@@ -5167,12 +5298,12 @@ function App() {
                   </div>
                 </div>
 
-                <div className="rounded-2xl border border-stone-200 bg-stone-50/70 p-3 sm:p-4">
+                <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-3 sm:p-4">
                   <div className="mb-4 space-y-1">
-                    <h3 className="text-sm font-semibold text-stone-950">
+                    <h3 className="text-sm font-semibold text-slate-950">
                       أسلوب التوزيع
                     </h3>
-                    <p className="text-xs text-stone-500">
+                    <p className="text-xs text-slate-500">
                       اختر بين خطة أسهل للورشة أو خطة تميل لأقل هادر أو المحسن الذكي.
                     </p>
                   </div>
@@ -5204,7 +5335,7 @@ function App() {
                         </SelectContent>
                       </Select>
                     </div>
-                    <p className="rounded-xl border border-stone-200 bg-white/85 px-3 py-2 text-xs leading-6 text-stone-600">
+                    <p className="rounded-xl border border-slate-200 bg-white/85 px-3 py-2 text-xs leading-6 text-slate-600">
                       {
                         sheetLayoutOptimizationModeDescriptions[
                           projectSettings.optimizationMode
@@ -5214,12 +5345,12 @@ function App() {
                   </div>
                 </div>
 
-                <div className="rounded-2xl border border-stone-200 bg-stone-50/70 p-3 sm:p-4">
+                <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-3 sm:p-4">
                   <div className="mb-4 space-y-1">
-                    <h3 className="text-sm font-semibold text-stone-950">
+                    <h3 className="text-sm font-semibold text-slate-950">
                       الأسعار والمصنعية
                     </h3>
-                    <p className="text-xs text-stone-500">
+                    <p className="text-xs text-slate-500">
                       تكلفة اللوح، المصنعية، شريط الحافة، والمفصلات لحساب تكلفة المشروع.
                     </p>
                   </div>
@@ -5315,7 +5446,7 @@ function App() {
                 </div>
               </div>
 
-              <div className="sticky bottom-0 z-10 border-t border-stone-200 bg-stone-50/95 px-4 py-3 pb-[calc(0.75rem+env(safe-area-inset-bottom,0px))] text-xs text-stone-500 sm:px-6 sm:py-4 sm:pb-4">
+              <div className="sticky bottom-0 z-10 border-t border-slate-200 bg-slate-50/95 px-4 py-3 pb-[calc(0.75rem+env(safe-area-inset-bottom,0px))] text-xs text-slate-500 sm:px-6 sm:py-4 sm:pb-4">
                 أي تعديل هنا ينسحب فورًا على الوحدات الموجودة حاليًا وعلى أي
                 وحدة جديدة تضيفها بعد ذلك.
               </div>
@@ -5324,14 +5455,14 @@ function App() {
         ) : null}
 
         {isProjectLibraryOpen ? (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-stone-950/45 p-4 backdrop-blur-sm">
-            <div className="flex max-h-[calc(100vh-2rem)] w-full max-w-3xl flex-col overflow-hidden rounded-[1.75rem] border border-stone-200 bg-white shadow-[0_30px_90px_-40px_rgba(63,40,12,0.55)] sm:max-h-[calc(100vh-3rem)]">
-              <div className="sticky top-0 z-10 flex items-start justify-between gap-3 border-b border-stone-200 bg-white px-4 py-4 sm:px-6 sm:py-5">
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 p-4 backdrop-blur-sm">
+            <div className="flex max-h-[calc(100vh-2rem)] w-full max-w-3xl flex-col overflow-hidden rounded-[1.75rem] border border-slate-200 bg-white shadow-[0_30px_90px_-40px_rgba(24,32,40,0.55)] sm:max-h-[calc(100vh-3rem)]">
+              <div className="sticky top-0 z-10 flex items-start justify-between gap-3 border-b border-slate-200 bg-white px-4 py-4 sm:px-6 sm:py-5">
                 <div>
-                  <h2 className="text-lg font-semibold text-stone-950">
+                  <h2 className="text-lg font-semibold text-slate-950">
                     مكتبة المشاريع
                   </h2>
-                  <p className="mt-1 text-sm text-stone-500">
+                  <p className="mt-1 text-sm text-slate-500">
                     افتح مشروعًا محفوظًا أو احذف مشروعًا قديمًا من حسابك الحالي.
                   </p>
                 </div>
@@ -5348,35 +5479,35 @@ function App() {
 
               <div className="grid gap-4 overflow-y-auto px-4 py-4 pb-[calc(1rem+env(safe-area-inset-bottom,0px))] sm:px-6 sm:py-5 sm:pb-5 md:grid-cols-2">
                 {savedProjects.length === 0 ? (
-                  <div className="rounded-2xl border border-dashed border-stone-300 bg-stone-50/70 p-5 text-sm text-stone-500 md:col-span-2">
+                  <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50/70 p-5 text-sm text-slate-500 md:col-span-2">
                     لا توجد مشاريع محفوظة بعد. احفظ أول مشروع وسيظهر هنا.
                   </div>
                 ) : (
                   savedProjects.map((project) => (
                     <div
                       key={project.id}
-                      className="rounded-2xl border border-stone-200 bg-stone-50/70 p-4"
+                      className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4"
                     >
                       <div className="flex items-start justify-between gap-3">
                         <div>
-                          <p className="text-sm font-semibold text-stone-950">
+                          <p className="text-sm font-semibold text-slate-950">
                             {project.name}
                           </p>
-                          <p className="mt-1 text-xs text-stone-500">
+                          <p className="mt-1 text-xs text-slate-500">
                             آخر حفظ {formatProjectUpdatedAt(project.updatedAt)}
                           </p>
                         </div>
                         {currentProjectId === project.id ? (
                           <Badge
                             variant="outline"
-                            className="border-emerald-200 bg-emerald-50 text-emerald-700"
+                            className="border-teal-200 bg-teal-50 text-teal-700"
                           >
                             الحالي
                           </Badge>
                         ) : null}
                       </div>
 
-                      <div className="mt-3 grid gap-2 text-xs text-stone-500 sm:grid-cols-2">
+                      <div className="mt-3 grid gap-2 text-xs text-slate-500 sm:grid-cols-2">
                         <p>الوحدات: {project.units.length}</p>
                         <p>
                           اللوح:{" "}
@@ -5422,14 +5553,14 @@ function App() {
         ) : null}
 
         {isUnitPresetOpen ? (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-stone-950/45 p-4 backdrop-blur-sm">
-            <div className="flex max-h-[calc(100vh-2rem)] w-full max-w-4xl flex-col overflow-hidden rounded-[1.75rem] border border-stone-200 bg-white shadow-[0_30px_90px_-40px_rgba(63,40,12,0.55)] sm:max-h-[calc(100vh-3rem)]">
-              <div className="sticky top-0 z-10 flex items-start justify-between gap-3 border-b border-stone-200 bg-white px-4 py-4 sm:px-6 sm:py-5">
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 p-4 backdrop-blur-sm">
+            <div className="flex max-h-[calc(100vh-2rem)] w-full max-w-4xl flex-col overflow-hidden rounded-[1.75rem] border border-slate-200 bg-white shadow-[0_30px_90px_-40px_rgba(24,32,40,0.55)] sm:max-h-[calc(100vh-3rem)]">
+              <div className="sticky top-0 z-10 flex items-start justify-between gap-3 border-b border-slate-200 bg-white px-4 py-4 sm:px-6 sm:py-5">
                 <div>
-                  <h2 className="text-lg font-semibold text-stone-950">
+                  <h2 className="text-lg font-semibold text-slate-950">
                     مكتبة الوحدات الجاهزة
                   </h2>
-                  <p className="mt-1 text-sm text-stone-500">
+                  <p className="mt-1 text-sm text-slate-500">
                     اختر وحدة جاهزة لتعبئة المحرر الحالي بسرعة، ثم عدّل المقاسات
                     والتفاصيل كما تريد.
                   </p>
@@ -5449,43 +5580,43 @@ function App() {
                 {unitPresets.map((preset) => (
                   <div
                     key={preset.id}
-                    className="rounded-[1.5rem] border border-stone-200 bg-[linear-gradient(180deg,rgba(252,250,247,0.95),rgba(243,236,227,0.82))] p-4 shadow-[0_18px_44px_-36px_rgba(63,40,12,0.4)]"
+                    className="rounded-[1.5rem] border border-slate-200 bg-[linear-gradient(180deg,rgba(255,255,255,0.95),rgba(235,240,242,0.82))] p-4 shadow-[0_18px_44px_-36px_rgba(24,32,40,0.4)]"
                   >
                     <div className="flex items-start justify-between gap-3">
                       <div>
-                        <p className="text-sm font-semibold text-stone-950">
+                        <p className="text-sm font-semibold text-slate-950">
                           {preset.title}
                         </p>
-                        <p className="mt-1 text-xs leading-6 text-stone-500">
+                        <p className="mt-1 text-xs leading-6 text-slate-500">
                           {preset.description}
                         </p>
                       </div>
                       <Badge
                         variant="outline"
-                        className="border-stone-200 bg-white/80 text-stone-700"
+                        className="border-slate-200 bg-white/80 text-slate-700"
                       >
                         {cabinetTypeLabels[preset.input.cabinetType]}
                       </Badge>
                     </div>
 
                     <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
-                      <div className="rounded-xl bg-white/75 p-3 ring-1 ring-stone-200">
-                        <p className="text-[11px] text-stone-500">المقاس</p>
-                        <p className="mt-1 font-semibold text-stone-950">
+                      <div className="rounded-xl bg-white/75 p-3 ring-1 ring-slate-200">
+                        <p className="text-[11px] text-slate-500">المقاس</p>
+                        <p className="mt-1 font-semibold text-slate-950">
                           {formatCm(preset.input.width)} ×{" "}
                           {formatCm(preset.input.height)} ×{" "}
                           {formatCm(preset.input.depth)}
                         </p>
                       </div>
-                      <div className="rounded-xl bg-white/75 p-3 ring-1 ring-stone-200">
-                        <p className="text-[11px] text-stone-500">الواجهة</p>
-                        <p className="mt-1 font-semibold text-stone-950">
+                      <div className="rounded-xl bg-white/75 p-3 ring-1 ring-slate-200">
+                        <p className="text-[11px] text-slate-500">الواجهة</p>
+                        <p className="mt-1 font-semibold text-slate-950">
                           {frontOptionLabels[preset.input.frontOption]}
                         </p>
                       </div>
                     </div>
 
-                    <div className="mt-3 flex flex-wrap gap-2 text-xs text-stone-500">
+                    <div className="mt-3 flex flex-wrap gap-2 text-xs text-slate-500">
                       <span>{preset.input.shelfCount} رف</span>
                       <span>•</span>
                       <span>{preset.input.drawerCount} درج</span>
@@ -5507,379 +5638,1126 @@ function App() {
           </div>
         ) : null}
 
-        <section className="relative overflow-hidden rounded-[2rem] border border-black/5 bg-white/80 p-6 shadow-[0_30px_90px_-50px_rgba(63,40,12,0.45)] backdrop-blur sm:p-8">
-          <div className="absolute inset-x-0 top-0 h-24 bg-[linear-gradient(90deg,rgba(116,84,45,0.14),rgba(210,191,162,0.08),rgba(41,64,55,0.14))]" />
-          <div className="relative sm:hidden">
-            <div className="flex items-start justify-between gap-3">
-              <div className="min-w-0">
-                <Badge
+        <section className="relative overflow-hidden rounded-[2.2rem] border border-white/40 bg-[linear-gradient(180deg,rgba(246,249,250,0.96),rgba(227,234,234,0.9))] p-4 shadow-[0_36px_100px_-54px_rgba(18,24,30,0.45)] backdrop-blur sm:p-6">
+          <div className="absolute inset-x-0 top-0 h-28 bg-[linear-gradient(90deg,rgba(73,109,122,0.16),rgba(240,244,245,0.08),rgba(118,152,167,0.14))]" />
+          <div className="absolute -left-16 top-0 size-40 rounded-full bg-sky-300/20 blur-3xl" />
+          <div className="absolute bottom-0 right-0 size-36 rounded-full bg-slate-200/30 blur-3xl" />
+
+          <div className="relative xl:hidden">
+            <div className="rounded-[1.75rem] border border-slate-200/70 bg-white/78 p-4 shadow-[0_22px_56px_-40px_rgba(20,27,33,0.22)]">
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex min-w-0 items-start gap-3">
+                  <div className="relative flex size-12 shrink-0 items-center justify-center rounded-[1rem] bg-[linear-gradient(145deg,#223741,#4b6978)] shadow-[0_16px_26px_-18px_rgba(26,42,51,0.46)]">
+                    <span className="absolute inset-[0.52rem] rounded-[0.65rem] border border-white/60" />
+                    <span className="absolute inset-y-[0.6rem] right-[0.56rem] w-[0.55rem] rounded-full border border-white/60 origin-left rotate-[-11deg]" />
+                  </div>
+                  <div className="min-w-0">
+                    <h1 className="font-heading text-xl font-semibold tracking-tight text-slate-950">
+                      Stage + Drawer
+                    </h1>
+                    <p className="mt-1 text-xs leading-6 text-slate-600">
+                      المسرح هو الواجهة الأساسية، وباقي التفاصيل تخرج من الأدراج.
+                    </p>
+                    <p className="mt-2 text-[11px] text-slate-500">
+                      {projectName} • {projectItemCount} عنصر • {units.length} وحدة
+                    </p>
+                  </div>
+                </div>
+                <Button
+                  type="button"
                   variant="outline"
-                  className="border-amber-900/15 bg-amber-50 text-amber-950"
+                  size="sm"
+                  className="shrink-0 rounded-full bg-white/82"
+                  onClick={() =>
+                    setStageDrawerMobilePanel((current) =>
+                      current === "details" ? null : "details",
+                    )
+                  }
                 >
-                  Cabinet Cut Optimizer
-                </Badge>
-                <h1 className="mt-3 text-xl font-semibold leading-tight text-stone-950">
-                  مشروع القص
-                </h1>
-                <p className="mt-1 text-xs leading-6 text-stone-500">
-                  {projectItemCount} عنصر • {units.length} وحدة •{" "}
-                  {customParts.length} مقاس حر
-                </p>
+                  {stageDrawerMobilePanel ? (
+                    <ArrowDown className="size-4" />
+                  ) : (
+                    <ArrowUp className="size-4" />
+                  )}
+                  {stageDrawerMobilePanel ? "إغلاق" : "Drawer"}
+                </Button>
               </div>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="shrink-0"
-                onClick={() => setIsTopPanelExpanded((current) => !current)}
-              >
-                {isTopPanelExpanded ? (
-                  <ArrowUp className="size-4" />
-                ) : (
-                  <ArrowDown className="size-4" />
-                )}
-                {isTopPanelExpanded ? "إخفاء" : "تفاصيل"}
-              </Button>
+
+              <div className="mt-4 flex flex-wrap gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="rounded-full bg-white/82"
+                  onClick={() => setActiveWorkspaceTab("preview")}
+                >
+                  <PanelsTopLeft className="size-4" />
+                  مسرح 3D مباشر
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="rounded-full bg-white/82"
+                  onClick={() => setActiveWorkspaceTab("preview")}
+                >
+                  <PanelsTopLeft className="size-4" />
+                  فتح الدلف
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="rounded-full bg-white/82"
+                  onClick={printProjectPreviewSnapshot}
+                  disabled={projectPreviewUnits.length === 0}
+                >
+                  <Printer className="size-4" />
+                  طباعة لقطة
+                </Button>
+                <Button
+                  type="button"
+                  className="rounded-full bg-[linear-gradient(145deg,#416575,#5b8699)] text-white shadow-[0_16px_28px_-18px_rgba(65,101,117,0.3)] hover:bg-[linear-gradient(145deg,#416575,#5b8699)]"
+                  onClick={mobilePrimaryAction.onClick}
+                  disabled={mobilePrimaryAction.disabled}
+                >
+                  <mobilePrimaryAction.icon className="size-4" />
+                  {mobilePrimaryAction.label}
+                </Button>
+              </div>
             </div>
 
-            <div className="mt-4 grid grid-cols-3 gap-2">
-              <div className="rounded-2xl bg-stone-950 px-3 py-3 text-stone-50">
-                <p className="text-[11px] text-stone-300">العناصر</p>
-                <p className="mt-1 text-sm font-semibold">{projectItemCount}</p>
-              </div>
-              <div className="rounded-2xl border border-stone-200 bg-white/90 px-3 py-3">
-                <p className="text-[11px] text-stone-500">القطع</p>
-                <p className="mt-1 text-sm font-semibold text-stone-900">
-                  {hasCalculatedProject ? projectParts.length : "--"}
-                </p>
-              </div>
-              <div className="rounded-2xl border border-stone-200 bg-white/90 px-3 py-3">
-                <p className="text-[11px] text-stone-500">الاستهلاك</p>
-                <p className="mt-1 text-sm font-semibold text-stone-900">
-                  {hasCalculatedProject
-                    ? `${projectLayoutTotalAreaM2} م²`
-                    : "--"}
-                </p>
-              </div>
-            </div>
-
-            <div className="mt-3 flex gap-2">
+            <div className="mt-3 grid grid-cols-2 gap-2">
               <Button
                 type="button"
                 variant="outline"
-                className="flex-1"
-                onClick={saveCurrentProject}
+                className="rounded-[1rem] bg-white/82"
+                onClick={() => setStageDrawerMobilePanel("details")}
               >
-                <Save className="size-4" />
-                حفظ
+                <ArrowUp className="size-4" />
+                تفاصيل المسرح
               </Button>
               <Button
                 type="button"
                 variant="outline"
-                className="flex-1"
-                onClick={() => setIsProjectSettingsOpen(true)}
+                className="rounded-[1rem] bg-white/82"
+                onClick={() => setStageDrawerMobilePanel("actions")}
               >
                 <Settings2 className="size-4" />
-                الإعدادات
+                لوحة الأوامر
               </Button>
             </div>
           </div>
 
-          <div
-            className={cn(
-              "relative flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between",
-              !isTopPanelExpanded && "hidden sm:flex",
-            )}
-          >
-            <div className="max-w-3xl space-y-4">
-              <Badge
-                variant="outline"
-                className="border-amber-900/15 bg-amber-50 text-amber-950"
-              >
-                Cabinet Cut Optimizer
-              </Badge>
-              <div className="space-y-3">
-                <h1 className="font-heading text-3xl leading-tight font-semibold tracking-tight text-stone-950 sm:text-5xl">
-                  كوّن مشروعك من أكثر من وحدة، ثم احسب القص بعد ما تخلص الإضافة.
-                </h1>
-                <p className="max-w-2xl text-sm leading-7 text-stone-600 sm:text-base">
-                  أضف كل وحدة بمقاساتها ونوع واجهتها، عاين شكلها في 3D أثناء
-                  الإعداد، وبعدها اضغط احسب لإخراج المقاسات النهائية للوحدة
-                  المختارة داخل المشروع.
-                </p>
-              </div>
-            </div>
+          <div className="relative hidden xl:block">
+            <div className="rounded-[1.95rem] border border-slate-200/70 bg-white/76 p-5 shadow-[0_26px_70px_-42px_rgba(20,27,33,0.18)]">
+              <div className="flex items-start justify-between gap-6">
+                <div className="flex items-start gap-4">
+                  <div className="relative flex size-14 shrink-0 items-center justify-center rounded-[1.15rem] bg-[linear-gradient(145deg,#223741,#4b6978)] shadow-[0_18px_32px_-20px_rgba(26,42,51,0.42)]">
+                    <span className="absolute inset-[0.62rem] rounded-[0.8rem] border border-white/60" />
+                    <span className="absolute inset-y-[0.75rem] right-[0.7rem] w-[0.62rem] rounded-full border border-white/60 origin-left rotate-[-11deg]" />
+                  </div>
 
-            <div className="grid gap-3 sm:grid-cols-3 lg:w-[28rem]">
-              <Card className="border-0 bg-stone-950 text-stone-50 ring-0">
-                <CardContent className="flex items-center justify-between p-4">
                   <div>
-                    <p className="text-xs text-stone-300">عناصر المشروع</p>
-                    <p className="mt-1 font-medium">{projectItemCount}</p>
-                  </div>
-                  <Box className="size-4 opacity-80" />
-                </CardContent>
-              </Card>
-              <Card className="border-0 bg-white/90 ring-1 ring-stone-200">
-                <CardContent className="flex items-center justify-between p-4">
-                  <div>
-                    <p className="text-xs text-stone-500">القطع المحسوبة</p>
-                    <p className="mt-1 font-medium text-stone-900">
-                      {calculatedViews.length > 0
-                        ? projectSummary.totalPanels
-                        : "--"}
+                    <h1 className="font-heading text-[2rem] font-semibold tracking-tight text-slate-950">
+                      Stage + Drawer
+                    </h1>
+                    <p className="mt-2 max-w-2xl text-sm leading-7 text-slate-600">
+                      المسرح هو الواجهة الأساسية، وباقي التفاصيل تخرج من الأدراج.
                     </p>
-                  </div>
-                  <PanelsTopLeft className="size-4 text-stone-500" />
-                </CardContent>
-              </Card>
-              <Card className="border-0 bg-white/90 ring-1 ring-stone-200">
-                <CardContent className="flex items-center justify-between p-4">
-                  <div>
-                    <p className="text-xs text-stone-500">استهلاك المشروع</p>
-                    <p className="mt-1 font-medium text-stone-900">
-                      {calculatedViews.length > 0
-                        ? `${projectSummary.totalAreaM2} م²`
-                        : "--"}
-                    </p>
-                  </div>
-                  <Ruler className="size-4 text-stone-500" />
-                </CardContent>
-              </Card>
-            </div>
-          </div>
-
-          <div
-            className={cn(
-              "relative mt-5 flex flex-wrap items-center justify-end gap-3 border-t border-stone-200/70 pt-4",
-              !isTopPanelExpanded && "hidden sm:flex",
-            )}
-          >
-            <div className="min-w-[18rem] flex-1 rounded-[1.6rem] border border-stone-200 bg-[linear-gradient(135deg,rgba(252,250,247,0.96),rgba(243,236,227,0.9))] p-4 shadow-[0_18px_50px_-40px_rgba(63,40,12,0.35)]">
-              <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
-                <div className="space-y-2 lg:min-w-[16rem] lg:flex-1">
-                  <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-stone-500">
-                    <div className="flex flex-wrap items-center gap-2">
+                    <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-slate-500">
                       <Badge variant="outline" className="bg-white/90">
                         {currentUser.name}
                       </Badge>
                       <span dir="ltr">{currentUser.email}</span>
+                      <span>{projectName}</span>
+                      <span>{projectItemCount} عنصر</span>
                     </div>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      className="bg-white/90"
-                      onClick={logoutCurrentUser}
-                    >
-                      <LogOut className="size-4" />
-                      خروج
-                    </Button>
-                  </div>
-                  <Label
-                    htmlFor="projectName"
-                    className="text-xs text-stone-500"
-                  >
-                    اسم المشروع
-                  </Label>
-                  <Input
-                    id="projectName"
-                    value={projectName}
-                    onChange={(event) => setProjectName(event.target.value)}
-                    className="h-11 bg-white/90 text-base font-medium"
-                  />
-                  <div className="flex flex-wrap gap-2 text-xs text-stone-500">
-                    <span>{units.length} وحدة</span>
-                    <span>•</span>
-                    <span>{customParts.length} مقاس حر</span>
-                    <span>•</span>
-                    <span>{savedProjects.length} مشروع محفوظ</span>
-                    {currentProjectId ? (
-                      <>
-                        <span>•</span>
-                        <span>تم ربط المشروع بحساب {currentUser.name}</span>
-                      </>
-                    ) : null}
                   </div>
                 </div>
 
-                <div className="flex flex-wrap gap-2 xl:max-w-[42rem] xl:justify-end">
+                <div className="flex max-w-[34rem] flex-wrap items-center justify-end gap-2">
                   <Button
                     type="button"
                     variant="outline"
-                    className="min-h-11 min-w-[8.75rem] justify-center whitespace-nowrap bg-white/90 px-4"
-                    onClick={resetProjectWorkspace}
+                    className="rounded-full bg-white/82"
+                    onClick={() => setActiveWorkspaceTab("preview")}
                   >
-                    <Plus className="size-4" />
-                    مشروع جديد
+                    <PanelsTopLeft className="size-4" />
+                    مسرح 3D مباشر
                   </Button>
                   <Button
                     type="button"
                     variant="outline"
-                    className="min-h-11 min-w-[8.75rem] justify-center whitespace-nowrap bg-white/90 px-4"
-                    onClick={saveCurrentProject}
+                    className="rounded-full bg-white/82"
+                    onClick={() => setActiveWorkspaceTab("preview")}
                   >
+                    <PanelsTopLeft className="size-4" />
+                    فتح الدلف
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="rounded-full bg-white/82"
+                    onClick={printProjectPreviewSnapshot}
+                    disabled={projectPreviewUnits.length === 0}
+                  >
+                    <Printer className="size-4" />
+                    طباعة لقطة
+                  </Button>
+                  <Button
+                    type="button"
+                    className="rounded-full bg-[linear-gradient(145deg,#416575,#5b8699)] text-white shadow-[0_16px_28px_-18px_rgba(65,101,117,0.3)] hover:bg-[linear-gradient(145deg,#416575,#5b8699)]"
+                    onClick={mobilePrimaryAction.onClick}
+                    disabled={mobilePrimaryAction.disabled}
+                  >
+                    <mobilePrimaryAction.icon className="size-4" />
+                    {mobilePrimaryAction.label}
+                  </Button>
+                </div>
+              </div>
+
+              <div className="mt-5 flex flex-wrap items-center justify-between gap-4 border-t border-slate-200/70 pt-4">
+                <div className="flex flex-wrap gap-2">
+                  {workspaceTabs.map((tab) => {
+                    const Icon = tab.icon;
+                    const isActive = activeWorkspaceTab === tab.id;
+
+                    return (
+                      <button
+                        key={tab.id}
+                        type="button"
+                        onClick={() => setActiveWorkspaceTab(tab.id)}
+                        className={cn(
+                          "flex items-center gap-2 rounded-full border px-3 py-2 text-sm transition-colors",
+                          isActive
+                            ? "border-slate-300 bg-[linear-gradient(145deg,#223842,#49616d)] text-white"
+                            : "border-slate-200 bg-white/80 text-slate-700 hover:bg-white",
+                        )}
+                      >
+                        <Icon className="size-4" />
+                        <span>{tab.label}</span>
+                        <span
+                          className={cn(
+                            "text-[11px]",
+                            isActive ? "text-slate-200" : "text-slate-500",
+                          )}
+                        >
+                          {tab.badge}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2">
+                  <Button type="button" variant="outline" size="sm" onClick={saveCurrentProject}>
                     <Save className="size-4" />
-                    حفظ المشروع
+                    حفظ
                   </Button>
                   <Button
                     type="button"
                     variant="outline"
-                    className="min-h-11 min-w-[8.75rem] justify-center whitespace-nowrap bg-white/90 px-4"
+                    size="sm"
+                    onClick={() => setIsProjectSettingsOpen(true)}
+                  >
+                    <Settings2 className="size-4" />
+                    الإعدادات
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
                     onClick={() => setIsProjectLibraryOpen(true)}
                   >
                     <FolderOpen className="size-4" />
                     المشاريع
                   </Button>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    className="min-h-11 min-w-[8.75rem] justify-center whitespace-nowrap bg-white/90 px-4"
-                    onClick={exportProjectCsv}
-                    disabled={projectParts.length === 0}
-                  >
-                    <Download className="size-4" />
-                    تصدير CSV
+                  <Button type="button" variant="outline" size="sm" onClick={resetProjectWorkspace}>
+                    <Plus className="size-4" />
+                    مشروع جديد
                   </Button>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    className="min-h-11 min-w-[8.75rem] justify-center whitespace-nowrap bg-white/90 px-4"
-                    onClick={printProjectSummary}
-                    disabled={projectParts.length === 0}
-                  >
-                    <Printer className="size-4" />
-                    طباعة
+                  <Button type="button" variant="outline" size="sm" onClick={logoutCurrentUser}>
+                    <LogOut className="size-4" />
+                    خروج
                   </Button>
                 </div>
               </div>
 
-              <div className="mt-3 flex min-h-6 flex-col gap-2 text-xs text-stone-500 md:flex-row md:items-center md:justify-between">
-                <span className="leading-6">
-                  {currentProjectId
-                    ? "يمكنك الآن تحديث نفس المشروع أو حفظ نسخة جديدة بالاسم الحالي."
-                    : "ابدأ التسمية ثم احفظ المشروع ليظهر داخل مكتبة المشاريع."}
-                </span>
-                <div className="flex flex-col gap-1 text-right md:items-end md:text-left">
-                  {projectActionMessage ? (
-                    <span className="font-medium leading-6 text-emerald-700">
-                      {projectActionMessage}
-                    </span>
-                  ) : null}
-                  {projectArrangementAutosaveMessage ? (
-                    <span
-                      className={cn(
-                        "font-medium leading-6",
-                        projectArrangementAutosaveToneClassName,
-                      )}
-                    >
-                      {projectArrangementAutosaveMessage}
-                    </span>
-                  ) : null}
+              <div className="mt-4 flex flex-wrap items-center justify-between gap-3 text-xs">
+                <div className="flex flex-wrap gap-3 text-slate-500">
+                  <span>{units.length} وحدة</span>
+                  <span>{customParts.length} مقاس حر</span>
+                  <span>{savedProjects.length} محفوظ</span>
+                  <span>{projectMaterialSummary}</span>
                 </div>
-              </div>
-            </div>
 
-            <div className="rounded-2xl bg-stone-50/90 px-4 py-3 ring-1 ring-stone-200">
-              <p className="text-xs text-stone-500">إعدادات المشروع الحالية</p>
-              <p className="mt-1 text-sm font-medium text-stone-950">
-                {materialLabels[projectSettings.material]} •{" "}
-                {formatMmFromCm(projectSettings.boardThickness)} • ظهر{" "}
-                {formatMmFromCm(projectSettings.backThickness)}
-              </p>
-              <p className="mt-1 text-xs text-stone-500">
-                لوح 18:{" "}
-                {formatSheetSize(
-                  projectSettings.boardSheetLength,
-                  projectSettings.boardSheetWidth,
-                )}{" "}
-                • لوح 6:{" "}
-                {formatSheetSize(
-                  projectSettings.backSheetLength,
-                  projectSettings.backSheetWidth,
+                {projectActionMessage || projectArrangementAutosaveMessage ? (
+                  <div className="flex flex-col items-end gap-1">
+                    {projectActionMessage ? (
+                      <span className="font-medium text-teal-700">
+                        {projectActionMessage}
+                      </span>
+                    ) : null}
+                    {projectArrangementAutosaveMessage ? (
+                      <span className={cn("font-medium", projectArrangementAutosaveToneClassName)}>
+                        {projectArrangementAutosaveMessage}
+                      </span>
+                    ) : null}
+                  </div>
+                ) : (
+                  <span className="text-slate-500">
+                    {currentProjectId
+                      ? "يمكنك تحديث نفس المشروع أو حفظ نسخة جديدة من نفس المسرح."
+                      : "ابدأ التسمية ثم احفظ المشروع ليظهر داخل مكتبة المشاريع."}
+                  </span>
                 )}
-              </p>
-              <p className="mt-1 text-xs text-stone-500">
-                سلاح: {formatOptionalMmFromCm(projectSettings.cutKerf)} • حافة
-                تشطيب: {formatOptionalMmFromCm(projectSettings.trimMargin)}
-              </p>
-              <p className="mt-1 text-xs text-stone-500">
-                التخطيط:{" "}
-                {
-                  sheetLayoutOptimizationModeLabels[
-                    projectSettings.optimizationMode
-                  ]
-                }
-              </p>
-              <p className="mt-1 text-xs text-stone-500">
-                لوح 18: {formatPrice(projectSettings.boardSheetPrice)} • لوح 6:{" "}
-                {formatPrice(projectSettings.backSheetPrice)} • مصنعية:{" "}
-                {formatPrice(projectSettings.laborPricePerSquareMeter)}/م²
-              </p>
-              <p className="mt-1 text-xs text-stone-500">
-                شريط حافة: {formatPrice(projectSettings.edgeBandPricePerMeter)}
-                /م ط • مفصلة: {formatPrice(projectSettings.hingePrice)}/قطعة
-              </p>
+              </div>
             </div>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => setIsProjectSettingsOpen(true)}
-            >
-              <Settings2 className="size-4" />
-              إعدادات المشروع
-            </Button>
           </div>
         </section>
 
-        <section className="mt-6">
-          <div className="flex gap-2 overflow-x-auto pb-2 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-            {workspaceTabs.map((tab) => {
-              const Icon = tab.icon;
-              const isActive = activeWorkspaceTab === tab.id;
+        <section className="mt-4 xl:hidden">
+          <Card className="border-0 bg-white/88 shadow-[0_20px_56px_-40px_rgba(20,27,33,0.24)] ring-1 ring-slate-900/5">
+            <CardContent className="space-y-4 p-4">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-slate-500">
+                    Stage + Drawer
+                  </p>
+                  <p className="mt-2 text-lg font-semibold text-slate-950">
+                    {dashboardFocusTitle}
+                  </p>
+                  <p className="mt-1 text-xs leading-6 text-slate-600">
+                    {dashboardFocusDescription}
+                  </p>
+                </div>
+                <div className="flex size-11 shrink-0 items-center justify-center rounded-[1rem] bg-[linear-gradient(145deg,#223842,#49616d)] text-slate-100 shadow-[0_16px_28px_-18px_rgba(26,42,51,0.42)]">
+                  <ActiveWorkspaceIcon className="size-4" />
+                </div>
+              </div>
 
-              return (
-                <button
-                  key={tab.id}
+              <div className="rounded-[1.5rem] border border-slate-200/70 bg-[radial-gradient(circle_at_top,_rgba(255,255,255,0.6),_transparent_38%),linear-gradient(180deg,#edf3f4_0%,#dbe7e7_100%)] p-4 shadow-[0_18px_40px_-32px_rgba(26,42,51,0.18)]">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-[11px] uppercase tracking-[0.14em] text-slate-500">
+                      Immersive Stage
+                    </p>
+                    <p className="mt-1 text-sm font-semibold text-slate-950">
+                      {dashboardLeadUnit
+                        ? dashboardLeadUnit.title
+                        : "المشهد ينتظر أول وحدة"}
+                    </p>
+                    <p className="mt-1 text-[11px] leading-5 text-slate-500">
+                      {dashboardLeadUnitSizeLabel ??
+                        "أضف وحدة أو افتح مشروعًا ليبدأ المسرح بعرض الترتيب الحالي."}
+                    </p>
+                  </div>
+                  <Badge
+                    variant="outline"
+                    className="border-slate-200 bg-white/80 text-slate-700"
+                  >
+                    {stageDrawerSceneStatusLabel}
+                  </Badge>
+                </div>
+
+                <div className="relative mt-4 overflow-hidden rounded-[1.3rem] border border-slate-200/70 bg-[linear-gradient(180deg,#e7eff1_0%,#cfdddd_100%)] px-4 pb-5 pt-8">
+                  <div className="absolute inset-x-6 bottom-3 h-4 rounded-full bg-slate-900/10 blur-xl" />
+                  <div className="relative flex min-h-40 items-end justify-center gap-3">
+                    {stageDrawerSceneUnits.length > 0 ? (
+                      stageDrawerSceneUnits.slice(0, 3).map((unit, index) => {
+                        const blockHeight = Math.min(
+                          Math.max(unit.height / 3.2, 88),
+                          180,
+                        );
+                        const blockWidth = Math.min(
+                          Math.max(unit.width / 2.5, 74),
+                          120,
+                        );
+
+                        return (
+                          <div
+                            key={unit.id}
+                            className="flex flex-col items-center gap-3"
+                          >
+                            <div
+                              className={cn(
+                                "relative rounded-[1.2rem] border border-slate-900/15 bg-[linear-gradient(180deg,#899fae_0%,#637c8e_100%)] shadow-[0_18px_30px_-20px_rgba(30,41,59,0.34)]",
+                                index === 1 &&
+                                  "bg-[linear-gradient(180deg,#708899_0%,#4e687b_100%)]",
+                                index === 2 &&
+                                  "bg-[linear-gradient(180deg,#9db4c2_0%,#7994a5_100%)]",
+                              )}
+                              style={{
+                                height: `${blockHeight}px`,
+                                width: `${blockWidth}px`,
+                              }}
+                            >
+                              <div className="absolute inset-[12%] rounded-[0.95rem] border border-white/30" />
+                              <div className="absolute inset-y-[14%] right-[14%] w-[14%] rounded-full border border-white/30 origin-left rotate-[-9deg]" />
+                            </div>
+                            <div className="text-center">
+                              <p className="text-xs font-semibold text-slate-950">
+                                {unit.title}
+                              </p>
+                              <p className="text-[10px] text-slate-500">
+                                {unit.frontLabel}
+                              </p>
+                            </div>
+                          </div>
+                        );
+                      })
+                    ) : (
+                      <div className="flex w-full items-center justify-center rounded-[1rem] border border-dashed border-slate-300 bg-white/55 px-5 py-8 text-center text-sm leading-7 text-slate-500">
+                        افتح وحدة أو أضف أول عنصر ليظهر المسرح التفاعلي هنا بدل
+                        العرض النصي التقليدي.
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <div className="mt-3 grid grid-cols-2 gap-2">
+                  {dashboardTopMetrics.slice(0, 2).map((metric) => (
+                    <div
+                      key={metric.label}
+                      className="rounded-[1rem] border border-slate-200/80 bg-white/82 p-3"
+                    >
+                      <p className="text-[11px] text-slate-500">
+                        {metric.label}
+                      </p>
+                      <p className="mt-2 text-lg font-semibold text-slate-950">
+                        {metric.value}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <details className="rounded-[1.35rem] border border-slate-200 bg-slate-50/80 p-4">
+                <summary className="flex cursor-pointer list-none items-center justify-between gap-3 text-sm font-medium text-slate-950 [&::-webkit-details-marker]:hidden">
+                  <span>Drawer سريع</span>
+                  <span className="text-[11px] text-slate-500">
+                    التوصيات والمحفوظات
+                  </span>
+                </summary>
+                <div className="mt-3 space-y-3">
+                  {stageDrawerLeadRecommendation ? (
+                    <div className="rounded-[1rem] border border-slate-200 bg-white/85 p-3">
+                      <p className="text-sm font-semibold text-slate-950">
+                        {stageDrawerLeadRecommendation.title}
+                      </p>
+                      <p className="mt-1 text-xs leading-6 text-slate-500">
+                        {stageDrawerLeadRecommendation.body}
+                      </p>
+                    </div>
+                  ) : null}
+                  {stageDrawerSupportRecommendation ? (
+                    <div className="rounded-[1rem] border border-slate-200 bg-white/85 p-3">
+                      <p className="text-sm font-semibold text-slate-950">
+                        {stageDrawerSupportRecommendation.title}
+                      </p>
+                      <p className="mt-1 text-xs leading-6 text-slate-500">
+                        {stageDrawerSupportRecommendation.body}
+                      </p>
+                    </div>
+                  ) : null}
+                  <div className="rounded-[1rem] border border-slate-200 bg-white/85 p-3">
+                    <p className="text-xs text-slate-500">آخر مشروع محفوظ</p>
+                    <p className="mt-1 text-sm font-semibold text-slate-950">
+                      {dashboardRecentProjects[0]?.name ?? "لا توجد محفوظات بعد"}
+                    </p>
+                    <p className="mt-1 text-[11px] text-slate-500">
+                      {dashboardRecentProjects[0]
+                        ? `${dashboardRecentProjects[0].units.length} وحدة • ${formatProjectUpdatedAt(dashboardRecentProjects[0].updatedAt)}`
+                        : "عند حفظ أول مشروع سيظهر هنا للعودة السريعة."}
+                    </p>
+                  </div>
+                </div>
+              </details>
+
+              <div className="rounded-[1.45rem] bg-[linear-gradient(180deg,#203640_0%,#15272d_100%)] p-4 text-slate-50 shadow-[0_18px_40px_-28px_rgba(26,42,51,0.52)]">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-xs text-slate-300">الأمر الحالي</p>
+                    <p className="mt-1 text-base font-semibold">
+                      {mobilePrimaryAction.label}
+                    </p>
+                  </div>
+                  <Badge className="bg-white/10 text-slate-50 hover:bg-white/10">
+                    {activeWorkspaceTabConfig.label}
+                  </Badge>
+                </div>
+                <div className="mt-3 flex flex-wrap gap-x-3 gap-y-1 text-xs text-slate-300">
+                  <span>{units.length} وحدة</span>
+                  <span>{customParts.length} حر</span>
+                  <span>{savedProjects.length} محفوظ</span>
+                </div>
+                <Button
                   type="button"
-                  onClick={() => setActiveWorkspaceTab(tab.id)}
-                  className={cn(
-                    "flex min-w-[10.5rem] shrink-0 items-center justify-between rounded-[1.35rem] border px-4 py-3 text-right transition-colors",
-                    isActive
-                      ? "border-stone-950 bg-stone-950 text-stone-50"
-                      : "border-stone-200 bg-white/88 text-stone-700",
-                  )}
+                  className="mt-4 h-10 w-full rounded-[0.95rem] bg-white text-slate-950 hover:bg-white/90"
+                  onClick={mobilePrimaryAction.onClick}
+                  disabled={mobilePrimaryAction.disabled}
                 >
-                  <div className="flex items-center gap-3">
-                    <span
+                  <mobilePrimaryAction.icon className="size-4" />
+                  {mobilePrimaryAction.label}
+                </Button>
+              </div>
+
+              <div className="grid grid-cols-4 gap-2 rounded-[1.35rem] bg-slate-950/90 p-2 shadow-[0_18px_34px_-28px_rgba(20,27,33,0.45)]">
+                {stageDrawerNavTabs.map((tab) => {
+                  const Icon = tab.icon;
+                  const isActive = activeWorkspaceTab === tab.id;
+
+                  return (
+                    <button
+                      key={tab.id}
+                      type="button"
+                      onClick={() => {
+                        setActiveWorkspaceTab(tab.id);
+                        setStageDrawerMobilePanel(null);
+                      }}
                       className={cn(
-                        "flex size-10 items-center justify-center rounded-full",
-                        isActive ? "bg-white/10" : "bg-stone-100",
+                        "rounded-[1rem] px-2 py-2 text-center text-[11px] font-medium text-slate-300 transition-colors",
+                        isActive &&
+                          "bg-[linear-gradient(145deg,#486d7f,#6a98ab)] text-white",
                       )}
                     >
-                      <Icon className="size-4" />
-                    </span>
-                    <div>
-                      <p className="text-sm font-semibold">{tab.label}</p>
-                      <p
-                        className={cn(
-                          "text-[11px]",
-                          isActive ? "text-stone-300" : "text-stone-500",
+                      <Icon className="mx-auto mb-1 size-4" />
+                      {tab.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </CardContent>
+          </Card>
+        </section>
+
+        {stageDrawerMobilePanel ? (
+          <div
+            className="fixed inset-0 z-40 bg-slate-950/35 backdrop-blur-sm xl:hidden"
+            onClick={() => setStageDrawerMobilePanel(null)}
+          >
+            <div
+              className="absolute inset-x-0 bottom-0 max-h-[78vh] overflow-hidden rounded-t-[2rem] border border-slate-200/70 bg-[linear-gradient(180deg,#f4f8f8_0%,#e6edec_100%)] shadow-[0_-24px_70px_-30px_rgba(20,27,33,0.45)]"
+              onClick={(event) => event.stopPropagation()}
+            >
+              <div className="mx-auto mt-3 h-1.5 w-14 rounded-full bg-slate-300" />
+              <div className="flex items-center justify-between gap-3 px-4 pb-3 pt-4">
+                <div className="flex gap-2">
+                  <Button
+                    type="button"
+                    variant={
+                      stageDrawerMobilePanel === "details" ? "default" : "outline"
+                    }
+                    className={cn(
+                      "rounded-full",
+                      stageDrawerMobilePanel === "details" &&
+                        "bg-[linear-gradient(145deg,#416575,#5b8699)] text-white hover:bg-[linear-gradient(145deg,#416575,#5b8699)]",
+                    )}
+                    onClick={() => setStageDrawerMobilePanel("details")}
+                  >
+                    تفاصيل
+                  </Button>
+                  <Button
+                    type="button"
+                    variant={
+                      stageDrawerMobilePanel === "actions" ? "default" : "outline"
+                    }
+                    className={cn(
+                      "rounded-full",
+                      stageDrawerMobilePanel === "actions" &&
+                        "bg-[linear-gradient(145deg,#203640,#15272d)] text-white hover:bg-[linear-gradient(145deg,#203640,#15272d)]",
+                    )}
+                    onClick={() => setStageDrawerMobilePanel("actions")}
+                  >
+                    أوامر
+                  </Button>
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="rounded-full bg-white/85"
+                  onClick={() => setStageDrawerMobilePanel(null)}
+                >
+                  إغلاق
+                </Button>
+              </div>
+
+              <div className="max-h-[calc(78vh-4.5rem)] overflow-y-auto px-4 pb-5">
+                {stageDrawerMobilePanel === "details" ? (
+                  <div className="space-y-3">
+                    <div className="rounded-[1.3rem] border border-slate-200 bg-white/84 p-4">
+                      <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-slate-500">
+                        Left Drawer
+                      </p>
+                      <p className="mt-2 text-base font-semibold text-slate-950">
+                        تفاصيل الوحدة تفتح وتغلق بدل أن تبقى دائمة.
+                      </p>
+                      <p className="mt-2 text-sm leading-7 text-slate-600">
+                        {dashboardFocusDescription}
+                      </p>
+                    </div>
+
+                    <div className="rounded-[1.15rem] border border-slate-200 bg-white/84 p-4">
+                      <p className="text-xs text-slate-500">الوحدة النشطة</p>
+                      <p className="mt-2 text-sm font-semibold text-slate-950">
+                        {dashboardLeadUnit?.title ?? "المشهد ينتظر أول وحدة"}
+                      </p>
+                      <p className="mt-1 text-xs leading-6 text-slate-500">
+                        {dashboardLeadUnitSizeLabel ??
+                          "أضف وحدة أو افتح مشروعًا ليبدأ المسرح بعرض الترتيب الحالي."}
+                      </p>
+                    </div>
+
+                    {stageDrawerLeadRecommendation ? (
+                      <div className="rounded-[1.15rem] border border-slate-200 bg-white/84 p-4">
+                        <p className="text-sm font-semibold text-slate-950">
+                          {stageDrawerLeadRecommendation.title}
+                        </p>
+                        <p className="mt-1 text-xs leading-6 text-slate-500">
+                          {stageDrawerLeadRecommendation.body}
+                        </p>
+                      </div>
+                    ) : null}
+
+                    {stageDrawerSupportRecommendation ? (
+                      <div className="rounded-[1.15rem] border border-slate-200 bg-white/84 p-4">
+                        <p className="text-sm font-semibold text-slate-950">
+                          {stageDrawerSupportRecommendation.title}
+                        </p>
+                        <p className="mt-1 text-xs leading-6 text-slate-500">
+                          {stageDrawerSupportRecommendation.body}
+                        </p>
+                      </div>
+                    ) : null}
+
+                    <div className="rounded-[1.15rem] border border-slate-200 bg-white/84 p-4">
+                      <div className="flex items-center justify-between gap-3">
+                        <p className="text-sm font-semibold text-slate-950">
+                          آخر المشاريع
+                        </p>
+                        <span className="text-xs text-slate-500">
+                          {savedProjects.length} محفوظ
+                        </span>
+                      </div>
+                      <div className="mt-3 space-y-2">
+                        {dashboardRecentProjects.length > 0 ? (
+                          dashboardRecentProjects.map((project) => (
+                            <div
+                              key={project.id}
+                              className="rounded-[1rem] border border-slate-200 bg-slate-50/80 px-3 py-3"
+                            >
+                              <p className="text-sm font-semibold text-slate-950">
+                                {project.name}
+                              </p>
+                              <p className="mt-1 text-xs text-slate-500">
+                                {project.units.length} وحدة • آخر حفظ{" "}
+                                {formatProjectUpdatedAt(project.updatedAt)}
+                              </p>
+                            </div>
+                          ))
+                        ) : (
+                          <p className="text-xs leading-6 text-slate-500">
+                            عند حفظ أول مشروع سيظهر هنا كمختصر سريع للعودة إليه.
+                          </p>
                         )}
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    <div className="rounded-[1.3rem] bg-[linear-gradient(180deg,#203640_0%,#15272d_100%)] p-4 text-slate-50 shadow-[0_18px_40px_-28px_rgba(26,42,51,0.36)]">
+                      <div className="flex items-center justify-between gap-3">
+                        <div>
+                          <p className="text-xs text-slate-300">الأمر الحالي</p>
+                          <p className="mt-1 text-base font-semibold">
+                            {mobilePrimaryAction.label}
+                          </p>
+                        </div>
+                        <Badge className="bg-white/10 text-slate-50 hover:bg-white/10">
+                          {activeWorkspaceTabConfig.label}
+                        </Badge>
+                      </div>
+                      <div className="mt-3 flex flex-wrap gap-x-3 gap-y-1 text-xs text-slate-300">
+                        <span>{units.length} وحدة</span>
+                        <span>{customParts.length} حر</span>
+                        <span>{savedProjects.length} محفوظ</span>
+                      </div>
+                      <Button
+                        type="button"
+                        className="mt-4 h-10 w-full rounded-[0.95rem] bg-white text-slate-950 hover:bg-white/90"
+                        onClick={() => {
+                          mobilePrimaryAction.onClick();
+                          setStageDrawerMobilePanel(null);
+                        }}
+                        disabled={mobilePrimaryAction.disabled}
                       >
-                        {tab.badge}
+                        <mobilePrimaryAction.icon className="size-4" />
+                        {mobilePrimaryAction.label}
+                      </Button>
+                    </div>
+
+                    <div className="rounded-[1.15rem] border border-slate-200 bg-white/84 p-4">
+                      <Label
+                        htmlFor="stageProjectNameMobile"
+                        className="text-xs text-slate-500"
+                      >
+                        اسم المشروع
+                      </Label>
+                      <Input
+                        id="stageProjectNameMobile"
+                        value={projectName}
+                        onChange={(event) => setProjectName(event.target.value)}
+                        className="mt-2 h-10 bg-white text-sm font-medium"
+                      />
+                    </div>
+
+                    <div className="space-y-2 rounded-[1.15rem] border border-slate-200 bg-white/84 p-4">
+                      {dashboardProjectRailSettings.map((setting) => (
+                        <div
+                          key={setting.label}
+                          className="flex items-center justify-between gap-3 text-sm"
+                        >
+                          <span className="text-slate-500">{setting.label}</span>
+                          <span className="font-medium text-slate-950">
+                            {setting.value}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="h-10 bg-white/85"
+                        onClick={saveCurrentProject}
+                      >
+                        <Save className="size-4" />
+                        حفظ
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="h-10 bg-white/85"
+                        onClick={() => setIsProjectSettingsOpen(true)}
+                      >
+                        <Settings2 className="size-4" />
+                        الإعدادات
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="h-10 bg-white/85"
+                        onClick={() => setIsProjectLibraryOpen(true)}
+                      >
+                        <FolderOpen className="size-4" />
+                        المشاريع
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="h-10 bg-white/85"
+                        onClick={resetProjectWorkspace}
+                      >
+                        <Plus className="size-4" />
+                        مشروع جديد
+                      </Button>
+                    </div>
+
+                    <div className="flex items-center justify-between gap-3 rounded-[1rem] border border-slate-200 bg-white/84 px-3 py-3 text-xs text-slate-500">
+                      <div>
+                        <Badge variant="outline" className="bg-white/90">
+                          {currentUser.name}
+                        </Badge>
+                        <p dir="ltr" className="mt-1 truncate text-[11px]">
+                          {currentUser.email}
+                        </p>
+                      </div>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={logoutCurrentUser}
+                      >
+                        <LogOut className="size-4" />
+                        خروج
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        ) : null}
+
+        <section
+          className={cn(
+            "mt-6 hidden gap-5 xl:grid",
+            stageDrawerDesktopLeftOpen && stageDrawerDesktopRightOpen
+              ? "xl:grid-cols-[0.82fr_minmax(0,1.3fr)_0.88fr]"
+              : stageDrawerDesktopLeftOpen
+                ? "xl:grid-cols-[0.82fr_minmax(0,1.4fr)_4.5rem]"
+                : stageDrawerDesktopRightOpen
+                  ? "xl:grid-cols-[4.5rem_minmax(0,1.4fr)_0.88fr]"
+                  : "xl:grid-cols-[4.5rem_minmax(0,1fr)_4.5rem]",
+          )}
+        >
+          <Card className="border-0 bg-white/88 shadow-[0_24px_64px_-44px_rgba(20,27,33,0.22)] ring-1 ring-slate-900/5">
+            <CardContent className={cn("h-full", stageDrawerDesktopLeftOpen ? "space-y-4 p-5" : "p-0")}>
+              {stageDrawerDesktopLeftOpen ? (
+                <>
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500">
+                        Left Drawer
+                      </p>
+                      <h2 className="mt-4 text-[1.8rem] font-semibold leading-tight text-slate-950">
+                        تفاصيل الوحدة تفتح وتغلق بدل أن تبقى دائمة.
+                      </h2>
+                      <p className="mt-3 text-sm leading-7 text-slate-600">
+                        {dashboardFocusDescription}
+                      </p>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="rounded-full bg-white/85"
+                      onClick={() => setStageDrawerDesktopLeftOpen(false)}
+                    >
+                      <ArrowRight className="size-4" />
+                      طي
+                    </Button>
+                  </div>
+
+                  <div className="space-y-3">
+                    <div className="rounded-[1.35rem] border border-slate-200 bg-slate-50/80 p-4">
+                      <strong className="block text-base text-slate-950">
+                        الوحدة النشطة
+                      </strong>
+                      <p className="mt-2 text-sm leading-7 text-slate-500">
+                        {dashboardLeadUnit?.title ?? "المشهد ينتظر أول وحدة"} •{" "}
+                        {dashboardLeadUnitSizeLabel ?? "بانتظار إدخال المقاسات"}
+                      </p>
+                    </div>
+
+                    <div className="rounded-[1.35rem] border border-slate-200 bg-slate-50/80 p-4">
+                      <strong className="block text-base text-slate-950">
+                        المقاسات الحرة
+                      </strong>
+                      <p className="mt-2 text-sm leading-7 text-slate-500">
+                        {customParts.length > 0
+                          ? `${customParts.length} مقاس حر يفتح من drawer منفصل فوق المسرح عند الحاجة.`
+                          : "لا توجد مقاسات حرة بعد. سيظل هذا الجزء مختصرًا حتى تبدأ الإضافة."}
+                      </p>
+                    </div>
+
+                    <div className="rounded-[1.35rem] border border-slate-200 bg-slate-50/80 p-4">
+                      <strong className="block text-base text-slate-950">
+                        مراجعة قبل الإضافة
+                      </strong>
+                      <p className="mt-2 text-sm leading-7 text-slate-500">
+                        {stageDrawerLeadRecommendation?.title ??
+                          "تحذيرات التصميم ستظهر هنا فور اكتمال المقاسات بدل البقاء في بطاقات طويلة داخل الصفحة."}
+                      </p>
+                    </div>
+
+                    <div className="rounded-[1.35rem] border border-slate-200 bg-slate-50/80 p-4">
+                      <strong className="block text-base text-slate-950">
+                        قائمة الوحدات
+                      </strong>
+                      <p className="mt-2 text-sm leading-7 text-slate-500">
+                        {stageDrawerSceneUnits.length > 0
+                          ? stageDrawerSceneUnits
+                              .slice(0, 3)
+                              .map((unit) => unit.title)
+                              .join(" • ")
+                          : "سحب سريع بين الوحدات سيظهر هنا عندما يصبح لديك ترتيب فعلي على المسرح."}
                       </p>
                     </div>
                   </div>
+                </>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setStageDrawerDesktopLeftOpen(true)}
+                  className="flex h-full w-full flex-col items-center justify-center gap-4 rounded-[1.9rem] bg-white/78 text-slate-500"
+                >
+                  <ArrowRight className="size-4" />
+                  <span className="-rotate-90 whitespace-nowrap text-xs font-bold uppercase tracking-[0.2em]">
+                    Left Drawer
+                  </span>
                 </button>
-              );
-            })}
-          </div>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card className="border-0 bg-white/88 shadow-[0_26px_70px_-42px_rgba(20,27,33,0.24)] ring-1 ring-slate-900/5">
+            <CardContent className="p-0">
+              <div className="relative overflow-hidden rounded-[2rem] border border-slate-200/70 bg-[radial-gradient(circle_at_top,_rgba(255,255,255,0.62),_transparent_36%),linear-gradient(180deg,#edf3f4_0%,#dfe8e7_100%)] p-6">
+                <div className="absolute -left-12 top-0 size-36 rounded-full bg-sky-300/20 blur-3xl" />
+                <div className="absolute bottom-0 right-0 size-40 rounded-full bg-slate-200/30 blur-3xl" />
+
+                <div className="relative flex items-start justify-between gap-4">
+                  <div className="max-w-2xl">
+                    <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500">
+                      Immersive Stage
+                    </p>
+                    <h2 className="mt-4 text-3xl font-semibold leading-tight text-slate-950">
+                      المسرح هو البطل الرئيسي للتجربة.
+                    </h2>
+                    <p className="mt-3 text-sm leading-7 text-slate-600">
+                      مناسب لو تريد أن يشعر المستخدم أنه يعمل داخل مشهد تفاعلي، خصوصًا مع ترتيب الوحدات وفتح الدلف والطباعة من نفس الشاشة.
+                    </p>
+                  </div>
+
+                  <Badge
+                    variant="outline"
+                    className="border-slate-200 bg-white/85 text-slate-700"
+                  >
+                    {stageDrawerSceneUnits.length > 0
+                      ? `${stageDrawerSceneUnits.length} وحدات • ${stageDrawerSceneStatusLabel}`
+                      : stageDrawerSceneStatusLabel}
+                  </Badge>
+                </div>
+
+                <div className="relative mt-6 overflow-hidden rounded-[1.8rem] border border-slate-200/70 bg-[linear-gradient(180deg,#dfe9ea_0%,#ccdbda_100%)] px-6 pb-24 pt-10">
+                  <div className="absolute inset-x-6 top-4 flex items-center justify-between text-[11px] text-slate-500">
+                    <span>
+                      الترتيب: {projectPreviewUnits.length > 0 ? `داخل المشروع ${projectPreviewUnits.length}` : "بانتظار البناء"}
+                    </span>
+                    <span>
+                      الوحدة النشطة: {dashboardLeadUnit?.title ?? "--"}
+                    </span>
+                  </div>
+                  <div className="absolute inset-x-10 bottom-10 h-5 rounded-full bg-slate-900/10 blur-xl" />
+
+                  <div className="relative flex min-h-[28rem] items-end justify-center gap-5">
+                    {stageDrawerSceneUnits.length > 0 ? (
+                      stageDrawerSceneUnits.slice(0, 3).map((unit, index) => {
+                        const blockHeight = Math.min(
+                          Math.max(unit.height / 2.9, 140),
+                          284,
+                        );
+                        const blockWidth = Math.min(
+                          Math.max(unit.width / 1.7, 112),
+                          170,
+                        );
+
+                        return (
+                          <div
+                            key={unit.id}
+                            className="flex flex-col items-center gap-3"
+                          >
+                            <div
+                              className={cn(
+                                "relative rounded-[1.65rem] border border-slate-900/15 bg-[linear-gradient(180deg,#899fae_0%,#637c8e_100%)] shadow-[0_20px_34px_-22px_rgba(30,41,59,0.34)]",
+                                index === 1 &&
+                                  "bg-[linear-gradient(180deg,#708899_0%,#4e687b_100%)]",
+                                index === 2 &&
+                                  "bg-[linear-gradient(180deg,#9db4c2_0%,#7994a5_100%)]",
+                              )}
+                              style={{
+                                height: `${blockHeight}px`,
+                                width: `${blockWidth}px`,
+                              }}
+                            >
+                              <div className="absolute inset-[12%] rounded-[1.1rem] border border-white/30" />
+                              <div className="absolute inset-y-[13%] right-[13%] w-[12%] rounded-full border border-white/30 origin-left rotate-[-11deg]" />
+                            </div>
+                            <div className="text-center">
+                              <p className="text-sm font-semibold text-slate-950">
+                                {unit.title}
+                              </p>
+                              <p className="text-[11px] text-slate-500">
+                                {unit.frontLabel} • {round2(unit.width)} × {round2(unit.height)} × {round2(unit.depth)}
+                              </p>
+                            </div>
+                          </div>
+                        );
+                      })
+                    ) : (
+                      <div className="flex w-full items-center justify-center rounded-[1.2rem] border border-dashed border-slate-300 bg-white/55 px-6 py-14 text-center text-sm leading-7 text-slate-500">
+                        ابدأ بإضافة أول وحدة أو أكمل مقاسات المحرر الحالي ليظهر المسرح بدل الحالة الفارغة.
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="absolute bottom-4 left-1/2 flex -translate-x-1/2 items-center gap-2 rounded-[1.5rem] bg-slate-950/90 p-2 shadow-[0_20px_40px_-24px_rgba(18,24,30,0.34)]">
+                    <button
+                      type="button"
+                      onClick={() => setActiveWorkspaceTab("builder")}
+                      className="rounded-[1rem] px-4 py-2 text-xs font-semibold text-slate-300 transition-colors hover:bg-white/5 hover:text-white"
+                    >
+                      الإضافة
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setActiveWorkspaceTab("preview")}
+                      className="rounded-[1rem] bg-[linear-gradient(145deg,#457082,#6695a8)] px-4 py-2 text-xs font-semibold text-white"
+                    >
+                      المعاينة
+                    </button>
+                    <button
+                      type="button"
+                      onClick={printProjectPreviewSnapshot}
+                      disabled={projectPreviewUnits.length === 0}
+                      className="rounded-[1rem] px-4 py-2 text-xs font-semibold text-slate-300 transition-colors hover:bg-white/5 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      طباعة
+                    </button>
+                    <button
+                      type="button"
+                      onClick={resetProjectArrangement}
+                      disabled={projectPreviewUnits.length <= 1}
+                      className="rounded-[1rem] px-4 py-2 text-xs font-semibold text-slate-300 transition-colors hover:bg-white/5 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      إعادة ضبط
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="border-0 bg-[linear-gradient(180deg,#19242a_0%,#12191f_100%)] text-slate-50 shadow-[0_26px_70px_-42px_rgba(20,27,33,0.56)] ring-1 ring-white/5">
+            <CardContent className={cn("h-full", stageDrawerDesktopRightOpen ? "space-y-4 p-5" : "p-0")}>
+              {stageDrawerDesktopRightOpen ? (
+                <>
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-300">
+                        Right Drawer
+                      </p>
+                      <h2 className="mt-4 text-[1.8rem] font-semibold leading-tight">
+                        لوحة أوامر وسياق بدل بطاقات كثيرة.
+                      </h2>
+                      <p className="mt-3 text-sm leading-7 text-slate-300">
+                        القيمة هنا أن الأوامر الأساسية لا تغادر المشهد، بينما التفاصيل الثانوية تبقى قابلة للطي.
+                      </p>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="rounded-full border-white/10 bg-white/5 text-slate-100 hover:bg-white/10"
+                      onClick={() => setStageDrawerDesktopRightOpen(false)}
+                    >
+                      <ArrowLeft className="size-4" />
+                      طي
+                    </Button>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="rounded-[1.2rem] border border-white/10 bg-white/5 p-4">
+                      <p className="text-xs text-slate-300">الوحدات</p>
+                      <p className="mt-2 text-2xl font-semibold text-slate-50">
+                        {units.length}
+                      </p>
+                    </div>
+                    <div className="rounded-[1.2rem] border border-white/10 bg-white/5 p-4">
+                      <p className="text-xs text-slate-300">المفصلات</p>
+                      <p className="mt-2 text-2xl font-semibold text-slate-50">
+                        {hasCalculatedProject ? projectSummary.totalHingeCount : "--"}
+                      </p>
+                    </div>
+                    <div className="rounded-[1.2rem] border border-white/10 bg-white/5 p-4">
+                      <p className="text-xs text-slate-300">الهالك</p>
+                      <p className="mt-2 text-2xl font-semibold text-slate-50">
+                        {hasCalculatedProject ? `${projectLayoutWastePercent}%` : "--"}
+                      </p>
+                    </div>
+                    <div className="rounded-[1.2rem] border border-white/10 bg-white/5 p-4">
+                      <p className="text-xs text-slate-300">أمر سريع</p>
+                      <p className="mt-2 text-sm font-semibold leading-6 text-slate-50">
+                        {mobilePrimaryAction.label}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="space-y-2 rounded-[1.35rem] border border-white/10 bg-white/5 p-4">
+                    {dashboardProjectRailSettings.map((setting) => (
+                      <div
+                        key={setting.label}
+                        className="flex items-center justify-between gap-3 text-sm"
+                      >
+                        <span className="text-slate-300">{setting.label}</span>
+                        <span className="font-medium text-slate-50">
+                          {setting.value}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="rounded-[1.35rem] border border-white/10 bg-white/5 p-4">
+                    <p className="text-sm font-semibold text-slate-50">
+                      أفضل لحظة استخدام
+                    </p>
+                    <p className="mt-2 text-sm leading-7 text-slate-300">
+                      بعد إدخال الوحدات، وأثناء مراجعة المشروع مع العميل أو داخل الورشة.
+                    </p>
+                  </div>
+
+                  <div className="rounded-[1.35rem] border border-white/10 bg-white/5 p-4">
+                    <div className="flex items-center justify-between gap-3">
+                      <p className="text-sm font-semibold text-slate-50">
+                        آخر المشاريع
+                      </p>
+                      <span className="text-xs text-slate-300">
+                        {savedProjects.length} محفوظ
+                      </span>
+                    </div>
+                    <div className="mt-3 space-y-2">
+                      {dashboardRecentProjects.length > 0 ? (
+                        dashboardRecentProjects.map((project) => (
+                          <div
+                            key={project.id}
+                            className="rounded-[1rem] border border-white/10 bg-white/5 px-3 py-3"
+                          >
+                            <p className="text-sm font-semibold text-slate-50">
+                              {project.name}
+                            </p>
+                            <p className="mt-1 text-xs text-slate-300">
+                              {project.units.length} وحدة • آخر حفظ {formatProjectUpdatedAt(project.updatedAt)}
+                            </p>
+                          </div>
+                        ))
+                      ) : (
+                        <p className="text-xs leading-6 text-slate-300">
+                          عند حفظ أول مشروع سيظهر هنا كمختصر سريع للعودة إليه.
+                        </p>
+                      )}
+                    </div>
+                  </div>
+
+                  <Button
+                    type="button"
+                    className="h-11 w-full rounded-[1rem] bg-white text-slate-950 hover:bg-white/90"
+                    onClick={mobilePrimaryAction.onClick}
+                    disabled={mobilePrimaryAction.disabled}
+                  >
+                    <mobilePrimaryAction.icon className="size-4" />
+                    {mobilePrimaryAction.label}
+                  </Button>
+                </>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setStageDrawerDesktopRightOpen(true)}
+                  className="flex h-full w-full flex-col items-center justify-center gap-4 rounded-[1.9rem] bg-[linear-gradient(180deg,#19242a_0%,#12191f_100%)] text-slate-300"
+                >
+                  <ArrowLeft className="size-4" />
+                  <span className="-rotate-90 whitespace-nowrap text-xs font-bold uppercase tracking-[0.2em]">
+                    Right Drawer
+                  </span>
+                </button>
+              )}
+            </CardContent>
+          </Card>
         </section>
 
         {activeWorkspaceTab === "project" ? (
           <section className="mt-6 grid gap-6 xl:grid-cols-[1.05fr_0.95fr]">
-            <Card className="border-0 bg-white/88 shadow-[0_20px_60px_-45px_rgba(63,40,12,0.55)] ring-1 ring-stone-950/8">
+            <Card className="border-0 bg-white/88 shadow-[0_20px_60px_-45px_rgba(24,32,40,0.55)] ring-1 ring-slate-950/8">
               <CardHeader>
                 <CardTitle>إدارة المشروع</CardTitle>
                 <CardDescription>
@@ -5888,12 +6766,12 @@ function App() {
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
-                <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-stone-200 bg-stone-50/80 p-4 text-sm text-stone-600">
+                <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-slate-50/80 p-4 text-sm text-slate-600">
                   <div className="space-y-1">
-                    <p className="font-medium text-stone-950">
+                    <p className="font-medium text-slate-950">
                       {currentUser.name}
                     </p>
-                    <p dir="ltr" className="text-xs text-stone-500">
+                    <p dir="ltr" className="text-xs text-slate-500">
                       {currentUser.email}
                     </p>
                   </div>
@@ -5919,21 +6797,21 @@ function App() {
                 </div>
 
                 <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-                  <div className="rounded-2xl border border-stone-200 bg-stone-50/80 p-4">
-                    <p className="text-xs text-stone-500">الوحدات الحالية</p>
-                    <p className="mt-2 text-lg font-semibold text-stone-950">
+                  <div className="rounded-2xl border border-slate-200 bg-slate-50/80 p-4">
+                    <p className="text-xs text-slate-500">الوحدات الحالية</p>
+                    <p className="mt-2 text-lg font-semibold text-slate-950">
                       {units.length}
                     </p>
                   </div>
-                  <div className="rounded-2xl border border-stone-200 bg-stone-50/80 p-4">
-                    <p className="text-xs text-stone-500">المقاسات الحرة</p>
-                    <p className="mt-2 text-lg font-semibold text-stone-950">
+                  <div className="rounded-2xl border border-slate-200 bg-slate-50/80 p-4">
+                    <p className="text-xs text-slate-500">المقاسات الحرة</p>
+                    <p className="mt-2 text-lg font-semibold text-slate-950">
                       {customParts.length}
                     </p>
                   </div>
-                  <div className="rounded-2xl border border-stone-200 bg-stone-50/80 p-4">
-                    <p className="text-xs text-stone-500">المحفوظات</p>
-                    <p className="mt-2 text-lg font-semibold text-stone-950">
+                  <div className="rounded-2xl border border-slate-200 bg-slate-50/80 p-4">
+                    <p className="text-xs text-slate-500">المحفوظات</p>
+                    <p className="mt-2 text-lg font-semibold text-slate-950">
                       {savedProjects.length}
                     </p>
                   </div>
@@ -5995,7 +6873,7 @@ function App() {
                 {projectActionMessage || projectArrangementAutosaveMessage ? (
                   <div className="space-y-3">
                     {projectActionMessage ? (
-                      <div className="rounded-2xl border border-emerald-200 bg-emerald-50/80 p-4 text-sm text-emerald-800">
+                      <div className="rounded-2xl border border-teal-200 bg-teal-50/80 p-4 text-sm text-teal-800">
                         {projectActionMessage}
                       </div>
                     ) : null}
@@ -6004,10 +6882,10 @@ function App() {
                         className={cn(
                           "rounded-2xl border p-4 text-sm",
                           projectArrangementAutosaveState === "error"
-                            ? "border-amber-200 bg-amber-50/80 text-amber-800"
+                            ? "border-slate-300 bg-slate-100 text-slate-800"
                             : projectArrangementAutosaveState === "saving"
                               ? "border-sky-200 bg-sky-50/80 text-sky-800"
-                              : "border-emerald-200 bg-emerald-50/80 text-emerald-800",
+                              : "border-teal-200 bg-teal-50/80 text-teal-800",
                         )}
                       >
                         {projectArrangementAutosaveMessage}
@@ -6019,21 +6897,21 @@ function App() {
             </Card>
 
             <div className="grid gap-6">
-              <Card className="border-0 bg-white/88 shadow-[0_20px_60px_-45px_rgba(63,40,12,0.55)] ring-1 ring-stone-950/8">
+              <Card className="border-0 bg-white/88 shadow-[0_20px_60px_-45px_rgba(24,32,40,0.55)] ring-1 ring-slate-950/8">
                 <CardHeader>
                   <CardTitle>ملخص الإعدادات الحالية</CardTitle>
                   <CardDescription>
                     القيم التي ستُطبق على الوحدات والنتائج في هذا المشروع.
                   </CardDescription>
                 </CardHeader>
-                <CardContent className="space-y-3 text-sm text-stone-600">
-                  <div className="rounded-2xl bg-stone-50/80 p-4 ring-1 ring-stone-200">
-                    <p className="font-medium text-stone-950">
+                <CardContent className="space-y-3 text-sm text-slate-600">
+                  <div className="rounded-2xl bg-slate-50/80 p-4 ring-1 ring-slate-200">
+                    <p className="font-medium text-slate-950">
                       {materialLabels[projectSettings.material]} •{" "}
                       {formatMmFromCm(projectSettings.boardThickness)} • ظهر{" "}
                       {formatMmFromCm(projectSettings.backThickness)}
                     </p>
-                    <p className="mt-2 text-xs leading-6 text-stone-500">
+                    <p className="mt-2 text-xs leading-6 text-slate-500">
                       لوح 18:{" "}
                       {formatSheetSize(
                         projectSettings.boardSheetLength,
@@ -6045,7 +6923,7 @@ function App() {
                         projectSettings.backSheetWidth,
                       )}
                     </p>
-                    <p className="mt-1 text-xs leading-6 text-stone-500">
+                    <p className="mt-1 text-xs leading-6 text-slate-500">
                       سلاح: {formatOptionalMmFromCm(projectSettings.cutKerf)} •
                       حافة تشطيب:{" "}
                       {formatOptionalMmFromCm(projectSettings.trimMargin)}
@@ -6054,14 +6932,14 @@ function App() {
                 </CardContent>
               </Card>
 
-              <Card className="border-0 bg-stone-950 text-stone-50 ring-0">
+              <Card className="border-0 bg-slate-950 text-slate-50 ring-0">
                 <CardHeader>
                   <div className="flex items-center gap-2">
                     <Info className="size-4" />
                     <Layers2 className="size-4" />
                     <CardTitle>وضع المحرك الحالي</CardTitle>
                   </div>
-                  <CardDescription className="text-stone-300">
+                  <CardDescription className="text-slate-300">
                     المشروع أصبح يدعم تجميع وحدات متعددة مع أوضاع واجهات مختلفة
                     قبل تنفيذ الحساب النهائي.
                   </CardDescription>
@@ -6074,7 +6952,7 @@ function App() {
         {activeWorkspaceTab === "builder" ? (
           <>
             <section className="mt-6">
-              <div className="grid gap-2 sm:grid-cols-3">
+              <div className="flex gap-2 overflow-x-auto pb-2 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:grid sm:grid-cols-3 sm:overflow-visible sm:pb-0">
                 {builderTabs.map((tab) => {
                   const isActive = activeBuilderTab === tab.id;
 
@@ -6084,16 +6962,16 @@ function App() {
                       type="button"
                       onClick={() => setActiveBuilderTab(tab.id)}
                       className={cn(
-                        "rounded-[1.35rem] border p-4 text-right transition-colors",
+                        "min-w-[11rem] shrink-0 rounded-[1.2rem] border p-3 text-right transition-colors sm:min-w-0 sm:rounded-[1.35rem] sm:p-4",
                         isActive
-                          ? "border-amber-300 bg-amber-50/80 ring-1 ring-amber-200"
-                          : "border-stone-200 bg-white/88",
+                          ? "border-slate-300 bg-slate-100 ring-1 ring-slate-200"
+                          : "border-slate-200 bg-white/88",
                       )}
                     >
-                      <p className="text-sm font-semibold text-stone-950">
+                      <p className="text-sm font-semibold text-slate-950">
                         {tab.label}
                       </p>
-                      <p className="mt-1 text-xs leading-6 text-stone-500">
+                      <p className="mt-1 hidden text-xs leading-6 text-slate-500 sm:block">
                         {tab.description}
                       </p>
                     </button>
@@ -6103,14 +6981,14 @@ function App() {
             </section>
 
             <section className="mt-6 grid gap-6 lg:grid-cols-[1.08fr_0.92fr]">
-              <Card className="border-0 bg-white/88 shadow-[0_20px_60px_-45px_rgba(63,40,12,0.55)] ring-1 ring-stone-950/8">
+              <Card className="border-0 bg-white/88 shadow-[0_20px_60px_-45px_rgba(24,32,40,0.55)] ring-1 ring-slate-950/8">
                 {activeBuilderTab === "unit" ? (
                   <>
                     <CardHeader>
                       <CardTitle>
                         {editingUnitId ? "تعديل وحدة" : "إضافة وحدة"}
                       </CardTitle>
-                      <CardDescription>
+                      <CardDescription className="hidden sm:block">
                         جهّز الوحدة الحالية من المقاسات ونوع الواجهة ثم أضفها
                         إلى قائمة المشروع.
                       </CardDescription>
@@ -6305,11 +7183,11 @@ function App() {
                             </Select>
                           </div>
                         ) : null}
-                        <div className="rounded-2xl border border-stone-200 bg-stone-50/80 px-4 py-3 xl:col-span-2">
-                          <p className="text-xs text-stone-500">
+                        <div className="rounded-2xl border border-slate-200 bg-slate-50/80 px-4 py-3 xl:col-span-2">
+                          <p className="text-xs text-slate-500">
                             إعدادات المشروع
                           </p>
-                          <p className="mt-1 text-sm font-medium text-stone-950">
+                          <p className="mt-1 text-sm font-medium text-slate-950">
                             {materialLabels[projectSettings.material]} •{" "}
                             {formatMmFromCm(projectSettings.boardThickness)} •
                             ظهر {formatMmFromCm(projectSettings.backThickness)}
@@ -6386,29 +7264,110 @@ function App() {
 
                       <Separator />
 
-                      <div className="grid gap-4 lg:grid-cols-[1.25fr_0.75fr]">
-                        <div className="rounded-2xl border border-stone-200 bg-stone-50/70 p-4">
-                          <div className="flex items-center gap-2 text-sm font-medium text-stone-950">
+                      <div className="space-y-3 lg:hidden">
+                        <div className="grid grid-cols-2 gap-2">
+                          <div className="rounded-xl border border-slate-200 bg-slate-50/80 p-3">
+                            <p className="text-[11px] text-slate-500">
+                              الأبعاد
+                            </p>
+                            <p className="mt-1 text-sm font-medium text-slate-950">
+                              {hasEditorCoreDimensions
+                                ? `${formatCm(editorInput.width)} × ${formatCm(editorInput.height)} × ${formatCm(editorInput.depth)}`
+                                : "أدخل المقاسات"}
+                            </p>
+                          </div>
+                          <div className="rounded-xl border border-slate-200 bg-slate-50/80 p-3">
+                            <p className="text-[11px] text-slate-500">
+                              الواجهة
+                            </p>
+                            <p className="mt-1 text-sm font-medium text-slate-950">
+                              {frontOptionLabels[editorInput.frontOption]}
+                            </p>
+                          </div>
+                          <div className="rounded-xl border border-slate-200 bg-slate-50/80 p-3">
+                            <p className="text-[11px] text-slate-500">
+                              عدد الواجهات
+                            </p>
+                            <p className="mt-1 text-sm font-medium text-slate-950">
+                              {editorFrontPieceCount}
+                            </p>
+                          </div>
+                          <div className="rounded-xl border border-slate-200 bg-slate-50/80 p-3">
+                            <p className="text-[11px] text-slate-500">
+                              اتجاه الثمرة
+                            </p>
+                            <p className="mt-1 text-sm font-medium text-slate-950">
+                              {grainDirectionLabels[editorInput.grainDirection]}
+                            </p>
+                          </div>
+                        </div>
+
+                        <details className="rounded-2xl border border-slate-200 bg-slate-50/80 p-4">
+                          <summary className="flex cursor-pointer list-none items-center justify-between gap-3 text-sm font-medium text-slate-950 [&::-webkit-details-marker]:hidden">
+                            <span className="flex items-center gap-2">
+                              <Sparkles className="size-4" />
+                              مراجعة سريعة
+                            </span>
+                            <span className="text-[11px] text-slate-500">
+                              افتح عند الحاجة
+                            </span>
+                          </summary>
+                          {hasEditorCompleteDimensions &&
+                          editorReviewWarnings.length > 0 ? (
+                            <ul className="mt-3 space-y-2 text-sm leading-6 text-slate-600">
+                              {editorReviewWarnings.map((warning) => (
+                                <li key={warning}>{warning}</li>
+                              ))}
+                            </ul>
+                          ) : (
+                            <ul className="mt-3 space-y-2 text-sm leading-6 text-slate-600">
+                              {hasEditorCompleteDimensions ? (
+                                <>
+                                  <li>
+                                    المعاينة الحالية تعكس شكل الواجهة المختار.
+                                  </li>
+                                  <li>
+                                    بعد إضافة الوحدات اضغط احسب لاستخراج مقاسات المشروع.
+                                  </li>
+                                </>
+                              ) : (
+                                <>
+                                  <li>
+                                    ابدأ بإدخال العرض والارتفاع والعمق أولًا.
+                                  </li>
+                                  <li>
+                                    لو كانت الوحدة زاوية L، أدخل ضلع الرجوع أيضًا.
+                                  </li>
+                                </>
+                              )}
+                            </ul>
+                          )}
+                        </details>
+                      </div>
+
+                      <div className="hidden gap-4 lg:grid lg:grid-cols-[1.25fr_0.75fr]">
+                        <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4">
+                          <div className="flex items-center gap-2 text-sm font-medium text-slate-950">
                             <ScanSearch className="size-4" />
                             ملخص الوحدة الجاري إعدادها
                           </div>
                           <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                            <div className="rounded-xl bg-white p-3 ring-1 ring-stone-200">
-                              <p className="text-xs text-stone-500">
+                            <div className="rounded-xl bg-white p-3 ring-1 ring-slate-200">
+                              <p className="text-xs text-slate-500">
                                 الأبعاد الكلية
                               </p>
-                              <p className="mt-1 text-sm font-medium text-stone-950">
+                              <p className="mt-1 text-sm font-medium text-slate-950">
                                 {hasEditorCoreDimensions
                                   ? `${formatCm(editorInput.width)} × ${formatCm(editorInput.height)} × ${formatCm(editorInput.depth)}`
                                   : "أدخل العرض والارتفاع والعمق لعرض الملخص"}
                               </p>
                             </div>
                             {isCornerBlindEditor ? (
-                              <div className="rounded-xl bg-white p-3 ring-1 ring-stone-200">
-                                <p className="text-xs text-stone-500">
+                              <div className="rounded-xl bg-white p-3 ring-1 ring-slate-200">
+                                <p className="text-xs text-slate-500">
                                   بيانات الزاوية
                                 </p>
-                                <p className="mt-1 text-sm font-medium text-stone-950">
+                                <p className="mt-1 text-sm font-medium text-slate-950">
                                   {hasEditorCompleteDimensions
                                     ? `${
                                         cornerPlacementLabels[
@@ -6422,51 +7381,51 @@ function App() {
                                 </p>
                               </div>
                             ) : null}
-                            <div className="rounded-xl bg-white p-3 ring-1 ring-stone-200">
-                              <p className="text-xs text-stone-500">
+                            <div className="rounded-xl bg-white p-3 ring-1 ring-slate-200">
+                              <p className="text-xs text-slate-500">
                                 نوع الواجهة
                               </p>
-                              <p className="mt-1 text-sm font-medium text-stone-950">
+                              <p className="mt-1 text-sm font-medium text-slate-950">
                                 {frontOptionLabels[editorInput.frontOption]}
                               </p>
                             </div>
-                            <div className="rounded-xl bg-white p-3 ring-1 ring-stone-200">
-                              <p className="text-xs text-stone-500">
+                            <div className="rounded-xl bg-white p-3 ring-1 ring-slate-200">
+                              <p className="text-xs text-slate-500">
                                 عدد الواجهات الظاهرة
                               </p>
-                              <p className="mt-1 text-sm font-medium text-stone-950">
+                              <p className="mt-1 text-sm font-medium text-slate-950">
                                 {editorFrontPieceCount}
                               </p>
                             </div>
-                            <div className="rounded-xl bg-white p-3 ring-1 ring-stone-200">
-                              <p className="text-xs text-stone-500">
+                            <div className="rounded-xl bg-white p-3 ring-1 ring-slate-200">
+                              <p className="text-xs text-slate-500">
                                 الخامة المختارة
                               </p>
-                              <p className="mt-1 text-sm font-medium text-stone-950">
+                              <p className="mt-1 text-sm font-medium text-slate-950">
                                 {materialLabels[projectSettings.material]}
                               </p>
                             </div>
-                            <div className="rounded-xl bg-white p-3 ring-1 ring-stone-200">
-                              <p className="text-xs text-stone-500">
+                            <div className="rounded-xl bg-white p-3 ring-1 ring-slate-200">
+                              <p className="text-xs text-slate-500">
                                 سمك اللوح
                               </p>
-                              <p className="mt-1 text-sm font-medium text-stone-950">
+                              <p className="mt-1 text-sm font-medium text-slate-950">
                                 {formatMmFromCm(projectSettings.boardThickness)}
                               </p>
                             </div>
-                            <div className="rounded-xl bg-white p-3 ring-1 ring-stone-200">
-                              <p className="text-xs text-stone-500">
+                            <div className="rounded-xl bg-white p-3 ring-1 ring-slate-200">
+                              <p className="text-xs text-slate-500">
                                 سمك الظهر
                               </p>
-                              <p className="mt-1 text-sm font-medium text-stone-950">
+                              <p className="mt-1 text-sm font-medium text-slate-950">
                                 {formatMmFromCm(projectSettings.backThickness)}
                               </p>
                             </div>
-                            <div className="rounded-xl bg-white p-3 ring-1 ring-stone-200">
-                              <p className="text-xs text-stone-500">
+                            <div className="rounded-xl bg-white p-3 ring-1 ring-slate-200">
+                              <p className="text-xs text-slate-500">
                                 اتجاه الثمرة
                               </p>
-                              <p className="mt-1 text-sm font-medium text-stone-950">
+                              <p className="mt-1 text-sm font-medium text-slate-950">
                                 {
                                   grainDirectionLabels[
                                     editorInput.grainDirection
@@ -6477,20 +7436,20 @@ function App() {
                           </div>
                         </div>
 
-                        <div className="rounded-2xl border border-stone-200 bg-stone-950 p-4 text-stone-50">
+                        <div className="rounded-2xl border border-slate-200 bg-slate-950 p-4 text-slate-50">
                           <div className="flex items-center gap-2 text-sm font-medium">
                             <Sparkles className="size-4" />
                             مراجعة قبل الإضافة
                           </div>
                           {hasEditorCompleteDimensions &&
                           editorReviewWarnings.length > 0 ? (
-                            <ul className="mt-4 space-y-3 text-sm text-stone-300">
+                            <ul className="mt-4 space-y-3 text-sm text-slate-300">
                               {editorReviewWarnings.map((warning) => (
                                 <li key={warning}>{warning}</li>
                               ))}
                             </ul>
                           ) : (
-                            <ul className="mt-4 space-y-3 text-sm text-stone-300">
+                            <ul className="mt-4 space-y-3 text-sm text-slate-300">
                               {hasEditorCompleteDimensions ? (
                                 <>
                                   <li>
@@ -6528,8 +7487,11 @@ function App() {
                         </div>
                       </div>
                     </CardContent>
-                    <CardFooter className="flex flex-col gap-3 border-t border-stone-200/80 bg-stone-50/80 sm:flex-row sm:items-center sm:justify-between">
-                      <p className="text-xs text-stone-500">
+                    <CardFooter className="flex flex-col gap-3 border-t border-slate-200/80 bg-slate-50/80 sm:flex-row sm:items-center sm:justify-between">
+                      <p className="text-xs text-slate-500 sm:hidden">
+                        أضف الوحدات ثم احسب المشروع عند الانتهاء.
+                      </p>
+                      <p className="hidden text-xs text-slate-500 sm:block">
                         أضف الوحدات أولًا، ثم احسب المشروع عند الانتهاء بدل
                         الحساب التلقائي مع كل تغيير.
                       </p>
@@ -6575,7 +7537,7 @@ function App() {
                         </div>
                         <Badge
                           variant="outline"
-                          className="border-stone-200 bg-stone-50 text-stone-700"
+                          className="border-slate-200 bg-slate-50 text-slate-700"
                         >
                           {customParts.length} مقاس
                         </Badge>
@@ -6647,7 +7609,7 @@ function App() {
                               )
                             }
                           />
-                          <div className="flex items-center justify-between gap-3 text-xs text-stone-500">
+                          <div className="flex items-center justify-between gap-3 text-xs text-slate-500">
                             <span>
                               {customPartDraft.thicknessMode === "project"
                                 ? `مرتبط تلقائيا بسمك ${customPartDraft.category === "back" ? "الظهر" : "الهيكل"} الحالي.`
@@ -6668,10 +7630,10 @@ function App() {
                         </div>
                         <div className="space-y-2">
                           <Label>الخامة</Label>
-                          <div className="flex h-10 items-center rounded-md border border-stone-200 bg-stone-50 px-3 text-sm text-stone-700">
+                          <div className="flex h-10 items-center rounded-md border border-slate-200 bg-slate-50 px-3 text-sm text-slate-700">
                             {materialLabels[projectSettings.material]}
                           </div>
-                          <p className="text-xs text-stone-500">
+                          <p className="text-xs text-slate-500">
                             المقاس الحر يستخدم خامة المشروع الحالية ويدخل مع نفس
                             تقسيم اللوح.
                           </p>
@@ -6764,15 +7726,15 @@ function App() {
                               );
                             })}
                           </div>
-                          <p className="text-xs text-stone-500">
+                          <p className="text-xs text-slate-500">
                             اختر أي ضلع من الطول أو العرض ليُحسب ضمن شريط الحافة
                             للمقاس الحر.
                           </p>
                         </div>
                       </div>
 
-                      <div className="flex flex-col gap-3 rounded-2xl border border-stone-200 bg-stone-50/80 p-4 sm:flex-row sm:items-center sm:justify-between">
-                        <p className="text-xs leading-6 text-stone-500">
+                      <div className="flex flex-col gap-3 rounded-2xl border border-slate-200 bg-slate-50/80 p-4 sm:flex-row sm:items-center sm:justify-between">
+                        <p className="text-xs leading-6 text-slate-500">
                           القطعة الحرة تدخل في توزيع الألواح، التكاليف، جدول
                           القطع، والطباعة حتى لو لم تكن مرتبطة بأي وحدة.
                         </p>
@@ -6794,21 +7756,21 @@ function App() {
                       </div>
 
                       {customParts.length === 0 ? (
-                        <div className="rounded-2xl border border-dashed border-stone-300 bg-stone-50/80 p-6 text-center text-sm text-stone-500">
+                        <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50/80 p-6 text-center text-sm text-slate-500">
                           لم تتم إضافة أي مقاسات حرة بعد.
                         </div>
                       ) : (
                         customParts.map((part) => (
                           <div
                             key={part.id}
-                            className="rounded-2xl border border-stone-200 bg-stone-50/80 p-4 ring-1 ring-stone-200"
+                            className="rounded-2xl border border-slate-200 bg-slate-50/80 p-4 ring-1 ring-slate-200"
                           >
                             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                               <div className="space-y-1">
-                                <p className="font-medium text-stone-950">
+                                <p className="font-medium text-slate-950">
                                   {part.title}
                                 </p>
-                                <p className="text-xs text-stone-500">
+                                <p className="text-xs text-slate-500">
                                   {partCategoryLabels[part.category]} •{" "}
                                   {formatCm(part.length)} ×{" "}
                                   {formatCm(part.width)} • {part.qty} قطعة •{" "}
@@ -6819,11 +7781,11 @@ function App() {
                                     ).thickness,
                                   )}
                                 </p>
-                                <p className="text-xs text-stone-500">
+                                <p className="text-xs text-slate-500">
                                   {materialLabels[projectSettings.material]} •{" "}
                                   {grainDirectionLabels[part.grainDirection]}
                                 </p>
-                                <p className="text-xs text-stone-500">
+                                <p className="text-xs text-slate-500">
                                   {(part.thicknessMode ??
                                     inferCustomPartThicknessMode(
                                       part,
@@ -6832,7 +7794,7 @@ function App() {
                                     ? "السمك يتبع المشروع الحالي تلقائيًا"
                                     : "السمك مضبوط يدويًا لهذا المقاس"}
                                 </p>
-                                <p className="text-xs text-stone-500">
+                                <p className="text-xs text-slate-500">
                                   {formatPartEdgeBanding(
                                     buildCustomProjectCutlistPart(
                                       part,
@@ -6878,7 +7840,7 @@ function App() {
                         </div>
                         <Badge
                           variant="outline"
-                          className="border-stone-200 bg-stone-50 text-stone-700"
+                          className="border-slate-200 bg-slate-50 text-slate-700"
                         >
                           {projectItemCount} عنصر
                         </Badge>
@@ -6886,12 +7848,12 @@ function App() {
                     </CardHeader>
                     <CardContent className="space-y-4">
                       {unitFeedback ? (
-                        <div className="rounded-2xl border border-emerald-200 bg-emerald-50/80 p-4 text-sm text-emerald-900 ring-1 ring-emerald-100">
+                        <div className="rounded-2xl border border-teal-200 bg-teal-50/80 p-4 text-sm text-teal-900 ring-1 ring-teal-100">
                           <div className="flex items-center gap-2 font-medium">
                             <Sparkles className="size-4" />
                             تم تحديث قائمة الوحدات
                           </div>
-                          <p className="mt-2 text-sm leading-6 text-emerald-800">
+                          <p className="mt-2 text-sm leading-6 text-teal-800">
                             {unitFeedback.message}
                           </p>
                         </div>
@@ -6899,7 +7861,7 @@ function App() {
 
                       <div className="space-y-3">
                         {units.length === 0 ? (
-                          <div className="rounded-2xl border border-dashed border-stone-300 bg-stone-50/80 p-6 text-center text-sm text-stone-500">
+                          <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50/80 p-6 text-center text-sm text-slate-500">
                             أضف أول وحدة من النموذج الحالي لتبدأ تكوين المشروع.
                           </div>
                         ) : (
@@ -6914,20 +7876,20 @@ function App() {
                               <div
                                 key={unit.id}
                                 className={cn(
-                                  "rounded-2xl border bg-stone-50/80 p-4 ring-1 transition-colors",
+                                  "rounded-2xl border bg-slate-50/80 p-4 ring-1 transition-colors",
                                   isActive
-                                    ? "border-amber-300 bg-amber-50/70 ring-amber-200"
+                                    ? "border-slate-300 bg-slate-50 ring-slate-200"
                                     : isRecentlySaved
-                                      ? "border-emerald-300 bg-emerald-50/80 ring-emerald-200"
-                                      : "border-stone-200 ring-stone-200",
+                                      ? "border-teal-300 bg-teal-50/80 ring-teal-200"
+                                      : "border-slate-200 ring-slate-200",
                                 )}
                               >
                                 <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                                   <div className="space-y-1">
-                                    <p className="font-medium text-stone-950">
+                                    <p className="font-medium text-slate-950">
                                       {unit.title}
                                     </p>
-                                    <p className="text-xs text-stone-500">
+                                    <p className="text-xs text-slate-500">
                                       {cabinetTypeLabels[unit.cabinetType]} •{" "}
                                       {formatCm(unit.width)} ×{" "}
                                       {formatCm(unit.height)} ×{" "}
@@ -6935,7 +7897,7 @@ function App() {
                                     </p>
                                     {unit.cabinetType === "corner-l-base" ||
                                     unit.cabinetType === "corner-l-wall" ? (
-                                      <p className="text-xs text-stone-500">
+                                      <p className="text-xs text-slate-500">
                                         {
                                           cornerPlacementLabels[
                                             unit.cabinetType === "corner-l-wall"
@@ -6975,7 +7937,7 @@ function App() {
                                     </Button>
                                   </div>
                                 </div>
-                                <p className="mt-2 text-xs text-stone-500">
+                                <p className="mt-2 text-xs text-slate-500">
                                   {frontOptionLabels[unit.frontOption]} •{" "}
                                   {getFrontPieceCount(unitResult)} واجهة •{" "}
                                   {unit.shelfCount} رف
@@ -6986,9 +7948,9 @@ function App() {
                         )}
                       </div>
 
-                      <div className="rounded-2xl border border-stone-200 bg-stone-50/80 p-4">
+                      <div className="rounded-2xl border border-slate-200 bg-slate-50/80 p-4">
                         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                          <p className="text-xs text-stone-500">
+                          <p className="text-xs text-slate-500">
                             الحساب يعتمد على الوحدات والمقاسات الحرة الموجودة
                             داخل المشروع.
                           </p>
@@ -7013,7 +7975,64 @@ function App() {
                   <>
                     <Card
                       id="project-units-list"
-                      className="border-0 bg-white/88 shadow-[0_20px_60px_-45px_rgba(63,40,12,0.55)] ring-1 ring-stone-950/8"
+                      className="border-0 bg-white/88 shadow-[0_20px_60px_-45px_rgba(24,32,40,0.55)] ring-1 ring-slate-950/8 lg:hidden"
+                    >
+                      <CardHeader className="pb-3">
+                        <CardTitle>معاينة الوحدة</CardTitle>
+                        <CardDescription>
+                          افتح 3D عند الحاجة بدل بقاءه ظاهرًا طوال الوقت.
+                        </CardDescription>
+                      </CardHeader>
+                      <CardContent className="space-y-3">
+                        <div className="grid grid-cols-2 gap-2">
+                          <div className="rounded-xl border border-slate-200 bg-slate-50/80 p-3 text-center">
+                            <p className="text-[11px] text-slate-500">
+                              اسم الوحدة
+                            </p>
+                            <p className="mt-1 text-sm font-medium text-slate-950">
+                              {editorTitle}
+                            </p>
+                          </div>
+                          <div className="rounded-xl border border-slate-200 bg-slate-50/80 p-3 text-center">
+                            <p className="text-[11px] text-slate-500">
+                              الواجهة
+                            </p>
+                            <p className="mt-1 text-sm font-medium text-slate-950">
+                              {frontOptionLabels[editorInput.frontOption]}
+                            </p>
+                          </div>
+                        </div>
+
+                        <details className="rounded-[1.35rem] border border-slate-200 bg-slate-50/80 p-4">
+                          <summary className="flex cursor-pointer list-none items-center justify-between gap-3 text-sm font-medium text-slate-950 [&::-webkit-details-marker]:hidden">
+                            <span className="flex items-center gap-2">
+                              <PanelsTopLeft className="size-4" />
+                              فتح 3D للوحدة الحالية
+                            </span>
+                            <span className="text-[11px] text-slate-500">
+                              اختياري
+                            </span>
+                          </summary>
+                          <div className="mt-3 relative overflow-hidden rounded-[1.25rem] border border-slate-200 bg-[linear-gradient(180deg,#f4f8f8_0%,#e6edec_100%)] p-4">
+                            {hasEditorCompleteDimensions ? (
+                              <CabinetPreview
+                                input={editorInput}
+                                result={editorResult}
+                                selectedPartId={selectedPartId}
+                              />
+                            ) : (
+                              <div className="flex h-56 w-full items-center justify-center rounded-[1rem] border border-dashed border-slate-300 bg-white/65 px-4 text-center text-sm leading-7 text-slate-500">
+                                أدخل المقاسات الأساسية لتظهر المعاينة بشكل صحيح.
+                              </div>
+                            )}
+                          </div>
+                        </details>
+                      </CardContent>
+                    </Card>
+
+                    <Card
+                      id="project-units-list"
+                      className="hidden border-0 bg-white/88 shadow-[0_20px_60px_-45px_rgba(24,32,40,0.55)] ring-1 ring-slate-950/8 lg:block"
                     >
                       <CardHeader>
                         <CardTitle>3D للوحدة الحالية</CardTitle>
@@ -7023,8 +8042,8 @@ function App() {
                         </CardDescription>
                       </CardHeader>
                       <CardContent>
-                        <div className="relative overflow-hidden rounded-[1.5rem] border border-stone-200 bg-[linear-gradient(180deg,#faf7f2_0%,#efe7db_100%)] p-6">
-                          <div className="absolute inset-x-0 top-0 h-20 bg-[radial-gradient(circle_at_top,rgba(97,74,42,0.12),transparent_60%)]" />
+                        <div className="relative overflow-hidden rounded-[1.5rem] border border-slate-200 bg-[linear-gradient(180deg,#f4f8f8_0%,#e6edec_100%)] p-6">
+                          <div className="absolute inset-x-0 top-0 h-20 bg-[radial-gradient(circle_at_top,rgba(43,58,68,0.12),transparent_60%)]" />
                           <div className="relative space-y-4">
                             {hasEditorCompleteDimensions ? (
                               <CabinetPreview
@@ -7033,43 +8052,43 @@ function App() {
                                 selectedPartId={selectedPartId}
                               />
                             ) : (
-                              <div className="flex h-72 w-full items-center justify-center rounded-[1.25rem] border border-dashed border-stone-300 bg-white/65 px-6 text-center text-sm leading-7 text-stone-500">
+                              <div className="flex h-72 w-full items-center justify-center rounded-[1.25rem] border border-dashed border-slate-300 bg-white/65 px-6 text-center text-sm leading-7 text-slate-500">
                                 أدخل المقاسات الأساسية للوحدة لتظهر المعاينة
                                 ثلاثية الأبعاد والقطع المتوقعة بشكل صحيح.
                               </div>
                             )}
                             <div className="grid gap-3 sm:grid-cols-3">
-                              <div className="rounded-xl bg-white/80 p-3 text-center ring-1 ring-stone-200">
-                                <p className="text-xs text-stone-500">
+                              <div className="rounded-xl bg-white/80 p-3 text-center ring-1 ring-slate-200">
+                                <p className="text-xs text-slate-500">
                                   اسم الوحدة
                                 </p>
-                                <p className="mt-1 text-sm font-medium text-stone-950">
+                                <p className="mt-1 text-sm font-medium text-slate-950">
                                   {editorTitle}
                                 </p>
                               </div>
-                              <div className="rounded-xl bg-white/80 p-3 text-center ring-1 ring-stone-200">
-                                <p className="text-xs text-stone-500">
+                              <div className="rounded-xl bg-white/80 p-3 text-center ring-1 ring-slate-200">
+                                <p className="text-xs text-slate-500">
                                   نوع الواجهة
                                 </p>
-                                <p className="mt-1 text-sm font-medium text-stone-950">
+                                <p className="mt-1 text-sm font-medium text-slate-950">
                                   {frontOptionLabels[editorInput.frontOption]}
                                 </p>
                               </div>
-                              <div className="rounded-xl bg-white/80 p-3 text-center ring-1 ring-stone-200">
-                                <p className="text-xs text-stone-500">
+                              <div className="rounded-xl bg-white/80 p-3 text-center ring-1 ring-slate-200">
+                                <p className="text-xs text-slate-500">
                                   عدد الواجهات
                                 </p>
-                                <p className="mt-1 text-sm font-medium text-stone-950">
+                                <p className="mt-1 text-sm font-medium text-slate-950">
                                   {hasEditorCompleteDimensions
                                     ? editorFrontPieceCount
                                     : "--"}
                                 </p>
                               </div>
-                              <div className="rounded-xl bg-white/80 p-3 text-center ring-1 ring-stone-200">
-                                <p className="text-xs text-stone-500">
+                              <div className="rounded-xl bg-white/80 p-3 text-center ring-1 ring-slate-200">
+                                <p className="text-xs text-slate-500">
                                   اتجاه الثمرة
                                 </p>
-                                <p className="mt-1 text-sm font-medium text-stone-950">
+                                <p className="mt-1 text-sm font-medium text-slate-950">
                                   {
                                     grainDirectionLabels[
                                       editorInput.grainDirection
@@ -7084,7 +8103,46 @@ function App() {
                     </Card>
 
                     {units.length > 1 ? (
-                      <Card className="border-0 bg-white/88 shadow-[0_20px_60px_-45px_rgba(63,40,12,0.55)] ring-1 ring-stone-950/8">
+                      <>
+                        <Card className="border-0 bg-white/88 shadow-[0_20px_60px_-45px_rgba(24,32,40,0.55)] ring-1 ring-slate-950/8 lg:hidden">
+                          <CardContent className="space-y-3 p-4">
+                            <div className="flex items-start justify-between gap-3">
+                              <div>
+                                <p className="text-sm font-semibold text-slate-950">
+                                  ترتيب المشروع
+                                </p>
+                                <p className="mt-1 text-xs leading-6 text-slate-500">
+                                  للمشروع أكثر من وحدة. افتح تبويب 3D عند الحاجة بدل عرض المسرح الكامل هنا.
+                                </p>
+                              </div>
+                              <Badge
+                                variant="outline"
+                                className="border-slate-200 bg-slate-50 text-slate-700"
+                              >
+                                {projectPreviewUnits.length} وحدة
+                              </Badge>
+                            </div>
+                            <div className="flex gap-2">
+                              <Button
+                                type="button"
+                                className="flex-1"
+                                onClick={() => setActiveWorkspaceTab("preview")}
+                              >
+                                <PanelsTopLeft className="size-4" />
+                                افتح تبويب 3D
+                              </Button>
+                              <Button
+                                type="button"
+                                variant="outline"
+                                onClick={resetProjectArrangement}
+                              >
+                                إعادة ضبط
+                              </Button>
+                            </div>
+                          </CardContent>
+                        </Card>
+
+                        <Card className="hidden border-0 bg-white/88 shadow-[0_20px_60px_-45px_rgba(24,32,40,0.55)] ring-1 ring-slate-950/8 lg:block">
                         <CardHeader>
                           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                             <div>
@@ -7127,8 +8185,8 @@ function App() {
                                   className={cn(
                                     "rounded-2xl border p-4 ring-1",
                                     isActive
-                                      ? "border-amber-300 bg-amber-50/70 ring-amber-200"
-                                      : "border-stone-200 bg-stone-50/80 ring-stone-200",
+                                      ? "border-slate-300 bg-slate-50 ring-slate-200"
+                                      : "border-slate-200 bg-slate-50/80 ring-slate-200",
                                   )}
                                 >
                                   <button
@@ -7138,10 +8196,10 @@ function App() {
                                       setActiveProjectUnitId(unit.id)
                                     }
                                   >
-                                    <p className="font-medium text-stone-950">
+                                    <p className="font-medium text-slate-950">
                                       {unit.title}
                                     </p>
-                                    <p className="mt-1 text-xs text-stone-500">
+                                    <p className="mt-1 text-xs text-slate-500">
                                       ترتيب {index + 1} • جانبي{" "}
                                       {formatCm(unit.offsetX)} • ارتفاع{" "}
                                       {formatCm(unit.offsetY)} • عمق{" "}
@@ -7273,7 +8331,7 @@ function App() {
                                     </Button>
                                   </div>
 
-                                  <p className="mt-3 text-[11px] leading-5 text-stone-500">
+                                  <p className="mt-3 text-[11px] leading-5 text-slate-500">
                                     الوحدات الأرضية تبدأ تحت تلقائيًا، والوحدات
                                     المعلقة تبدأ فوق تلقائيًا ويمكنك ضبط مكان كل
                                     وحدة كما تريد.
@@ -7283,12 +8341,13 @@ function App() {
                             })}
                           </div>
                         </CardContent>
-                      </Card>
+                        </Card>
+                      </>
                     ) : null}
                   </>
                 ) : activeBuilderTab === "units" ? (
                   units.length > 1 ? (
-                    <Card className="border-0 bg-white/88 shadow-[0_20px_60px_-45px_rgba(63,40,12,0.55)] ring-1 ring-stone-950/8">
+                    <Card className="border-0 bg-white/88 shadow-[0_20px_60px_-45px_rgba(24,32,40,0.55)] ring-1 ring-slate-950/8">
                       <CardHeader>
                         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                           <div>
@@ -7320,7 +8379,7 @@ function App() {
                       </CardContent>
                     </Card>
                   ) : (
-                    <Card className="border-0 bg-white/88 shadow-[0_20px_60px_-45px_rgba(63,40,12,0.55)] ring-1 ring-stone-950/8">
+                    <Card className="border-0 bg-white/88 shadow-[0_20px_60px_-45px_rgba(24,32,40,0.55)] ring-1 ring-slate-950/8">
                       <CardHeader>
                         <CardTitle>ترتيب المشروع</CardTitle>
                         <CardDescription>
@@ -7331,7 +8390,7 @@ function App() {
                     </Card>
                   )
                 ) : (
-                  <Card className="border-0 bg-white/88 shadow-[0_20px_60px_-45px_rgba(63,40,12,0.55)] ring-1 ring-stone-950/8">
+                  <Card className="border-0 bg-white/88 shadow-[0_20px_60px_-45px_rgba(24,32,40,0.55)] ring-1 ring-slate-950/8">
                     <CardHeader>
                       <CardTitle>المقاسات الحرة الحالية</CardTitle>
                       <CardDescription>
@@ -7341,21 +8400,21 @@ function App() {
                     </CardHeader>
                     <CardContent className="space-y-3">
                       {customParts.length === 0 ? (
-                        <div className="rounded-2xl border border-dashed border-stone-300 bg-stone-50/80 p-6 text-center text-sm text-stone-500">
+                        <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50/80 p-6 text-center text-sm text-slate-500">
                           لا توجد مقاسات حرة بعد.
                         </div>
                       ) : (
                         customParts.map((part) => (
                           <div
                             key={part.id}
-                            className="rounded-2xl border border-stone-200 bg-stone-50/80 p-4 ring-1 ring-stone-200"
+                            className="rounded-2xl border border-slate-200 bg-slate-50/80 p-4 ring-1 ring-slate-200"
                           >
                             <div className="flex items-center justify-between gap-3">
                               <div>
-                                <p className="font-medium text-stone-950">
+                                <p className="font-medium text-slate-950">
                                   {part.title}
                                 </p>
-                                <p className="mt-1 text-xs text-stone-500">
+                                <p className="mt-1 text-xs text-slate-500">
                                   {formatCm(part.length)} ×{" "}
                                   {formatCm(part.width)} • {part.qty} قطعة
                                 </p>
@@ -7383,7 +8442,7 @@ function App() {
         {activeWorkspaceTab === "preview" ? (
           <section className="mt-6 space-y-6 pb-8">
             {projectPreviewUnits.length === 0 ? (
-              <Card className="border-0 bg-white/88 shadow-[0_20px_60px_-45px_rgba(63,40,12,0.55)] ring-1 ring-stone-950/8">
+              <Card className="border-0 bg-white/88 shadow-[0_20px_60px_-45px_rgba(24,32,40,0.55)] ring-1 ring-slate-950/8">
                 <CardHeader>
                   <CardTitle>معاينة 3D للمشروع</CardTitle>
                   <CardDescription>
@@ -7393,7 +8452,7 @@ function App() {
                 </CardHeader>
               </Card>
             ) : (
-              <Card className="border-0 bg-white/88 shadow-[0_20px_60px_-45px_rgba(63,40,12,0.55)] ring-1 ring-stone-950/8">
+              <Card className="border-0 bg-white/88 shadow-[0_20px_60px_-45px_rgba(24,32,40,0.55)] ring-1 ring-slate-950/8">
                 <CardHeader>
                   <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
                     <div>
@@ -7444,8 +8503,8 @@ function App() {
                           className={cn(
                             "rounded-2xl border p-4 ring-1",
                             isActive
-                              ? "border-amber-300 bg-amber-50/70 ring-amber-200"
-                              : "border-stone-200 bg-stone-50/80 ring-stone-200",
+                              ? "border-slate-300 bg-slate-50 ring-slate-200"
+                              : "border-slate-200 bg-slate-50/80 ring-slate-200",
                           )}
                         >
                           <button
@@ -7453,10 +8512,10 @@ function App() {
                             className="w-full text-right"
                             onClick={() => setActiveProjectUnitId(unit.id)}
                           >
-                            <p className="font-medium text-stone-950">
+                            <p className="font-medium text-slate-950">
                               {unit.title}
                             </p>
-                            <p className="mt-1 text-xs text-stone-500">
+                            <p className="mt-1 text-xs text-slate-500">
                               ترتيب {index + 1} • جانبي {formatCm(unit.offsetX)}{" "}
                               • ارتفاع {formatCm(unit.offsetY)} • عمق{" "}
                               {formatCm(unit.offsetZ)} • دوران {unit.rotationY}°
@@ -7573,7 +8632,7 @@ function App() {
                             </Button>
                           </div>
 
-                          <p className="mt-3 text-[11px] leading-5 text-stone-500">
+                          <p className="mt-3 text-[11px] leading-5 text-slate-500">
                             اضغط على الوحدة لتفعيلها، ثم حرّكها بالسحب داخل
                             المشهد أو من أزرار الضبط الدقيقة هنا.
                           </p>
@@ -7591,84 +8650,84 @@ function App() {
           hasCalculatedProject ? (
             <>
               <section className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-9">
-                <Card className="border-0 bg-white/88 ring-1 ring-stone-950/8">
+                <Card className="border-0 bg-white/88 ring-1 ring-slate-950/8">
                   <CardContent className="p-4">
-                    <p className="text-xs text-stone-500">الوحدات المحسوبة</p>
-                    <p className="mt-2 text-lg font-semibold text-stone-950">
+                    <p className="text-xs text-slate-500">الوحدات المحسوبة</p>
+                    <p className="mt-2 text-lg font-semibold text-slate-950">
                       {projectSummary.unitCount}
                     </p>
                   </CardContent>
                 </Card>
-                <Card className="border-0 bg-white/88 ring-1 ring-stone-950/8">
+                <Card className="border-0 bg-white/88 ring-1 ring-slate-950/8">
                   <CardContent className="p-4">
-                    <p className="text-xs text-stone-500">المقاسات الحرة</p>
-                    <p className="mt-2 text-lg font-semibold text-stone-950">
+                    <p className="text-xs text-slate-500">المقاسات الحرة</p>
+                    <p className="mt-2 text-lg font-semibold text-slate-950">
                       {calculatedCustomParts.length}
                     </p>
                   </CardContent>
                 </Card>
-                <Card className="border-0 bg-white/88 ring-1 ring-stone-950/8">
+                <Card className="border-0 bg-white/88 ring-1 ring-slate-950/8">
                   <CardContent className="p-4">
-                    <p className="text-xs text-stone-500">إجمالي القطع</p>
-                    <p className="mt-2 text-lg font-semibold text-stone-950">
+                    <p className="text-xs text-slate-500">إجمالي القطع</p>
+                    <p className="mt-2 text-lg font-semibold text-slate-950">
                       {projectSummary.totalPanels}
                     </p>
                   </CardContent>
                 </Card>
-                <Card className="border-0 bg-white/88 ring-1 ring-stone-950/8">
+                <Card className="border-0 bg-white/88 ring-1 ring-slate-950/8">
                   <CardContent className="p-4">
-                    <p className="text-xs text-stone-500">إجمالي الألواح</p>
-                    <p className="mt-2 text-lg font-semibold text-stone-950">
+                    <p className="text-xs text-slate-500">إجمالي الألواح</p>
+                    <p className="mt-2 text-lg font-semibold text-slate-950">
                       {projectSummary.totalSheets}
                     </p>
                   </CardContent>
                 </Card>
-                <Card className="border-0 bg-white/88 ring-1 ring-stone-950/8">
+                <Card className="border-0 bg-white/88 ring-1 ring-slate-950/8">
                   <CardContent className="p-4">
-                    <p className="text-xs text-stone-500">إجمالي الاستهلاك</p>
-                    <p className="mt-2 text-lg font-semibold text-stone-950">
+                    <p className="text-xs text-slate-500">إجمالي الاستهلاك</p>
+                    <p className="mt-2 text-lg font-semibold text-slate-950">
                       {projectSummary.totalAreaM2} م²
                     </p>
                   </CardContent>
                 </Card>
-                <Card className="border-0 bg-white/88 ring-1 ring-stone-950/8">
+                <Card className="border-0 bg-white/88 ring-1 ring-slate-950/8">
                   <CardContent className="p-4">
-                    <p className="text-xs text-stone-500">تكلفة الألواح</p>
-                    <p className="mt-2 text-lg font-semibold text-stone-950">
+                    <p className="text-xs text-slate-500">تكلفة الألواح</p>
+                    <p className="mt-2 text-lg font-semibold text-slate-950">
                       {formatPrice(projectSummary.totalSheetCost)}
                     </p>
                   </CardContent>
                 </Card>
-                <Card className="border-0 bg-white/88 ring-1 ring-stone-950/8">
+                <Card className="border-0 bg-white/88 ring-1 ring-slate-950/8">
                   <CardContent className="p-4">
-                    <p className="text-xs text-stone-500">المصنعية</p>
-                    <p className="mt-2 text-lg font-semibold text-stone-950">
+                    <p className="text-xs text-slate-500">المصنعية</p>
+                    <p className="mt-2 text-lg font-semibold text-slate-950">
                       {formatPrice(projectSummary.totalLaborCost)}
                     </p>
                   </CardContent>
                 </Card>
-                <Card className="border-0 bg-white/88 ring-1 ring-stone-950/8">
+                <Card className="border-0 bg-white/88 ring-1 ring-slate-950/8">
                   <CardContent className="p-4">
-                    <p className="text-xs text-stone-500">تكلفة شريط الحافة</p>
-                    <p className="mt-2 text-lg font-semibold text-stone-950">
+                    <p className="text-xs text-slate-500">تكلفة شريط الحافة</p>
+                    <p className="mt-2 text-lg font-semibold text-slate-950">
                       {formatPrice(projectSummary.totalEdgeBandCost)}
                     </p>
                   </CardContent>
                 </Card>
-                <Card className="border-0 bg-white/88 ring-1 ring-stone-950/8">
+                <Card className="border-0 bg-white/88 ring-1 ring-slate-950/8">
                   <CardContent className="p-4">
-                    <p className="text-xs text-stone-500">إجمالي المفصلات</p>
-                    <p className="mt-2 text-lg font-semibold text-stone-950">
+                    <p className="text-xs text-slate-500">إجمالي المفصلات</p>
+                    <p className="mt-2 text-lg font-semibold text-slate-950">
                       {projectSummary.totalHingeCount} مفصلة
                     </p>
-                    <p className="mt-1 text-xs text-stone-500">
+                    <p className="mt-1 text-xs text-slate-500">
                       التكلفة {formatPrice(projectSummary.totalHingeCost)}
                     </p>
                   </CardContent>
                 </Card>
-                <Card className="border-0 bg-stone-950 text-stone-50 ring-0">
+                <Card className="border-0 bg-slate-950 text-slate-50 ring-0">
                   <CardContent className="p-4">
-                    <p className="text-xs text-stone-300">إجمالي التكلفة</p>
+                    <p className="text-xs text-slate-300">إجمالي التكلفة</p>
                     <p className="mt-2 text-lg font-semibold">
                       {formatPrice(projectSummary.totalProjectCost)}
                     </p>
@@ -7677,7 +8736,7 @@ function App() {
               </section>
 
               <section className="mt-6">
-                <Card className="border-0 bg-white/88 shadow-[0_20px_60px_-45px_rgba(63,40,12,0.55)] ring-1 ring-stone-950/8">
+                <Card className="border-0 bg-white/88 shadow-[0_20px_60px_-45px_rgba(24,32,40,0.55)] ring-1 ring-slate-950/8">
                   <CardHeader>
                     <button
                       type="button"
@@ -7694,15 +8753,15 @@ function App() {
                         </div>
                         <Badge
                           variant="secondary"
-                          className="w-fit bg-stone-100 text-stone-700"
+                          className="w-fit bg-slate-100 text-slate-700"
                         >
                           {unitCostSummaries.length} وحدة
                         </Badge>
                       </div>
                       {openResultsSections.costs ? (
-                        <ArrowUp className="size-4 text-stone-500" />
+                        <ArrowUp className="size-4 text-slate-500" />
                       ) : (
-                        <ArrowDown className="size-4 text-stone-500" />
+                        <ArrowDown className="size-4 text-slate-500" />
                       )}
                     </button>
                   </CardHeader>
@@ -7713,74 +8772,74 @@ function App() {
                       {unitCostSummaries.map((summary) => (
                         <div
                           key={summary.unitId}
-                          className="rounded-[1.5rem] border border-stone-200 bg-[linear-gradient(180deg,rgba(252,250,247,0.95),rgba(243,236,227,0.82))] p-4 shadow-[0_18px_44px_-36px_rgba(63,40,12,0.4)]"
+                          className="rounded-[1.5rem] border border-slate-200 bg-[linear-gradient(180deg,rgba(255,255,255,0.95),rgba(235,240,242,0.82))] p-4 shadow-[0_18px_44px_-36px_rgba(24,32,40,0.4)]"
                         >
                           <div className="flex items-start justify-between gap-3">
                             <div>
-                              <p className="text-sm font-semibold text-stone-950">
+                              <p className="text-sm font-semibold text-slate-950">
                                 {summary.unitTitle}
                               </p>
-                              <p className="mt-1 text-xs text-stone-500">
+                              <p className="mt-1 text-xs text-slate-500">
                                 {summary.panelCount} قطعة •{" "}
                                 {summary.totalAreaM2} م²
                               </p>
                             </div>
                             <Badge
                               variant="outline"
-                              className="border-amber-200 bg-amber-50 text-amber-800"
+                              className="border-slate-300 bg-slate-50 text-slate-800"
                             >
                               {formatPrice(summary.totalCost)}
                             </Badge>
                           </div>
 
                           <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
-                            <div className="rounded-xl bg-white/75 p-3 ring-1 ring-stone-200">
-                              <p className="text-[11px] text-stone-500">
+                            <div className="rounded-xl bg-white/75 p-3 ring-1 ring-slate-200">
+                              <p className="text-[11px] text-slate-500">
                                 ألواح 18 مم
                               </p>
-                              <p className="mt-1 font-semibold text-stone-950">
+                              <p className="mt-1 font-semibold text-slate-950">
                                 {summary.boardSheetCount} لوح
                               </p>
-                              <p className="mt-1 text-[11px] text-stone-500">
+                              <p className="mt-1 text-[11px] text-slate-500">
                                 استخدام {summary.boardUsedAreaM2} م²
                               </p>
                             </div>
-                            <div className="rounded-xl bg-white/75 p-3 ring-1 ring-stone-200">
-                              <p className="text-[11px] text-stone-500">
+                            <div className="rounded-xl bg-white/75 p-3 ring-1 ring-slate-200">
+                              <p className="text-[11px] text-slate-500">
                                 ألواح 6 مم
                               </p>
-                              <p className="mt-1 font-semibold text-stone-950">
+                              <p className="mt-1 font-semibold text-slate-950">
                                 {summary.backSheetCount} لوح
                               </p>
-                              <p className="mt-1 text-[11px] text-stone-500">
+                              <p className="mt-1 text-[11px] text-slate-500">
                                 استخدام {summary.backUsedAreaM2} م²
                               </p>
                             </div>
                           </div>
 
-                          <div className="mt-3 space-y-2 rounded-xl bg-stone-950/[0.03] p-3 ring-1 ring-stone-200 text-xs text-stone-600">
+                          <div className="mt-3 space-y-2 rounded-xl bg-slate-950/[0.03] p-3 ring-1 ring-slate-200 text-xs text-slate-600">
                             <div className="flex items-center justify-between gap-3">
                               <span>تكلفة الألواح</span>
-                              <span className="font-medium text-stone-900">
+                              <span className="font-medium text-slate-900">
                                 {formatPrice(summary.sheetCost)}
                               </span>
                             </div>
                             <div className="flex items-center justify-between gap-3">
                               <span>المصنعية</span>
-                              <span className="font-medium text-stone-900">
+                              <span className="font-medium text-slate-900">
                                 {formatPrice(summary.laborCost)}
                               </span>
                             </div>
                             <div className="flex items-center justify-between gap-3">
                               <span>شريط الحافة</span>
-                              <span className="font-medium text-stone-900">
+                              <span className="font-medium text-slate-900">
                                 {summary.edgeBandLengthM} م ط •{" "}
                                 {formatPrice(summary.edgeBandCost)}
                               </span>
                             </div>
                             <div className="flex items-center justify-between gap-3">
                               <span>المفصلات</span>
-                              <span className="font-medium text-stone-900">
+                              <span className="font-medium text-slate-900">
                                 {summary.hingeCount} مفصلة •{" "}
                                 {formatPrice(summary.hingeCost)}
                               </span>
@@ -7794,7 +8853,7 @@ function App() {
               </section>
 
               <section className="mt-6">
-                <Card className="border-0 bg-white/88 shadow-[0_20px_60px_-45px_rgba(63,40,12,0.55)] ring-1 ring-stone-950/8">
+                <Card className="border-0 bg-white/88 shadow-[0_20px_60px_-45px_rgba(24,32,40,0.55)] ring-1 ring-slate-950/8">
                   <CardHeader>
                     <CardTitle>نتيجة المشروع المجمعة</CardTitle>
                     <CardDescription>
@@ -7807,7 +8866,7 @@ function App() {
               </section>
 
               <section className="mt-6">
-                <Card className="border-0 bg-white/88 shadow-[0_20px_60px_-45px_rgba(63,40,12,0.55)] ring-1 ring-stone-950/8">
+                <Card className="border-0 bg-white/88 shadow-[0_20px_60px_-45px_rgba(24,32,40,0.55)] ring-1 ring-slate-950/8">
                   <CardHeader>
                     <CardTitle>توصيات المحسن الذكي</CardTitle>
                     <CardDescription>
@@ -7822,22 +8881,22 @@ function App() {
                           <div
                             key={recommendation.id}
                             className={cn(
-                              "rounded-[1.4rem] border p-4 shadow-[0_16px_44px_-34px_rgba(63,40,12,0.35)]",
+                              "rounded-[1.4rem] border p-4 shadow-[0_16px_44px_-34px_rgba(24,32,40,0.35)]",
                               recommendation.tone === "action"
-                                ? "border-amber-200 bg-amber-50/85"
-                                : "border-stone-200 bg-stone-50/80",
+                                ? "border-slate-300 bg-slate-50/85"
+                                : "border-slate-200 bg-slate-50/80",
                             )}
                           >
                             <div className="flex items-center justify-between gap-3">
-                              <p className="text-sm font-semibold text-stone-950">
+                              <p className="text-sm font-semibold text-slate-950">
                                 {recommendation.title}
                               </p>
                               <Badge
                                 variant="outline"
                                 className={cn(
                                   recommendation.tone === "action"
-                                    ? "border-amber-300 bg-white text-amber-900"
-                                    : "border-stone-200 bg-white text-stone-700",
+                                    ? "border-slate-300 bg-white text-slate-900"
+                                    : "border-slate-200 bg-white text-slate-700",
                                 )}
                               >
                                 {recommendation.tone === "action"
@@ -7845,7 +8904,7 @@ function App() {
                                   : "معلومة ذكية"}
                               </Badge>
                             </div>
-                            <p className="mt-3 text-sm leading-7 text-stone-600">
+                            <p className="mt-3 text-sm leading-7 text-slate-600">
                               {recommendation.body}
                             </p>
                           </div>
@@ -7857,7 +8916,7 @@ function App() {
               </section>
 
               <section className="mt-6 space-y-6">
-                <Card className="border-0 bg-white/88 shadow-[0_20px_60px_-45px_rgba(63,40,12,0.55)] ring-1 ring-stone-950/8">
+                <Card className="border-0 bg-white/88 shadow-[0_20px_60px_-45px_rgba(24,32,40,0.55)] ring-1 ring-slate-950/8">
                   <CardHeader>
                     <button
                       type="button"
@@ -7874,16 +8933,16 @@ function App() {
                         </div>
                         <Badge
                           variant="outline"
-                          className="border-stone-200 bg-stone-50 text-stone-700"
+                          className="border-slate-200 bg-slate-50 text-slate-700"
                         >
                           {projectLayoutSheetCount} لوح /{" "}
                           {projectSheetLayout?.stocks.length ?? 0} خامة
                         </Badge>
                       </div>
                       {openResultsSections.layout ? (
-                        <ArrowUp className="size-4 text-stone-500" />
+                        <ArrowUp className="size-4 text-slate-500" />
                       ) : (
-                        <ArrowDown className="size-4 text-stone-500" />
+                        <ArrowDown className="size-4 text-slate-500" />
                       )}
                     </button>
                   </CardHeader>
@@ -7896,17 +8955,17 @@ function App() {
                     {projectSheetLayout?.stocks.map((stock) => (
                       <div
                         key={stock.key}
-                        className="rounded-2xl border border-stone-200 bg-stone-50/70 p-3"
+                        className="rounded-2xl border border-slate-200 bg-slate-50/70 p-3"
                       >
-                        <div className="mb-4 flex flex-col gap-2 rounded-xl bg-white/90 p-3 ring-1 ring-stone-200 sm:flex-row sm:items-center sm:justify-between">
+                        <div className="mb-4 flex flex-col gap-2 rounded-xl bg-white/90 p-3 ring-1 ring-slate-200 sm:flex-row sm:items-center sm:justify-between">
                           <div>
-                            <p className="text-sm font-medium text-stone-950">
+                            <p className="text-sm font-medium text-slate-950">
                               {getStockLabel(
                                 stock.thickness,
                                 stock.isBackStock,
                               )}
                             </p>
-                            <p className="text-xs text-stone-500">
+                            <p className="text-xs text-slate-500">
                               {stock.materialSummary} • {stock.partCount} قطعة •{" "}
                               {stock.sheets.length} لوح •{" "}
                               {formatSheetSize(
@@ -7915,34 +8974,31 @@ function App() {
                               )}
                             </p>
                           </div>
-                          <p className="text-xs text-stone-500">
+                          <p className="text-xs text-slate-500">
                             استهلاك هذه المجموعة {stock.totalAreaM2} م²
                           </p>
-                          <p className="text-xs text-stone-500">
+                          <p className="text-xs text-slate-500">
                             الهالك داخل هذه المجموعة{" "}
                             {getStockWasteAreaM2(stock)} م²
                           </p>
                         </div>
 
                         <div className="space-y-4">
-                          <div className="rounded-xl border border-stone-200 bg-white px-3 py-2 text-[11px] font-medium leading-5 text-stone-600">
+                          <div className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-[11px] font-medium leading-5 text-slate-600">
                             شريط الحافة يظهر بخط أسود متقطع على الضلع نفسه ليبقى
                             واضحًا حتى في الطباعة الأبيض والأسود.
                           </div>
                           {stock.sheets.map((sheet) => {
-                            const isSheetRotated = isProjectSheetRotated(
-                              stock.key,
-                              sheet.index,
-                            );
+                            const isSheetRotated = stock.boardLength >= stock.boardWidth;
                             const sheetSvgPresentation =
                               getSheetSvgPresentation(stock, isSheetRotated);
 
                             return (
                               <div
                                 key={`${stock.key}-${sheet.index}`}
-                                className="rounded-2xl border border-stone-200 bg-white/80 p-3"
+                                className="rounded-2xl border border-slate-200 bg-white/80 p-3"
                               >
-                                <div className="mb-3 flex flex-col gap-3 text-xs text-stone-500 sm:flex-row sm:items-center sm:justify-between">
+                                <div className="mb-3 flex flex-col gap-3 text-xs text-slate-500 sm:flex-row sm:items-center sm:justify-between">
                                   <div className="space-y-1">
                                     <span className="block">لوح #{sheet.index + 1}</span>
                                     <span className="block">
@@ -7956,21 +9012,6 @@ function App() {
                                       variant="outline"
                                       size="sm"
                                       className="h-8 gap-1.5 rounded-xl"
-                                      onClick={() =>
-                                        toggleProjectSheetRotation(
-                                          stock.key,
-                                          sheet.index,
-                                        )
-                                      }
-                                    >
-                                      <RotateCcw className="size-3.5" />
-                                      {isSheetRotated ? "إلغاء الدوران" : "دوران"}
-                                    </Button>
-                                    <Button
-                                      type="button"
-                                      variant="outline"
-                                      size="sm"
-                                      className="h-8 gap-1.5 rounded-xl"
                                       onClick={() => printProjectSheet(stock, sheet)}
                                     >
                                       <Printer className="size-3.5" />
@@ -7978,10 +9019,10 @@ function App() {
                                     </Button>
                                   </div>
                                 </div>
-                                <div className="rounded-xl border border-stone-200 bg-[linear-gradient(180deg,#f8f4ee_0%,#f2ece3_100%)] p-3">
+                                <div className="rounded-xl border border-slate-200 bg-[linear-gradient(180deg,#edf3f4_0%,#dbe7e7_100%)] p-3">
                                   <svg
                                     viewBox={`-18 -18 ${sheetSvgPresentation.viewBoxWidth} ${sheetSvgPresentation.viewBoxHeight}`}
-                                    className="w-full rounded-xl bg-white shadow-[inset_0_0_0_1px_rgba(214,206,194,0.9)]"
+                                    className="w-full rounded-xl bg-white shadow-[inset_0_0_0_1px_rgba(201,215,222,0.96)]"
                                     preserveAspectRatio="xMidYMid meet"
                                     role="img"
                                     aria-label={`${stock.key} sheet ${sheet.index + 1} layout`}
@@ -8334,15 +9375,15 @@ function App() {
                     ))}
 
                     {projectWasteInsight ? (
-                      <div className="rounded-2xl border border-amber-200 bg-amber-50/80 p-4 text-sm leading-7 text-amber-950 ring-1 ring-amber-100">
+                      <div className="rounded-2xl border border-slate-300 bg-slate-100 p-4 text-sm leading-7 text-slate-950 ring-1 ring-slate-100">
                         <p className="font-medium">قراءة سريعة للهالك</p>
-                        <p className="mt-2 text-amber-900">
+                        <p className="mt-2 text-slate-900">
                           {projectWasteInsight}
                         </p>
                       </div>
                     ) : null}
                   </CardContent>
-                  <CardFooter className="justify-between border-t border-stone-200/80 bg-stone-50/80 text-xs text-stone-500">
+                  <CardFooter className="justify-between border-t border-slate-200/80 bg-slate-50/80 text-xs text-slate-500">
                     <span>
                       توزيع المشروع يظل مفصولًا حسب سماكة اللوح لكل خامة.
                     </span>
@@ -8350,7 +9391,7 @@ function App() {
                   </CardFooter>
                 </Card>
 
-                <Card className="border-0 bg-white/88 shadow-[0_20px_60px_-45px_rgba(63,40,12,0.55)] ring-1 ring-stone-950/8">
+                <Card className="border-0 bg-white/88 shadow-[0_20px_60px_-45px_rgba(24,32,40,0.55)] ring-1 ring-slate-950/8">
                   <CardHeader>
                     <button
                       type="button"
@@ -8364,9 +9405,9 @@ function App() {
                         </CardDescription>
                       </div>
                       {openResultsSections.metrics ? (
-                        <ArrowUp className="size-4 text-stone-500" />
+                        <ArrowUp className="size-4 text-slate-500" />
                       ) : (
-                        <ArrowDown className="size-4 text-stone-500" />
+                        <ArrowDown className="size-4 text-slate-500" />
                       )}
                     </button>
                   </CardHeader>
@@ -8376,66 +9417,66 @@ function App() {
                       !openResultsSections.metrics && "hidden",
                     )}
                   >
-                    <div className="rounded-2xl border border-stone-200 bg-stone-50 p-4">
-                      <p className="text-xs text-stone-500">عدد الوحدات</p>
-                      <p className="mt-2 text-lg font-semibold text-stone-950">
+                    <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                      <p className="text-xs text-slate-500">عدد الوحدات</p>
+                      <p className="mt-2 text-lg font-semibold text-slate-950">
                         {projectSummary.unitCount}
                       </p>
                     </div>
-                    <div className="rounded-2xl border border-stone-200 bg-stone-50 p-4">
-                      <p className="text-xs text-stone-500">
+                    <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                      <p className="text-xs text-slate-500">
                         الخامات المستخدمة
                       </p>
-                      <p className="mt-2 text-lg font-semibold text-stone-950">
+                      <p className="mt-2 text-lg font-semibold text-slate-950">
                         {projectMaterialSummary || "--"}
                       </p>
                     </div>
-                    <div className="rounded-2xl border border-stone-200 bg-stone-50 p-4">
-                      <p className="text-xs text-stone-500">إجمالي الواجهات</p>
-                      <p className="mt-2 text-lg font-semibold text-stone-950">
+                    <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                      <p className="text-xs text-slate-500">إجمالي الواجهات</p>
+                      <p className="mt-2 text-lg font-semibold text-slate-950">
                         {projectFrontPieceCount}
                       </p>
                     </div>
-                    <div className="rounded-2xl border border-stone-200 bg-stone-50 p-4">
-                      <p className="text-xs text-stone-500">المفصلات</p>
-                      <p className="mt-2 text-lg font-semibold text-stone-950">
+                    <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                      <p className="text-xs text-slate-500">المفصلات</p>
+                      <p className="mt-2 text-lg font-semibold text-slate-950">
                         {projectSummary.totalHingeCount} × {formatPrice(projectSettings.hingePrice)}
                       </p>
-                      <p className="mt-1 text-xs text-stone-500">
+                      <p className="mt-1 text-xs text-slate-500">
                         الإجمالي {formatPrice(projectSummary.totalHingeCost)}
                       </p>
                     </div>
-                    <div className="rounded-2xl border border-stone-200 bg-stone-50 p-4">
-                      <p className="text-xs text-stone-500">الهالك التقريبي</p>
-                      <p className="mt-2 text-lg font-semibold text-stone-950">
+                    <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                      <p className="text-xs text-slate-500">الهالك التقريبي</p>
+                      <p className="mt-2 text-lg font-semibold text-slate-950">
                         {projectLayoutWastePercent}%
                       </p>
                     </div>
-                    <div className="rounded-2xl border border-stone-200 bg-stone-50 p-4">
-                      <p className="text-xs text-stone-500">تسعير الألواح</p>
-                      <p className="mt-2 text-lg font-semibold text-stone-950">
+                    <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                      <p className="text-xs text-slate-500">تسعير الألواح</p>
+                      <p className="mt-2 text-lg font-semibold text-slate-950">
                         18 مم: {formatPrice(projectSettings.boardSheetPrice)} •
                         6 مم: {formatPrice(projectSettings.backSheetPrice)}
                       </p>
                     </div>
-                    <div className="rounded-2xl border border-stone-200 bg-stone-50 p-4">
-                      <p className="text-xs text-stone-500">مصنعية المتر</p>
-                      <p className="mt-2 text-lg font-semibold text-stone-950">
+                    <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                      <p className="text-xs text-slate-500">مصنعية المتر</p>
+                      <p className="mt-2 text-lg font-semibold text-slate-950">
                         {formatPrice(projectSettings.laborPricePerSquareMeter)}{" "}
                         / م²
                       </p>
                     </div>
-                    <div className="rounded-2xl border border-stone-200 bg-stone-50 p-4">
-                      <p className="text-xs text-stone-500">شريط الحافة</p>
-                      <p className="mt-2 text-lg font-semibold text-stone-950">
+                    <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                      <p className="text-xs text-slate-500">شريط الحافة</p>
+                      <p className="mt-2 text-lg font-semibold text-slate-950">
                         {projectSummary.totalEdgeBandLengthM} م ط ×{" "}
                         {formatPrice(projectSettings.edgeBandPricePerMeter)} ={" "}
                         {formatPrice(projectSummary.totalEdgeBandCost)}
                       </p>
                     </div>
-                    <div className="rounded-2xl border border-stone-200 bg-stone-50 p-4">
-                      <p className="text-xs text-stone-500">سعر المفصلة</p>
-                      <p className="mt-2 text-lg font-semibold text-stone-950">
+                    <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                      <p className="text-xs text-slate-500">سعر المفصلة</p>
+                      <p className="mt-2 text-lg font-semibold text-slate-950">
                         {formatPrice(projectSettings.hingePrice)} / قطعة
                       </p>
                     </div>
@@ -8444,7 +9485,7 @@ function App() {
               </section>
 
               <section className="mt-6">
-                <Card className="border-0 bg-white/88 shadow-[0_20px_60px_-45px_rgba(63,40,12,0.55)] ring-1 ring-stone-950/8">
+                <Card className="border-0 bg-white/88 shadow-[0_20px_60px_-45px_rgba(24,32,40,0.55)] ring-1 ring-slate-950/8">
                   <CardHeader>
                     <button
                       type="button"
@@ -8461,15 +9502,15 @@ function App() {
                         </div>
                         <Badge
                           variant="secondary"
-                          className="w-fit bg-stone-100 text-stone-700"
+                          className="w-fit bg-slate-100 text-slate-700"
                         >
                           {workshopExecutionCards.length} بطاقة
                         </Badge>
                       </div>
                       {openResultsSections.workshop ? (
-                        <ArrowUp className="size-4 text-stone-500" />
+                        <ArrowUp className="size-4 text-slate-500" />
                       ) : (
-                        <ArrowDown className="size-4 text-stone-500" />
+                        <ArrowDown className="size-4 text-slate-500" />
                       )}
                     </button>
                   </CardHeader>
@@ -8480,14 +9521,14 @@ function App() {
                       {workshopExecutionCards.map((card) => (
                         <div
                           key={card.id}
-                          className="rounded-[1.5rem] border border-stone-200 bg-[linear-gradient(180deg,rgba(252,250,247,0.95),rgba(243,236,227,0.82))] p-4 shadow-[0_18px_44px_-36px_rgba(63,40,12,0.4)]"
+                          className="rounded-[1.5rem] border border-slate-200 bg-[linear-gradient(180deg,rgba(255,255,255,0.95),rgba(235,240,242,0.82))] p-4 shadow-[0_18px_44px_-36px_rgba(24,32,40,0.4)]"
                         >
                           <div className="flex items-start justify-between gap-3">
                             <div>
-                              <p className="text-sm font-semibold text-stone-950">
+                              <p className="text-sm font-semibold text-slate-950">
                                 {card.part.name}
                               </p>
-                              <p className="mt-1 text-xs text-stone-500">
+                              <p className="mt-1 text-xs text-slate-500">
                                 {card.unitTitle} •{" "}
                                 {partCategoryLabels[card.part.category]}
                               </p>
@@ -8495,13 +9536,13 @@ function App() {
                             <div className="flex flex-col items-end gap-2">
                               <Badge
                                 variant="outline"
-                                className="border-stone-200 bg-white text-stone-700"
+                                className="border-slate-200 bg-white text-slate-700"
                               >
                                 تشغيل #{card.operationOrder}
                               </Badge>
                               <Badge
                                 variant="outline"
-                                className="border-amber-200 bg-amber-50 text-amber-800"
+                                className="border-slate-300 bg-slate-50 text-slate-800"
                               >
                                 {card.partCode} • × {card.part.qty}
                               </Badge>
@@ -8509,55 +9550,55 @@ function App() {
                           </div>
 
                           <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
-                            <div className="rounded-xl bg-white/75 p-3 ring-1 ring-stone-200">
-                              <p className="text-[11px] text-stone-500">
+                            <div className="rounded-xl bg-white/75 p-3 ring-1 ring-slate-200">
+                              <p className="text-[11px] text-slate-500">
                                 الطول × العرض
                               </p>
-                              <p className="mt-1 font-semibold text-stone-950">
+                              <p className="mt-1 font-semibold text-slate-950">
                                 {formatCm(card.part.length)} ×{" "}
                                 {formatCm(card.part.width)}
                               </p>
                             </div>
-                            <div className="rounded-xl bg-white/75 p-3 ring-1 ring-stone-200">
-                              <p className="text-[11px] text-stone-500">
+                            <div className="rounded-xl bg-white/75 p-3 ring-1 ring-slate-200">
+                              <p className="text-[11px] text-slate-500">
                                 السمك
                               </p>
-                              <p className="mt-1 font-semibold text-stone-950">
+                              <p className="mt-1 font-semibold text-slate-950">
                                 {formatCm(card.part.thickness)}
                               </p>
                             </div>
                           </div>
 
-                          <div className="mt-3 rounded-xl bg-stone-950/[0.03] p-3 ring-1 ring-stone-200">
-                            <p className="text-[11px] text-stone-500">
+                          <div className="mt-3 rounded-xl bg-slate-950/[0.03] p-3 ring-1 ring-slate-200">
+                            <p className="text-[11px] text-slate-500">
                               ربط اللوح
                             </p>
-                            <p className="mt-1 text-sm font-medium text-stone-900">
+                            <p className="mt-1 text-sm font-medium text-slate-900">
                               {card.primarySheetReference ?? "لم يُوزع بعد"}
                             </p>
                             {card.sheetReferences.length > 1 ? (
-                              <p className="mt-1 text-[11px] leading-6 text-stone-500">
+                              <p className="mt-1 text-[11px] leading-6 text-slate-500">
                                 {card.sheetReferences.join(" • ")}
                               </p>
                             ) : null}
                           </div>
 
-                          <div className="mt-3 rounded-xl bg-stone-950/[0.03] p-3 ring-1 ring-stone-200">
-                            <p className="text-[11px] text-stone-500">الحواف</p>
-                            <p className="mt-1 text-sm font-medium text-stone-900">
+                          <div className="mt-3 rounded-xl bg-slate-950/[0.03] p-3 ring-1 ring-slate-200">
+                            <p className="text-[11px] text-slate-500">الحواف</p>
+                            <p className="mt-1 text-sm font-medium text-slate-900">
                               {formatPartEdgeBanding(card.part)}
                             </p>
-                            <p className="mt-1 text-xs text-stone-500">
+                            <p className="mt-1 text-xs text-slate-500">
                               إجمالي الطول:{" "}
                               {formatCm(getPartEdgeBandLengthCm(card.part))}
                             </p>
                           </div>
 
-                          <div className="mt-3 rounded-xl bg-white/75 p-3 ring-1 ring-stone-200">
-                            <p className="text-[11px] text-stone-500">
+                          <div className="mt-3 rounded-xl bg-white/75 p-3 ring-1 ring-slate-200">
+                            <p className="text-[11px] text-slate-500">
                               ملاحظات التنفيذ
                             </p>
-                            <p className="mt-1 text-xs leading-6 text-stone-600">
+                            <p className="mt-1 text-xs leading-6 text-slate-600">
                               {card.part.notes}
                             </p>
                           </div>
@@ -8569,7 +9610,7 @@ function App() {
               </section>
 
               <section className="mt-6 pb-8">
-                <Card className="border-0 bg-white/88 shadow-[0_20px_60px_-45px_rgba(63,40,12,0.55)] ring-1 ring-stone-950/8">
+                <Card className="border-0 bg-white/88 shadow-[0_20px_60px_-45px_rgba(24,32,40,0.55)] ring-1 ring-slate-950/8">
                   <CardHeader>
                     <button
                       type="button"
@@ -8587,7 +9628,7 @@ function App() {
                         </div>
                         <Badge
                           variant="secondary"
-                          className="w-fit bg-stone-100 text-stone-700"
+                          className="w-fit bg-slate-100 text-slate-700"
                         >
                           {selectedPartId
                             ? "جزء محدد"
@@ -8595,9 +9636,9 @@ function App() {
                         </Badge>
                       </div>
                       {openResultsSections.parts ? (
-                        <ArrowUp className="size-4 text-stone-500" />
+                        <ArrowUp className="size-4 text-slate-500" />
                       ) : (
-                        <ArrowDown className="size-4 text-stone-500" />
+                        <ArrowDown className="size-4 text-slate-500" />
                       )}
                     </button>
                   </CardHeader>
@@ -8617,28 +9658,28 @@ function App() {
                       </colgroup>
                       <TableHeader>
                         <TableRow>
-                          <TableHead className="px-3 text-right text-stone-700">
+                          <TableHead className="px-3 text-right text-slate-700">
                             الجزء
                           </TableHead>
-                          <TableHead className="px-3 text-right text-stone-700">
+                          <TableHead className="px-3 text-right text-slate-700">
                             الفئة
                           </TableHead>
-                          <TableHead className="px-3 text-right text-stone-700">
+                          <TableHead className="px-3 text-right text-slate-700">
                             العدد
                           </TableHead>
-                          <TableHead className="px-3 text-right text-stone-700">
+                          <TableHead className="px-3 text-right text-slate-700">
                             الطول
                           </TableHead>
-                          <TableHead className="px-3 text-right text-stone-700">
+                          <TableHead className="px-3 text-right text-slate-700">
                             العرض
                           </TableHead>
-                          <TableHead className="px-3 text-right text-stone-700">
+                          <TableHead className="px-3 text-right text-slate-700">
                             السمك
                           </TableHead>
-                          <TableHead className="px-3 text-right text-stone-700">
+                          <TableHead className="px-3 text-right text-slate-700">
                             الحواف
                           </TableHead>
-                          <TableHead className="px-3 text-right text-stone-700">
+                          <TableHead className="px-3 text-right text-slate-700">
                             ملاحظات
                           </TableHead>
                         </TableRow>
@@ -8650,12 +9691,12 @@ function App() {
                             className={cn(
                               "cursor-pointer",
                               selectedPartId === part.id &&
-                                "bg-amber-50 hover:bg-amber-50",
+                                "bg-slate-50 hover:bg-slate-50",
                             )}
                             onClick={() => handlePartSelection(part.id)}
                           >
-                            <TableCell className="px-3 align-top font-medium whitespace-normal text-stone-900">
-                              <span className="inline-flex min-w-16 items-center justify-center rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-800">
+                            <TableCell className="px-3 align-top font-medium whitespace-normal text-slate-900">
+                              <span className="inline-flex min-w-16 items-center justify-center rounded-full border border-slate-300 bg-slate-50 px-2 py-0.5 text-[11px] font-semibold text-slate-800">
                                 {projectPartLinkMap.get(part.id)?.code ?? "--"}
                               </span>
                               <span className="mt-2 block">{part.name}</span>
@@ -8675,14 +9716,14 @@ function App() {
                             <TableCell className="px-3 align-top">
                               {formatCm(part.thickness)}
                             </TableCell>
-                            <TableCell className="px-3 align-top whitespace-normal text-xs leading-6 text-stone-500">
+                            <TableCell className="px-3 align-top whitespace-normal text-xs leading-6 text-slate-500">
                               {formatPartEdgeBanding(part)}
-                              <span className="mt-1 block text-[11px] text-stone-400">
+                              <span className="mt-1 block text-[11px] text-slate-400">
                                 {formatCm(getPartEdgeBandLengthCm(part))}
                               </span>
                               {projectPartLinkMap.get(part.id)
                                 ?.primarySheetReference ? (
-                                <span className="mt-2 block text-[11px] text-stone-500">
+                                <span className="mt-2 block text-[11px] text-slate-500">
                                   {
                                     projectPartLinkMap.get(part.id)
                                       ?.primarySheetReference
@@ -8690,7 +9731,7 @@ function App() {
                                 </span>
                               ) : null}
                             </TableCell>
-                            <TableCell className="px-3 align-top whitespace-normal text-xs leading-6 text-stone-500">
+                            <TableCell className="px-3 align-top whitespace-normal text-xs leading-6 text-slate-500">
                               {part.notes}
                             </TableCell>
                           </TableRow>
@@ -8698,7 +9739,7 @@ function App() {
                       </TableBody>
                     </Table>
                   </CardContent>
-                  <CardFooter className="justify-between border-t border-stone-200/80 bg-stone-50/80 text-xs text-stone-500">
+                  <CardFooter className="justify-between border-t border-slate-200/80 bg-slate-50/80 text-xs text-slate-500">
                     <span>
                       نتيجة المشروع النهائية تعتمد على الوحدات التي كانت موجودة
                       عند آخر ضغط على زر احسب.
@@ -8714,7 +9755,7 @@ function App() {
             </>
           ) : (
             <section className="mt-6 pb-8">
-              <Card className="border-0 bg-white/88 shadow-[0_20px_60px_-45px_rgba(63,40,12,0.55)] ring-1 ring-stone-950/8">
+              <Card className="border-0 bg-white/88 shadow-[0_20px_60px_-45px_rgba(24,32,40,0.55)] ring-1 ring-slate-950/8">
                 <CardHeader>
                   <CardTitle>بانتظار الحساب</CardTitle>
                   <CardDescription>
@@ -8729,7 +9770,7 @@ function App() {
 
         {activeWorkspaceTab === "library" ? (
           <section className="mt-6 grid gap-6 lg:grid-cols-2">
-            <Card className="border-0 bg-white/88 shadow-[0_20px_60px_-45px_rgba(63,40,12,0.55)] ring-1 ring-stone-950/8">
+            <Card className="border-0 bg-white/88 shadow-[0_20px_60px_-45px_rgba(24,32,40,0.55)] ring-1 ring-slate-950/8">
               <CardHeader>
                 <CardTitle>المشاريع المحفوظة</CardTitle>
                 <CardDescription>
@@ -8738,21 +9779,21 @@ function App() {
               </CardHeader>
               <CardContent className="space-y-3">
                 {recentSavedProjects.length === 0 ? (
-                  <div className="rounded-2xl border border-dashed border-stone-300 bg-stone-50/80 p-6 text-center text-sm text-stone-500">
+                  <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50/80 p-6 text-center text-sm text-slate-500">
                     لا توجد مشاريع محفوظة بعد.
                   </div>
                 ) : (
                   recentSavedProjects.map((project) => (
                     <div
                       key={project.id}
-                      className="rounded-2xl border border-stone-200 bg-stone-50/80 p-4 ring-1 ring-stone-200"
+                      className="rounded-2xl border border-slate-200 bg-slate-50/80 p-4 ring-1 ring-slate-200"
                     >
                       <div className="flex items-center justify-between gap-3">
                         <div>
-                          <p className="font-medium text-stone-950">
+                          <p className="font-medium text-slate-950">
                             {project.name}
                           </p>
-                          <p className="mt-1 text-xs text-stone-500">
+                          <p className="mt-1 text-xs text-slate-500">
                             {project.units.length} وحدة •{" "}
                             {(project.customParts ?? []).length} مقاس حر
                           </p>
@@ -8782,7 +9823,7 @@ function App() {
               </CardFooter>
             </Card>
 
-            <Card className="border-0 bg-white/88 shadow-[0_20px_60px_-45px_rgba(63,40,12,0.55)] ring-1 ring-stone-950/8">
+            <Card className="border-0 bg-white/88 shadow-[0_20px_60px_-45px_rgba(24,32,40,0.55)] ring-1 ring-slate-950/8">
               <CardHeader>
                 <CardTitle>الوحدات الجاهزة</CardTitle>
                 <CardDescription>
@@ -8794,13 +9835,13 @@ function App() {
                 {unitPresets.slice(0, 4).map((preset) => (
                   <div
                     key={preset.id}
-                    className="rounded-2xl border border-stone-200 bg-stone-50/80 p-4 ring-1 ring-stone-200"
+                    className="rounded-2xl border border-slate-200 bg-slate-50/80 p-4 ring-1 ring-slate-200"
                   >
-                    <p className="font-medium text-stone-950">{preset.title}</p>
-                    <p className="mt-1 text-xs leading-6 text-stone-500">
+                    <p className="font-medium text-slate-950">{preset.title}</p>
+                    <p className="mt-1 text-xs leading-6 text-slate-500">
                       {preset.description}
                     </p>
-                    <p className="mt-2 text-xs text-stone-500">
+                    <p className="mt-2 text-xs text-slate-500">
                       {formatCm(preset.input.width)} ×{" "}
                       {formatCm(preset.input.height)} ×{" "}
                       {formatCm(preset.input.depth)}
@@ -8821,7 +9862,7 @@ function App() {
         <div className="fixed inset-x-4 bottom-24 z-40 sm:hidden">
           <Button
             type="button"
-            className="h-12 w-full rounded-[1.25rem] shadow-[0_20px_50px_-30px_rgba(63,40,12,0.65)]"
+            className="h-12 w-full rounded-[1.25rem] shadow-[0_20px_50px_-30px_rgba(24,32,40,0.65)]"
             onClick={mobilePrimaryAction.onClick}
             disabled={mobilePrimaryAction.disabled}
           >
@@ -8830,7 +9871,7 @@ function App() {
           </Button>
         </div>
 
-        <nav className="fixed inset-x-4 bottom-4 z-40 rounded-[1.5rem] border border-stone-200 bg-white/92 p-2 shadow-[0_20px_60px_-35px_rgba(63,40,12,0.55)] backdrop-blur sm:hidden">
+        <nav className="fixed inset-x-4 bottom-4 z-40 rounded-[1.5rem] border border-slate-200 bg-white/92 p-2 shadow-[0_20px_60px_-35px_rgba(24,32,40,0.55)] backdrop-blur sm:hidden">
           <div className="grid grid-cols-5 gap-2">
             {workspaceTabs.map((tab) => {
               const Icon = tab.icon;
@@ -8843,7 +9884,7 @@ function App() {
                   onClick={() => setActiveWorkspaceTab(tab.id)}
                   className={cn(
                     "flex flex-col items-center justify-center rounded-xl px-2 py-2 text-[11px]",
-                    isActive ? "bg-stone-950 text-stone-50" : "text-stone-600",
+                    isActive ? "bg-slate-950 text-slate-50" : "text-slate-600",
                   )}
                 >
                   <Icon className="size-4" />
