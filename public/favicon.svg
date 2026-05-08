@@ -1,18 +1,19 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
 	<defs>
-		<linearGradient id="bg" x1="9" y1="7" x2="55" y2="58" gradientUnits="userSpaceOnUse">
-			<stop offset="0" stop-color="#FFF8EC" />
-			<stop offset="0.55" stop-color="#EED8B6" />
-			<stop offset="1" stop-color="#C58C4B" />
+		<linearGradient id="bg" x1="8" y1="7" x2="56" y2="58" gradientUnits="userSpaceOnUse">
+			<stop offset="0" stop-color="#223741" />
+			<stop offset="0.6" stop-color="#4A6572" />
+			<stop offset="1" stop-color="#7F9EAC" />
 		</linearGradient>
-		<linearGradient id="door" x1="39" y1="15" x2="53" y2="50" gradientUnits="userSpaceOnUse">
-			<stop offset="0" stop-color="#D9A066" />
-			<stop offset="1" stop-color="#A7642E" />
+		<linearGradient id="door" x1="38" y1="15" x2="53" y2="50" gradientUnits="userSpaceOnUse">
+			<stop offset="0" stop-color="#E6EEF1" />
+			<stop offset="1" stop-color="#99B4C1" />
 		</linearGradient>
 	</defs>
 
-	<rect width="64" height="64" rx="18" fill="#201712" />
+	<rect width="64" height="64" rx="18" fill="#162026" />
 	<rect x="5" y="5" width="54" height="54" rx="15" fill="url(#bg)" />
+	<rect x="5" y="5" width="54" height="54" rx="15" fill="white" opacity="0.06" />
 
 	<g transform="translate(10 12)">
 		<rect
@@ -21,16 +22,16 @@
 			width="31"
 			height="40"
 			rx="6.5"
-			fill="#FFF9F0"
-			stroke="#3B2A1D"
+			fill="#F4F8F8"
+			stroke="#162026"
 			stroke-width="2.75"
 		/>
 		<path
 			d="M10.5 0V40M21 0V40M0 14H31M0 27H31"
-			stroke="#8A6440"
+			stroke="#6D8A99"
 			stroke-width="1.9"
 			stroke-linecap="round"
-			opacity="0.72"
+			opacity="0.8"
 		/>
 	</g>
 
@@ -42,29 +43,29 @@
 			height="35"
 			rx="4"
 			fill="url(#door)"
-			stroke="#3B2A1D"
+			stroke="#162026"
 			stroke-width="2.75"
 		/>
 		<path
 			d="M3.6 5.2V29.8"
-			stroke="#FAE6CC"
+			stroke="#F4F8F8"
 			stroke-width="1.5"
 			stroke-linecap="round"
-			opacity="0.58"
+			opacity="0.72"
 		/>
-		<circle cx="11" cy="17.5" r="1.7" fill="#FFF3DF" />
+		<circle cx="11" cy="17.5" r="1.7" fill="#F4F8F8" />
 	</g>
 
-	<path d="M43 20.5V49.5" stroke="#3B2A1D" stroke-width="1.5" opacity="0.28" />
+	<path d="M43 20.5V49.5" stroke="#162026" stroke-width="1.5" opacity="0.28" />
 	<path
 		d="M14 10.5H22M14 10.5V18.5"
-		stroke="#3B2A1D"
+		stroke="#DCE7EA"
 		stroke-width="2.25"
 		stroke-linecap="round"
 	/>
 	<path
 		d="M50 53.5H42M50 53.5V45.5"
-		stroke="#3B2A1D"
+		stroke="#DCE7EA"
 		stroke-width="2.25"
 		stroke-linecap="round"
 	/>

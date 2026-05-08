@@ -6927,8 +6927,8 @@ function App() {
               <Card className="border-0 bg-slate-950 text-slate-50 ring-0">
                 <CardHeader>
                   <div className="flex items-center gap-2">
-                    <Info className="size-4" />
-                    <Layers2 className="size-4" />
+                    <Info className="size-4 text-[color:var(--chart-3)]" />
+                    <Layers2 className="size-4 text-[color:var(--chart-3)]" />
                     <CardTitle>وضع المحرك الحالي</CardTitle>
                   </div>
                   <CardDescription className="text-slate-300">
@@ -7297,7 +7297,7 @@ function App() {
                         <details className="rounded-2xl border border-slate-200 bg-slate-50/80 p-4">
                           <summary className="flex cursor-pointer list-none items-center justify-between gap-3 text-sm font-medium text-slate-950 [&::-webkit-details-marker]:hidden">
                             <span className="flex items-center gap-2">
-                              <Sparkles className="size-4" />
+                              <Sparkles className="size-4 text-[color:var(--chart-2)]" />
                               مراجعة سريعة
                             </span>
                             <span className="text-[11px] text-slate-500">
@@ -7340,7 +7340,7 @@ function App() {
                       <div className="hidden gap-4 lg:grid lg:grid-cols-[1.25fr_0.75fr]">
                         <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4">
                           <div className="flex items-center gap-2 text-sm font-medium text-slate-950">
-                            <ScanSearch className="size-4" />
+                            <ScanSearch className="size-4 text-[color:var(--chart-2)]" />
                             ملخص الوحدة الجاري إعدادها
                           </div>
                           <div className="mt-4 grid gap-3 sm:grid-cols-2">
@@ -7430,7 +7430,7 @@ function App() {
 
                         <div className="rounded-2xl border border-slate-200 bg-slate-950 p-4 text-slate-50">
                           <div className="flex items-center gap-2 text-sm font-medium">
-                            <Sparkles className="size-4" />
+                            <Sparkles className="size-4 text-[color:var(--chart-3)]" />
                             مراجعة قبل الإضافة
                           </div>
                           {hasEditorCompleteDimensions &&
@@ -8751,9 +8751,9 @@ function App() {
                         </Badge>
                       </div>
                       {openResultsSections.costs ? (
-                        <ArrowUp className="size-4 text-slate-500" />
+                        <ArrowUp className="size-4 text-[color:var(--chart-2)]" />
                       ) : (
-                        <ArrowDown className="size-4 text-slate-500" />
+                        <ArrowDown className="size-4 text-[color:var(--chart-2)]" />
                       )}
                     </button>
                   </CardHeader>
@@ -8932,9 +8932,9 @@ function App() {
                         </Badge>
                       </div>
                       {openResultsSections.layout ? (
-                        <ArrowUp className="size-4 text-slate-500" />
+                        <ArrowUp className="size-4 text-[color:var(--chart-2)]" />
                       ) : (
-                        <ArrowDown className="size-4 text-slate-500" />
+                        <ArrowDown className="size-4 text-[color:var(--chart-2)]" />
                       )}
                     </button>
                   </CardHeader>
@@ -9397,9 +9397,9 @@ function App() {
                         </CardDescription>
                       </div>
                       {openResultsSections.metrics ? (
-                        <ArrowUp className="size-4 text-slate-500" />
+                        <ArrowUp className="size-4 text-[color:var(--chart-2)]" />
                       ) : (
-                        <ArrowDown className="size-4 text-slate-500" />
+                        <ArrowDown className="size-4 text-[color:var(--chart-2)]" />
                       )}
                     </button>
                   </CardHeader>
@@ -9500,9 +9500,9 @@ function App() {
                         </Badge>
                       </div>
                       {openResultsSections.workshop ? (
-                        <ArrowUp className="size-4 text-slate-500" />
+                        <ArrowUp className="size-4 text-[color:var(--chart-2)]" />
                       ) : (
-                        <ArrowDown className="size-4 text-slate-500" />
+                        <ArrowDown className="size-4 text-[color:var(--chart-2)]" />
                       )}
                     </button>
                   </CardHeader>
@@ -9628,9 +9628,9 @@ function App() {
                         </Badge>
                       </div>
                       {openResultsSections.parts ? (
-                        <ArrowUp className="size-4 text-slate-500" />
+                        <ArrowUp className="size-4 text-[color:var(--chart-2)]" />
                       ) : (
-                        <ArrowDown className="size-4 text-slate-500" />
+                        <ArrowDown className="size-4 text-[color:var(--chart-2)]" />
                       )}
                     </button>
                   </CardHeader>
