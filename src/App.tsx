@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 import dynamic from "next/dynamic";
 import {
   ArrowDown,
@@ -287,6 +287,10 @@ type UnitPreset = {
 type WorkspaceTab = "project" | "builder" | "preview" | "results" | "library";
 
 type BuilderTab = "unit" | "custom" | "units";
+
+function isSlowWorkspaceTab(tab: WorkspaceTab) {
+  return tab === "preview" || tab === "results";
+}
 
 type ResultsSectionKey = "costs" | "layout" | "metrics" | "workshop" | "parts";
 
@@ -2940,6 +2944,13 @@ function App() {
   const [activeWorkspaceTab, setActiveWorkspaceTab] =
     useState<WorkspaceTab>("builder");
   const [activeBuilderTab, setActiveBuilderTab] = useState<BuilderTab>("unit");
+  const [pendingWorkspaceTab, setPendingWorkspaceTab] =
+    useState<WorkspaceTab | null>(null);
+  const [isWorkspaceTransitionPending, startWorkspaceTransition] =
+    useTransition();
+  const [deletingProjectId, setDeletingProjectId] = useState<string | null>(
+    null,
+  );
   const [openResultsSections, setOpenResultsSections] = useState<
     Record<ResultsSectionKey, boolean>
   >({
@@ -3326,6 +3337,32 @@ function App() {
   const projectItemCount = units.length + customParts.length;
   const hasCalculatedProject =
     calculatedViews.length > 0 || calculatedCustomParts.length > 0;
+  const activeWorkspaceTransitionTab = isWorkspaceTransitionPending
+    ? pendingWorkspaceTab
+    : null;
+  const isPreviewTransitionPending =
+    activeWorkspaceTransitionTab === "preview";
+  const isResultsTransitionPending =
+    activeWorkspaceTransitionTab === "results";
+  const deletingProject = deletingProjectId
+    ? savedProjects.find((project) => project.id === deletingProjectId) ?? null
+    : null;
+  const workspaceTransitionMessage =
+    activeWorkspaceTransitionTab === "preview"
+      ? "جاري فتح تبويب 3D..."
+      : activeWorkspaceTransitionTab === "results"
+        ? "جاري تجهيز النتائج..."
+        : null;
+  const blockingOverlayMessage = deletingProjectId
+    ? "جاري حذف المشروع..."
+    : workspaceTransitionMessage;
+  const blockingOverlayDescription = deletingProjectId
+    ? deletingProject
+      ? `يتم الآن حذف ${deletingProject.name} من حسابك الحالي.`
+      : "يتم الآن حذف المشروع من حسابك الحالي."
+    : workspaceTransitionMessage
+      ? "سيتم نقل الواجهة فور انتهاء تجهيز الشاشة المطلوبة."
+      : null;
   const recentSavedProjects = savedProjects.slice(0, 3);
   const workspaceTabs: Array<{
     id: WorkspaceTab;
@@ -3402,10 +3439,12 @@ function App() {
               disabled: false,
             }
           : {
-              label: "احسب المشروع",
-              icon: Calculator,
+              label: isResultsTransitionPending
+                ? "جاري تجهيز النتائج..."
+                : "احسب المشروع",
+              icon: isResultsTransitionPending ? RotateCw : Calculator,
               onClick: calculateUnits,
-              disabled: projectItemCount === 0,
+              disabled: projectItemCount === 0 || isResultsTransitionPending,
             }
       : activeWorkspaceTab === "results"
         ? hasCalculatedProject
@@ -3416,10 +3455,12 @@ function App() {
               disabled: projectParts.length === 0,
             }
           : {
-              label: "احسب المشروع",
-              icon: Calculator,
+              label: isResultsTransitionPending
+                ? "جاري تجهيز النتائج..."
+                : "احسب المشروع",
+              icon: isResultsTransitionPending ? RotateCw : Calculator,
               onClick: calculateUnits,
-              disabled: projectItemCount === 0,
+              disabled: projectItemCount === 0 || isResultsTransitionPending,
             }
         : activeWorkspaceTab === "preview"
           ? {
@@ -4536,15 +4577,42 @@ function App() {
   }
 
   function calculateUnits() {
-    if (units.length === 0 && customParts.length === 0) {
+    if (
+      (units.length === 0 && customParts.length === 0) ||
+      isWorkspaceTransitionPending ||
+      deletingProjectId !== null
+    ) {
       return;
     }
 
-    setActiveWorkspaceTab("results");
-    setCalculatedUnits(units.map((unit) => ({ ...unit })));
-    setCalculatedCustomParts(customParts.map((part) => ({ ...part })));
-    setSelectedCalculatedUnitId(units[0]?.id ?? null);
-    setSelectedPartId(null);
+    setPendingWorkspaceTab("results");
+    startWorkspaceTransition(() => {
+      setActiveWorkspaceTab("results");
+      setCalculatedUnits(units.map((unit) => ({ ...unit })));
+      setCalculatedCustomParts(customParts.map((part) => ({ ...part })));
+      setSelectedCalculatedUnitId(units[0]?.id ?? null);
+      setSelectedPartId(null);
+    });
+  }
+
+  function navigateToWorkspaceTab(tab: WorkspaceTab) {
+    if (
+      tab === activeWorkspaceTab ||
+      isWorkspaceTransitionPending ||
+      deletingProjectId !== null
+    ) {
+      return;
+    }
+
+    if (!isSlowWorkspaceTab(tab)) {
+      setActiveWorkspaceTab(tab);
+      return;
+    }
+
+    setPendingWorkspaceTab(tab);
+    startWorkspaceTransition(() => {
+      setActiveWorkspaceTab(tab);
+    });
   }
 
   function resolveEditorCommitState() {
@@ -4760,6 +4828,12 @@ function App() {
   }
 
   async function deleteSavedProject(projectId: string) {
+    if (deletingProjectId || isWorkspaceTransitionPending) {
+      return;
+    }
+
+    setDeletingProjectId(projectId);
+
     try {
       const bootstrap = await requestApi<SessionBootstrap>(
         `/api/projects/${projectId}`,
@@ -4783,6 +4857,8 @@ function App() {
       announceProjectAction(
         error instanceof Error ? error.message : "تعذر حذف المشروع الآن.",
       );
+    } finally {
+      setDeletingProjectId(null);
     }
   }
 
@@ -5871,6 +5947,7 @@ function App() {
                           size="sm"
                           className="flex-1"
                           onClick={() => loadSavedProject(project)}
+                          disabled={deletingProjectId !== null}
                         >
                           <FolderOpen className="size-4" />
                           فتح المشروع
@@ -5880,8 +5957,13 @@ function App() {
                           variant="outline"
                           size="sm"
                           onClick={() => deleteSavedProject(project.id)}
+                          disabled={deletingProjectId !== null}
                         >
-                          <Trash2 className="size-4" />
+                          {deletingProjectId === project.id ? (
+                            <RotateCw className="size-4 animate-spin" />
+                          ) : (
+                            <Trash2 className="size-4" />
+                          )}
                         </Button>
                       </div>
                     </div>
@@ -6133,14 +6215,17 @@ function App() {
                 {workspaceTabs.map((tab) => {
                   const Icon = tab.icon;
                   const isActive = activeWorkspaceTab === tab.id;
+                  const isPendingTarget =
+                    isWorkspaceTransitionPending && pendingWorkspaceTab === tab.id;
 
                   return (
                     <button
                       key={tab.id}
                       type="button"
-                      onClick={() => setActiveWorkspaceTab(tab.id)}
+                      onClick={() => navigateToWorkspaceTab(tab.id)}
+                      disabled={isWorkspaceTransitionPending}
                       className={cn(
-                        "grid grid-cols-[auto_1fr_auto] items-center gap-3 rounded-[1.2rem] border px-3 py-3 text-right transition-colors",
+                        "grid grid-cols-[auto_1fr_auto] items-center gap-3 rounded-[1.2rem] border px-3 py-3 text-right transition-colors disabled:cursor-wait disabled:opacity-75",
                         isActive
                           ? "border-slate-300 bg-[linear-gradient(145deg,#edf5f7,#ffffff)] ring-1 ring-slate-200"
                           : "border-slate-200 bg-white/82 text-slate-700 hover:bg-white",
@@ -6153,7 +6238,11 @@ function App() {
                             "bg-[linear-gradient(145deg,#31515d,#5d8596)] text-white",
                         )}
                       >
-                        <Icon className="size-4" />
+                          {isPendingTarget ? (
+                            <RotateCw className="size-4 animate-spin" />
+                          ) : (
+                            <Icon className="size-4" />
+                          )}
                       </span>
                       <span className="min-w-0">
                         <span className="block text-sm font-semibold text-slate-950">
@@ -6326,10 +6415,17 @@ function App() {
                           <Button
                             type="button"
                             variant="outline"
-                            onClick={() => setActiveWorkspaceTab("preview")}
+                            onClick={() => navigateToWorkspaceTab("preview")}
+                            disabled={isPreviewTransitionPending}
                           >
-                            <PanelsTopLeft className="size-4" />
-                            فتح 3D
+                            {isPreviewTransitionPending ? (
+                              <RotateCw className="size-4 animate-spin" />
+                            ) : (
+                              <PanelsTopLeft className="size-4" />
+                            )}
+                            {isPreviewTransitionPending
+                              ? "جاري فتح 3D..."
+                              : "فتح 3D"}
                           </Button>
                           <Button
                             type="button"
@@ -6427,10 +6523,17 @@ function App() {
                         type="button"
                         variant="outline"
                         className="bg-white/82"
-                        onClick={() => setActiveWorkspaceTab("preview")}
+                        onClick={() => navigateToWorkspaceTab("preview")}
+                        disabled={isPreviewTransitionPending}
                       >
-                        <PanelsTopLeft className="size-4" />
-                        المشهد الكامل
+                        {isPreviewTransitionPending ? (
+                          <RotateCw className="size-4 animate-spin" />
+                        ) : (
+                          <PanelsTopLeft className="size-4" />
+                        )}
+                        {isPreviewTransitionPending
+                          ? "جاري فتح 3D..."
+                          : "المشهد الكامل"}
                       </Button>
                       <Button
                         type="button"
@@ -7734,10 +7837,16 @@ function App() {
                             type="button"
                             className="w-full sm:w-auto"
                             onClick={calculateUnits}
-                            disabled={projectItemCount === 0}
+                            disabled={projectItemCount === 0 || isResultsTransitionPending}
                           >
-                            <Calculator className="size-4" />
-                            احسب المشروع
+                            {isResultsTransitionPending ? (
+                              <RotateCw className="size-4 animate-spin" />
+                            ) : (
+                              <Calculator className="size-4" />
+                            )}
+                            {isResultsTransitionPending
+                              ? "جاري تجهيز النتائج..."
+                              : "احسب المشروع"}
                           </Button>
                         </div>
                       </div>
@@ -7903,10 +8012,17 @@ function App() {
                               <Button
                                 type="button"
                                 className="flex-1"
-                                onClick={() => setActiveWorkspaceTab("preview")}
+                                onClick={() => navigateToWorkspaceTab("preview")}
+                                disabled={isPreviewTransitionPending}
                               >
-                                <PanelsTopLeft className="size-4" />
-                                افتح تبويب 3D
+                                {isPreviewTransitionPending ? (
+                                  <RotateCw className="size-4 animate-spin" />
+                                ) : (
+                                  <PanelsTopLeft className="size-4" />
+                                )}
+                                {isPreviewTransitionPending
+                                  ? "جاري فتح 3D..."
+                                  : "افتح تبويب 3D"}
                               </Button>
                               <Button
                                 type="button"
@@ -9749,24 +9865,52 @@ function App() {
             {workspaceTabs.map((tab) => {
               const Icon = tab.icon;
               const isActive = activeWorkspaceTab === tab.id;
+              const isPendingTarget =
+                isWorkspaceTransitionPending && pendingWorkspaceTab === tab.id;
 
               return (
                 <button
                   key={tab.id}
                   type="button"
-                  onClick={() => setActiveWorkspaceTab(tab.id)}
+                  onClick={() => navigateToWorkspaceTab(tab.id)}
+                  disabled={isWorkspaceTransitionPending}
                   className={cn(
-                    "flex flex-col items-center justify-center rounded-xl px-2 py-2 text-[11px]",
+                    "flex flex-col items-center justify-center rounded-xl px-2 py-2 text-[11px] disabled:cursor-wait disabled:opacity-75",
                     isActive ? "bg-slate-950 text-slate-50" : "text-slate-600",
                   )}
                 >
-                  <Icon className="size-4" />
+                  {isPendingTarget ? (
+                    <RotateCw className="size-4 animate-spin" />
+                  ) : (
+                    <Icon className="size-4" />
+                  )}
                   <span className="mt-1">{tab.label}</span>
                 </button>
               );
             })}
           </div>
         </nav>
+
+        {blockingOverlayMessage ? (
+          <div className="fixed inset-0 z-[120] flex items-center justify-center bg-slate-950/35 p-4 backdrop-blur-[3px]">
+            <div className="w-full max-w-md rounded-[1.75rem] border border-white/35 bg-[linear-gradient(180deg,rgba(15,23,42,0.94),rgba(30,41,59,0.9))] px-6 py-7 text-white shadow-[0_30px_80px_-35px_rgba(15,23,42,0.85)] ring-1 ring-white/10">
+              <div className="flex items-center gap-4">
+                <div className="flex size-12 items-center justify-center rounded-full bg-white/10 ring-1 ring-white/15">
+                  <RotateCw className="size-5 animate-spin" />
+                </div>
+                <div>
+                  <p className="text-base font-semibold">{blockingOverlayMessage}</p>
+                  <p className="mt-1 text-sm leading-6 text-slate-200">
+                    {blockingOverlayDescription}
+                  </p>
+                </div>
+              </div>
+              <div className="mt-5 h-1.5 overflow-hidden rounded-full bg-white/10">
+                <div className="h-full w-1/3 animate-pulse rounded-full bg-[linear-gradient(90deg,#93c5fd,#e2e8f0)]" />
+              </div>
+            </div>
+          </div>
+        ) : null}
       </div>
     </main>
   );
