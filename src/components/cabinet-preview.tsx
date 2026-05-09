@@ -71,10 +71,6 @@ type ProjectPreviewCameraTransition = {
   fovTo: number;
   nearFrom: number;
   nearTo: number;
-  minDistanceFrom: number;
-  minDistanceTo: number;
-  maxDistanceFrom: number;
-  maxDistanceTo: number;
   elapsed: number;
   duration: number;
 };
@@ -419,16 +415,6 @@ function ProjectCameraTransitionController({
     controls.target.lerpVectors(
       transition.targetFrom,
       transition.targetTo,
-      easedProgress,
-    );
-    controls.minDistance = lerpNumber(
-      transition.minDistanceFrom,
-      transition.minDistanceTo,
-      easedProgress,
-    );
-    controls.maxDistance = lerpNumber(
-      transition.maxDistanceFrom,
-      transition.maxDistanceTo,
       easedProgress,
     );
 
@@ -2111,10 +2097,6 @@ export function ProjectPreview({
       fovTo: nextFov,
       nearFrom: currentNear,
       nearTo: nextNear,
-      minDistanceFrom: controls.minDistance,
-      minDistanceTo: nextMinDistance,
-      maxDistanceFrom: controls.maxDistance,
-      maxDistanceTo: nextMaxDistance,
       elapsed: 0,
       duration: isCornerUnit ? 0.72 : 0.58,
     };
