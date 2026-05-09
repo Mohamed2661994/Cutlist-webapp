@@ -2538,6 +2538,47 @@ function buildEditorNumericDrafts(
   };
 }
 
+function applyEditorNumericDraftsToInput(
+  input: CabinetInput,
+  drafts: Record<EditorNumericFieldKey, string>,
+): CabinetInput {
+  const nextInput: CabinetInput = { ...input };
+
+  (Object.entries(drafts) as Array<[EditorNumericFieldKey, string]>).forEach(
+    ([key, value]) => {
+      const normalizedValue = normalizeNumericInput(value);
+
+      if (normalizedValue.trim() === "") {
+        nextInput[key] = 0;
+        return;
+      }
+
+      const parsedValue = Number(normalizedValue);
+
+      if (Number.isFinite(parsedValue)) {
+        nextInput[key] = parsedValue;
+      }
+    },
+  );
+
+  return nextInput;
+}
+
+function hasCompleteUnitDimensions(input: CabinetInput) {
+  if (input.width <= 0 || input.height <= 0 || input.depth <= 0) {
+    return false;
+  }
+
+  if (
+    input.cabinetType === "corner-l-base" ||
+    input.cabinetType === "corner-l-wall"
+  ) {
+    return input.returnDepth > 0;
+  }
+
+  return true;
+}
+
 function buildProjectSettingsDrafts(
   settings: ProjectSettings,
 ): ProjectSettingsNumericDrafts {
@@ -4341,11 +4382,23 @@ function App() {
   }
 
   function saveUnit() {
-    const title = editorTitle.trim() || createUnitTitle(units.length);
-    const nextUnitInput = applyProjectSettingsToInput(
-      editorInput,
-      projectSettings,
-    );
+    const {
+      title,
+      nextUnitInput,
+      nextEditorInput,
+      nextEditorNumericDrafts,
+    } = resolveEditorCommitState();
+
+    setEditorTitle(title);
+    setEditorInput(nextEditorInput);
+    setEditorNumericDrafts(nextEditorNumericDrafts);
+
+    if (!hasCompleteUnitDimensions(nextUnitInput)) {
+      announceProjectAction(
+        "أدخل العرض والارتفاع والعمق كاملين قبل إضافة الوحدة.",
+      );
+      return;
+    }
 
     if (editingUnitId) {
       setUnits((current) =>
@@ -4494,6 +4547,51 @@ function App() {
     setSelectedPartId(null);
   }
 
+  function resolveEditorCommitState() {
+    const inputIdsByField: Record<EditorNumericFieldKey, string> = {
+      width: "width",
+      height: "height",
+      depth: "depth",
+      returnDepth: "returnDepth",
+      shelfCount: "shelves",
+      drawerCount: "drawerCount",
+      doorLeafCount: "doorLeafCount",
+    };
+
+    const nextEditorNumericDrafts = { ...editorNumericDrafts };
+
+    (Object.entries(inputIdsByField) as Array<
+      [EditorNumericFieldKey, string]
+    >).forEach(([key, inputId]) => {
+      const element = document.getElementById(inputId);
+
+      if (element instanceof HTMLInputElement) {
+        nextEditorNumericDrafts[key] = normalizeNumericInput(element.value);
+      }
+    });
+
+    const titleElement = document.getElementById("unitTitle");
+    const titleValue =
+      titleElement instanceof HTMLInputElement
+        ? titleElement.value
+        : editorTitle;
+    const title = titleValue.trim() || createUnitTitle(units.length);
+    const nextEditorInput = applyEditorNumericDraftsToInput(
+      editorInput,
+      nextEditorNumericDrafts,
+    );
+
+    return {
+      title,
+      nextEditorNumericDrafts,
+      nextEditorInput,
+      nextUnitInput: applyProjectSettingsToInput(
+        nextEditorInput,
+        projectSettings,
+      ),
+    };
+  }
+
   function resolvePendingUnitForProjectSave() {
     if (activeBuilderTab !== "unit") {
       return {
@@ -4505,11 +4603,7 @@ function App() {
       };
     }
 
-    const title = editorTitle.trim() || createUnitTitle(units.length);
-    const nextUnitInput = applyProjectSettingsToInput(
-      editorInput,
-      projectSettings,
-    );
+    const { title, nextUnitInput } = resolveEditorCommitState();
 
     if (editingUnitId) {
       const nextUnits = units.map((unit) =>
@@ -4527,7 +4621,7 @@ function App() {
       };
     }
 
-    if (!hasEditorCompleteDimensions) {
+    if (!hasCompleteUnitDimensions(nextUnitInput)) {
       return {
         nextUnits: units,
         nextArrangement: normalizedProjectArrangement,
