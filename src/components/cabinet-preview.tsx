@@ -1998,11 +1998,6 @@ export function ProjectPreview({
     const currentNear = camera instanceof PerspectiveCamera ? camera.near : 0.1;
     const nextNear = 0.03;
     const nextFov = action === "inside" ? (isCornerUnit ? 46 : 48) : 34;
-    const nextMinDistance = action === "inside" ? 0.18 : minCameraDistance;
-    const nextMaxDistance =
-      action === "inside"
-        ? Math.max(2.4, minCameraDistance * 1.2)
-        : maxCameraDistance;
 
     setCameraDistanceMode("inside");
     setOpenDoorUnits((current) => ({
