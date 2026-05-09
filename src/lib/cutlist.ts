@@ -1262,9 +1262,7 @@ function buildSingleStockSheets(
   }
 
   function isSparseSheet(sheet: InternalSheet) {
-    return (
-      sheet.pieces.length <= 2 && getSheetUtilizationRatio(sheet) < 0.72
-    );
+    return sheet.pieces.length <= 2 && getSheetUtilizationRatio(sheet) < 0.72;
   }
 
   function getSinglePieceSheetCount(sheets: InternalSheet[]) {
@@ -1406,8 +1404,7 @@ function buildSingleStockSheets(
           leftScore.singlePieceSheetCount !== rightScore.singlePieceSheetCount
         ) {
           return (
-            leftScore.singlePieceSheetCount <
-            rightScore.singlePieceSheetCount
+            leftScore.singlePieceSheetCount < rightScore.singlePieceSheetCount
           );
         }
       }
@@ -1436,8 +1433,7 @@ function buildSingleStockSheets(
         leftScore.totalLargestReusableGap !== rightScore.totalLargestReusableGap
       ) {
         return (
-          leftScore.totalLargestReusableGap >
-          rightScore.totalLargestReusableGap
+          leftScore.totalLargestReusableGap > rightScore.totalLargestReusableGap
         );
       }
 
@@ -2033,10 +2029,15 @@ function buildSingleStockSheets(
 
       if (!bestCandidate) {
         const sheet = createShelfSheet();
-        const orientation = orientations.sort(
+        const sortedOrientations = [...orientations].sort(
           (left, right) =>
             left.length - right.length || left.width - right.width,
-        )[0];
+        );
+        const orientation =
+          sortedOrientations.find(
+            (candidate) =>
+              candidate.length <= boardLength && candidate.width <= boardWidth,
+          ) ?? sortedOrientations[0];
 
         if (
           orientation.length > boardLength ||

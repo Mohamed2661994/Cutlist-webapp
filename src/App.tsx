@@ -774,14 +774,16 @@ function buildProjectOptimizationRecommendations(
     {
       id: "baseline",
       title: "كيف يفكر المحرك الآن",
-      body:
-        "المحرك يفصل المشروع أولًا حسب الخامة والسماكة، ثم يحترم اتجاه الثمرة قبل أن يحاول تقليل الهدر داخل كل مجموعة لوح.",
+      body: "المحرك يفصل المشروع أولًا حسب الخامة والسماكة، ثم يحترم اتجاه الثمرة قبل أن يحاول تقليل الهدر داخل كل مجموعة لوح.",
       tone: "info",
     },
   ];
 
   const totalAvailableAreaM2 = round2(
-    sheetLayout.stocks.reduce((sum, stock) => sum + getStockAvailableAreaM2(stock), 0),
+    sheetLayout.stocks.reduce(
+      (sum, stock) => sum + getStockAvailableAreaM2(stock),
+      0,
+    ),
   );
   const totalUsedAreaM2 = round2(
     sheetLayout.stocks.reduce((sum, stock) => sum + stock.totalAreaM2, 0),
@@ -833,7 +835,9 @@ function buildProjectOptimizationRecommendations(
   }
 
   if (lockedCustomParts.length > 0 && sparseSheetCount > 0) {
-    const lockedLabels = [...new Set(lockedCustomParts.map((part) => part.name))]
+    const lockedLabels = [
+      ...new Set(lockedCustomParts.map((part) => part.name)),
+    ]
       .slice(0, 2)
       .join("، ");
     recommendations.push({
@@ -861,7 +865,10 @@ function buildProjectOptimizationRecommendations(
       ...stockParts.map((part) => part.length),
       0,
     );
-    const largestPartWidth = Math.max(...stockParts.map((part) => part.width), 0);
+    const largestPartWidth = Math.max(
+      ...stockParts.map((part) => part.width),
+      0,
+    );
     const closeToBoardLimit =
       largestPartLength >= stock.boardLength * 0.82 ||
       largestPartWidth >= stock.boardWidth * 0.82;
@@ -880,8 +887,7 @@ function buildProjectOptimizationRecommendations(
     recommendations.push({
       id: "real-world-settings",
       title: "أدخل قيم الورشة الحقيقية",
-      body:
-        "الحساب الحالي يفترض سلاح 0 مم وحافة تشطيب 0 مم. إدخال القيم الفعلية للمنشار والتشطيب يجعل توصيات التوزيع أقرب للنتيجة التنفيذية داخل الورشة.",
+      body: "الحساب الحالي يفترض سلاح 0 مم وحافة تشطيب 0 مم. إدخال القيم الفعلية للمنشار والتشطيب يجعل توصيات التوزيع أقرب للنتيجة التنفيذية داخل الورشة.",
       tone: "info",
     });
   }
@@ -1690,10 +1696,7 @@ function getSheetPieceFillColor(category: CutlistPart["category"]) {
   }
 }
 
-function getSheetSvgPresentation(
-  stock: SheetLayoutStock,
-  isRotated = false,
-) {
+function getSheetSvgPresentation(stock: SheetLayoutStock, isRotated = false) {
   return {
     viewBoxWidth: (isRotated ? stock.boardLength : stock.boardWidth) + 36,
     viewBoxHeight: (isRotated ? stock.boardWidth : stock.boardLength) + 36,
@@ -1710,8 +1713,10 @@ function getSheetPieceTextTransform(
   transformOrigin?: { x: number; y: number },
 ) {
   if (isSheetRotated) {
-    const originX = transformOrigin?.x ?? displayPiece.x + displayPiece.width / 2;
-    const originY = transformOrigin?.y ?? displayPiece.y + displayPiece.height / 2;
+    const originX =
+      transformOrigin?.x ?? displayPiece.x + displayPiece.width / 2;
+    const originY =
+      transformOrigin?.y ?? displayPiece.y + displayPiece.height / 2;
 
     return `rotate(90 ${originX} ${originY})`;
   }
@@ -1744,9 +1749,7 @@ function getSheetPieceTextPosition(
   };
 }
 
-function getSheetLengthLabelTransform(
-  stock: SheetLayoutStock,
-) {
+function getSheetLengthLabelTransform(stock: SheetLayoutStock) {
   return `rotate(90 ${stock.boardWidth + 14} ${stock.boardLength / 2})`;
 }
 
@@ -1887,7 +1890,8 @@ function getSheetPieceVisualEdges(
           tickStartX1: edgeRect.x + halfThickness,
           tickStartY1: edgeRect.y + edgeRect.height - halfThickness,
           tickStartX2: edgeRect.x + halfThickness,
-          tickStartY2: edgeRect.y + edgeRect.height - halfThickness - tickLength,
+          tickStartY2:
+            edgeRect.y + edgeRect.height - halfThickness - tickLength,
           tickEndX1: edgeRect.x + edgeRect.width - halfThickness,
           tickEndY1: edgeRect.y + edgeRect.height - halfThickness,
           tickEndX2: edgeRect.x + edgeRect.width - halfThickness,
@@ -1956,9 +1960,8 @@ function buildPrintSheetSvg(
         ? getSheetPieceDimensionTextStyle(dimensionTexts.side.fontSize)
         : null;
       const visualEdges = getSheetPieceVisualEdges(piece, displayPiece);
-      const edgeMarkerStrokeWidth = getSheetPieceEdgeMarkerStrokeWidth(
-        displayPiece,
-      );
+      const edgeMarkerStrokeWidth =
+        getSheetPieceEdgeMarkerStrokeWidth(displayPiece);
       const edgeMarkerDash = getSheetPieceEdgeMarkerDash(displayPiece);
       const edgeMarkup = part
         ? visualEdges
@@ -2284,9 +2287,7 @@ function getSheetEdgeDimensionTextTransform(
       : undefined;
   }
 
-  return isSheetRotated
-    ? undefined
-    : `rotate(-90 ${position.x} ${position.y})`;
+  return isSheetRotated ? undefined : `rotate(-90 ${position.x} ${position.y})`;
 }
 
 function getSheetPieceDimensionTexts(
@@ -2898,13 +2899,6 @@ function App() {
   const [activeWorkspaceTab, setActiveWorkspaceTab] =
     useState<WorkspaceTab>("builder");
   const [activeBuilderTab, setActiveBuilderTab] = useState<BuilderTab>("unit");
-  const [stageDrawerMobilePanel, setStageDrawerMobilePanel] = useState<
-    "details" | "actions" | null
-  >(null);
-  const [stageDrawerDesktopLeftOpen, setStageDrawerDesktopLeftOpen] =
-    useState(true);
-  const [stageDrawerDesktopRightOpen, setStageDrawerDesktopRightOpen] =
-    useState(true);
   const [openResultsSections, setOpenResultsSections] = useState<
     Record<ResultsSectionKey, boolean>
   >({
@@ -3511,19 +3505,25 @@ function App() {
     {
       label: "الهالك التقريبي",
       value: hasCalculatedProject ? `${projectLayoutWastePercent}%` : "--",
-      note: hasCalculatedProject ? (projectWasteInsight ?? "قراءة سريعة للهالك") : "سيظهر بعد التوزيع",
+      note: hasCalculatedProject
+        ? (projectWasteInsight ?? "قراءة سريعة للهالك")
+        : "سيظهر بعد التوزيع",
     },
     {
       label: "المفصلات",
       value: hasCalculatedProject ? `${projectSummary.totalHingeCount}` : "--",
-      note: hasCalculatedProject ? formatPrice(projectSummary.totalHingeCost) : "مرتبطة بنوع الواجهة",
+      note: hasCalculatedProject
+        ? formatPrice(projectSummary.totalHingeCost)
+        : "مرتبطة بنوع الواجهة",
     },
     {
       label: "إجمالي التكلفة",
       value: hasCalculatedProject
         ? formatPrice(projectSummary.totalProjectCost)
         : "--",
-      note: hasCalculatedProject ? "خامة + شريط + مفصلات + مصنعية" : "يظهر بعد الحساب",
+      note: hasCalculatedProject
+        ? "خامة + شريط + مفصلات + مصنعية"
+        : "يظهر بعد الحساب",
     },
   ] as const;
   const dashboardProjectRailSettings = [
@@ -3569,34 +3569,194 @@ function App() {
             },
           ]
         : [];
-  const stageDrawerLeadRecommendation = dashboardRecommendations[0] ?? null;
-  const stageDrawerSupportRecommendation = dashboardRecommendations[1] ?? null;
   const stageDrawerSceneStatusLabel =
     projectPreviewUnits.length > 1
       ? `المشروع • ${projectPreviewUnits.length} وحدات`
       : stageDrawerSceneUnits.length === 1
         ? "الوحدة النشطة"
         : "بانتظار الإدخال";
-  const stageDrawerNavTabs = [
+  const operatorFocusCards =
+    activeWorkspaceTab === "builder"
+      ? [
+          {
+            label: "اسم الوحدة",
+            value: editorTitle || "وحدة جديدة",
+          },
+          {
+            label: "نوع الوحدة",
+            value: cabinetTypeLabels[editorInput.cabinetType],
+          },
+          {
+            label: "الواجهة",
+            value: frontOptionLabels[editorInput.frontOption],
+          },
+          {
+            label: "المقاس",
+            value: hasEditorCoreDimensions
+              ? `${formatCm(editorInput.width)} × ${formatCm(editorInput.height)} × ${formatCm(editorInput.depth)}`
+              : "أدخل المقاسات الأساسية",
+          },
+          {
+            label: "اتجاه الثمرة",
+            value: grainDirectionLabels[editorInput.grainDirection],
+          },
+          {
+            label: "عدد الواجهات",
+            value: `${editorFrontPieceCount}`,
+          },
+        ]
+      : activeWorkspaceTab === "preview"
+        ? [
+            {
+              label: "الوحدة النشطة",
+              value: dashboardLeadUnit?.title ?? "بانتظار الإدخال",
+            },
+            {
+              label: "المشهد",
+              value: stageDrawerSceneStatusLabel,
+            },
+            {
+              label: "المقاس",
+              value: dashboardLeadUnitSizeLabel ?? "أضف أول وحدة للمراجعة",
+            },
+            {
+              label: "الوحدات في 3D",
+              value: `${projectPreviewUnits.length}`,
+            },
+            {
+              label: "الطباعة",
+              value: projectPreviewUnits.length > 0 ? "متاحة" : "معطلة",
+            },
+            {
+              label: "الترتيب",
+              value:
+                projectPreviewUnits.length > 1
+                  ? "مشروع متعدد الوحدات"
+                  : "مشهد أولي",
+            },
+          ]
+        : activeWorkspaceTab === "results"
+          ? [
+              {
+                label: "إجمالي القطع",
+                value: hasCalculatedProject ? `${projectParts.length}` : "--",
+              },
+              {
+                label: "إجمالي الألواح",
+                value: hasCalculatedProject
+                  ? `${projectSummary.totalSheets}`
+                  : "--",
+              },
+              {
+                label: "إجمالي التكلفة",
+                value: hasCalculatedProject
+                  ? formatPrice(projectSummary.totalProjectCost)
+                  : "--",
+              },
+              {
+                label: "الهالك",
+                value: hasCalculatedProject
+                  ? `${projectLayoutWastePercent}%`
+                  : "--",
+              },
+              {
+                label: "المفصلات",
+                value: hasCalculatedProject
+                  ? `${projectSummary.totalHingeCount}`
+                  : "--",
+              },
+              {
+                label: "شريط الحافة",
+                value: hasCalculatedProject
+                  ? `${round2(projectSummary.totalEdgeBandLengthM)} م`
+                  : "--",
+              },
+            ]
+          : activeWorkspaceTab === "project"
+            ? [
+                {
+                  label: "اسم المشروع",
+                  value: projectName,
+                },
+                {
+                  label: "الحساب",
+                  value: currentUser.name,
+                },
+                {
+                  label: "الوحدات",
+                  value: `${units.length}`,
+                },
+                {
+                  label: "المقاسات الحرة",
+                  value: `${customParts.length}`,
+                },
+                {
+                  label: "المحفوظات",
+                  value: `${savedProjects.length}`,
+                },
+                {
+                  label: "الحفظ",
+                  value:
+                    projectArrangementAutosaveMessage ??
+                    (currentProjectId ? "جاهز للتحديث" : "احفظ المشروع أولًا"),
+                },
+              ]
+            : [
+                {
+                  label: "المشاريع المحفوظة",
+                  value: `${savedProjects.length}`,
+                },
+                {
+                  label: "الوحدات الجاهزة",
+                  value: `${unitPresets.length}`,
+                },
+                {
+                  label: "آخر مشروع",
+                  value: dashboardRecentProjects[0]?.name ?? "لا توجد محفوظات",
+                },
+                {
+                  label: "العناصر الحالية",
+                  value: `${projectItemCount}`,
+                },
+                {
+                  label: "الخامة",
+                  value: projectMaterialSummary,
+                },
+                {
+                  label: "الحساب",
+                  value: currentUser.name,
+                },
+              ];
+  const operatorActionNote =
+    activeWorkspaceTab === "builder"
+      ? activeBuilderTab === "unit"
+        ? "أكمل المقاسات الأساسية ثم أضف الوحدة مباشرة إلى قائمة المشروع."
+        : activeBuilderTab === "custom"
+          ? "أدخل أبعاد القطعة الحرة ثم احفظها قبل الانتقال للحساب."
+          : "راجع العناصر الحالية ثم شغّل الحساب لاستخراج الألواح والتكلفة."
+      : activeWorkspaceTab === "preview"
+        ? "افتح المسرح الكامل أو اطبع لقطة بعد اكتمال ترتيب الوحدات."
+        : activeWorkspaceTab === "results"
+          ? "راجع التوصيات ثم اطبع أو صدّر ملخص المشروع النهائي."
+          : activeWorkspaceTab === "project"
+            ? "حدّث اسم المشروع واحفظه أو افتح مشروعًا آخر من المكتبة."
+            : "افتح المكتبة لتحميل مشروع محفوظ أو وحدة جاهزة إلى المحرر.";
+  const operatorDecisionStats = [
     {
-      id: "builder",
-      label: "الإضافة",
-      icon: Plus,
+      label: "الوحدات",
+      value: `${units.length}`,
     },
     {
-      id: "preview",
-      label: "3D",
-      icon: PanelsTopLeft,
+      label: "المفصلات",
+      value: hasCalculatedProject ? `${projectSummary.totalHingeCount}` : "--",
     },
     {
-      id: "results",
-      label: "النتائج",
-      icon: Printer,
+      label: "الهالك",
+      value: hasCalculatedProject ? `${projectLayoutWastePercent}%` : "--",
     },
     {
-      id: "project",
-      label: "المشروع",
-      icon: Settings2,
+      label: "المحفوظات",
+      value: `${savedProjects.length}`,
     },
   ] as const;
 
@@ -4153,7 +4313,10 @@ function App() {
       width: String(round2(normalizedEntry.width)),
       qty: String(normalizedEntry.qty),
       thickness: String(round2(normalizedEntry.thickness * 10)),
-      thicknessMode: inferCustomPartThicknessMode(normalizedEntry, projectSettings),
+      thicknessMode: inferCustomPartThicknessMode(
+        normalizedEntry,
+        projectSettings,
+      ),
       material: projectSettings.material,
       category: normalizedEntry.category,
       grainDirection: normalizedEntry.grainDirection,
@@ -4331,6 +4494,71 @@ function App() {
     setSelectedPartId(null);
   }
 
+  function resolvePendingUnitForProjectSave() {
+    if (activeBuilderTab !== "unit") {
+      return {
+        nextUnits: units,
+        nextArrangement: normalizedProjectArrangement,
+        shouldCommitDraft: false,
+        nextActiveUnitId: activeProjectUnitId,
+        nextEditorIndex: units.length,
+      };
+    }
+
+    const title = editorTitle.trim() || createUnitTitle(units.length);
+    const nextUnitInput = applyProjectSettingsToInput(
+      editorInput,
+      projectSettings,
+    );
+
+    if (editingUnitId) {
+      const nextUnits = units.map((unit) =>
+        unit.id === editingUnitId
+          ? { ...nextUnitInput, id: editingUnitId, title }
+          : unit,
+      );
+
+      return {
+        nextUnits,
+        nextArrangement: buildProjectArrangement(nextUnits, projectArrangement),
+        shouldCommitDraft: true,
+        nextActiveUnitId: editingUnitId,
+        nextEditorIndex: nextUnits.length,
+      };
+    }
+
+    if (!hasEditorCompleteDimensions) {
+      return {
+        nextUnits: units,
+        nextArrangement: normalizedProjectArrangement,
+        shouldCommitDraft: false,
+        nextActiveUnitId: activeProjectUnitId,
+        nextEditorIndex: units.length,
+      };
+    }
+
+    const nextId = createUnitId();
+    const nextUnits = [
+      ...units,
+      {
+        ...nextUnitInput,
+        id: nextId,
+        title,
+      },
+    ];
+
+    return {
+      nextUnits,
+      nextArrangement: buildProjectArrangement(nextUnits, [
+        ...projectArrangement,
+        { id: nextId, offsetX: 0, offsetY: 0, offsetZ: 0, rotationY: 0 },
+      ]),
+      shouldCommitDraft: true,
+      nextActiveUnitId: nextId,
+      nextEditorIndex: nextUnits.length,
+    };
+  }
+
   function resetProjectWorkspace() {
     if (
       (units.length > 0 || currentProjectId) &&
@@ -4353,13 +4581,14 @@ function App() {
 
   async function saveCurrentProject() {
     const nextProjectId = currentProjectId ?? createProjectId();
+    const pendingUnitResolution = resolvePendingUnitForProjectSave();
     const { trimmedName, snapshot } = buildSavedProjectSnapshot(
       nextProjectId,
       projectName,
       projectSettings,
-      units,
+      pendingUnitResolution.nextUnits,
       customParts,
-      normalizedProjectArrangement,
+      pendingUnitResolution.nextArrangement,
       edgeBandOverrides,
     );
 
@@ -4376,6 +4605,15 @@ function App() {
       setProjectArrangementAutosaveError(null);
       setCurrentProjectId(nextProjectId);
       setProjectName(trimmedName);
+
+      if (pendingUnitResolution.shouldCommitDraft) {
+        setUnits(pendingUnitResolution.nextUnits);
+        setProjectArrangement(pendingUnitResolution.nextArrangement);
+        setActiveProjectUnitId(pendingUnitResolution.nextActiveUnitId);
+        invalidateCalculatedState();
+        resetEditor(pendingUnitResolution.nextEditorIndex);
+      }
+
       announceProjectAction(`تم حفظ ${trimmedName} على الحساب الحالي.`);
     } catch (error) {
       announceProjectAction(
@@ -4893,10 +5131,14 @@ function App() {
       key === "backThickness"
     ) {
       setCustomParts((current) =>
-        current.map((part) => syncCustomProjectPartWithSettings(part, nextSettings)),
+        current.map((part) =>
+          syncCustomProjectPartWithSettings(part, nextSettings),
+        ),
       );
       setCalculatedCustomParts((current) =>
-        current.map((part) => syncCustomProjectPartWithSettings(part, nextSettings)),
+        current.map((part) =>
+          syncCustomProjectPartWithSettings(part, nextSettings),
+        ),
       );
     }
     setEditorInput((current) =>
@@ -5306,7 +5548,8 @@ function App() {
                       أسلوب التوزيع
                     </h3>
                     <p className="text-xs text-slate-500">
-                      اختر بين خطة أسهل للورشة أو خطة تميل لأقل هادر أو المحسن الذكي.
+                      اختر بين خطة أسهل للورشة أو خطة تميل لأقل هادر أو المحسن
+                      الذكي.
                     </p>
                   </div>
                   <div className="space-y-3">
@@ -5353,7 +5596,8 @@ function App() {
                       الأسعار والمصنعية
                     </h3>
                     <p className="text-xs text-slate-500">
-                      تكلفة اللوح، المصنعية، شريط الحافة، والمفصلات لحساب تكلفة المشروع.
+                      تكلفة اللوح، المصنعية، شريط الحافة، والمفصلات لحساب تكلفة
+                      المشروع.
                     </p>
                   </div>
                   <div className="grid gap-3 sm:grid-cols-2 sm:gap-4 lg:grid-cols-2">
@@ -5645,65 +5889,89 @@ function App() {
           <div className="absolute -left-16 top-0 size-40 rounded-full bg-sky-300/20 blur-3xl" />
           <div className="absolute bottom-0 right-0 size-36 rounded-full bg-slate-200/30 blur-3xl" />
 
-          <div className="relative xl:hidden">
-            <div className="rounded-[1.75rem] border border-slate-200/70 bg-white/78 p-4 shadow-[0_22px_56px_-40px_rgba(20,27,33,0.22)]">
-              <div className="flex items-start justify-between gap-3">
-                <div className="flex min-w-0 items-start gap-3">
-                  <div className="relative flex size-12 shrink-0 items-center justify-center rounded-[1rem] bg-[linear-gradient(145deg,#223741,#4b6978)] shadow-[0_16px_26px_-18px_rgba(26,42,51,0.46)]">
-                    <span className="absolute inset-[0.52rem] rounded-[0.65rem] border border-white/60" />
-                    <span className="absolute inset-y-[0.6rem] right-[0.56rem] w-[0.55rem] rounded-full border border-white/60 origin-left rotate-[-11deg]" />
+          <div className="relative rounded-[1.95rem] border border-slate-200/70 bg-white/76 p-5 shadow-[0_26px_70px_-42px_rgba(20,27,33,0.18)]">
+            <div className="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
+              <div className="flex items-start gap-4">
+                <div className="relative flex size-14 shrink-0 items-center justify-center rounded-[1.15rem] bg-[linear-gradient(145deg,#223741,#4b6978)] shadow-[0_18px_32px_-20px_rgba(26,42,51,0.42)]">
+                  <span className="absolute inset-[0.62rem] rounded-[0.8rem] border border-white/60" />
+                  <span className="absolute inset-y-[0.75rem] right-[0.7rem] w-[0.62rem] rounded-full border border-white/60 origin-left rotate-[-11deg]" />
+                </div>
+
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500">
+                    <Badge variant="outline" className="bg-white/90">
+                      {currentUser.name}
+                    </Badge>
+                    <span dir="ltr" className="truncate">
+                      {currentUser.email}
+                    </span>
                   </div>
-                  <div className="min-w-0">
-                    <h1 className="font-heading text-xl font-semibold tracking-tight text-slate-950">
-                      Stage + Drawer
-                    </h1>
-                    <p className="mt-1 text-xs leading-6 text-slate-600">
-                      المسرح هو الواجهة الأساسية، وباقي التفاصيل تخرج من الأدراج.
-                    </p>
-                    <p className="mt-2 text-[11px] text-slate-500">
-                      {projectName} • {projectItemCount} عنصر • {units.length} وحدة
-                    </p>
+                  <h1 className="mt-3 font-heading text-[1.8rem] font-semibold tracking-tight text-slate-950 sm:text-[2rem]">
+                    لوحة التشغيل
+                  </h1>
+                  <p className="mt-2 max-w-2xl text-sm leading-7 text-slate-600">
+                    واجهة تشغيل أوضح: شريط تنقل جانبي، لوحة عمل مركزية، ولوحة
+                    قرار ثابتة بدل تكرار نفس المعلومات في أكثر من مكان.
+                  </p>
+                  <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-slate-500">
+                    <span>{projectName}</span>
+                    <span>{projectItemCount} عنصر</span>
+                    <span>{units.length} وحدة</span>
+                    <span>{customParts.length} مقاس حر</span>
                   </div>
                 </div>
+              </div>
+
+              <div className="flex max-w-[42rem] flex-wrap items-center gap-2 xl:justify-end">
                 <Button
                   type="button"
                   variant="outline"
                   size="sm"
-                  className="shrink-0 rounded-full bg-white/82"
-                  onClick={() =>
-                    setStageDrawerMobilePanel((current) =>
-                      current === "details" ? null : "details",
-                    )
-                  }
-                >
-                  {stageDrawerMobilePanel ? (
-                    <ArrowDown className="size-4" />
-                  ) : (
-                    <ArrowUp className="size-4" />
-                  )}
-                  {stageDrawerMobilePanel ? "إغلاق" : "Drawer"}
-                </Button>
-              </div>
-
-              <div className="mt-4 flex flex-wrap gap-2">
-                <Button
-                  type="button"
-                  variant="outline"
                   className="rounded-full bg-white/82"
-                  onClick={() => setActiveWorkspaceTab("preview")}
+                  onClick={saveCurrentProject}
                 >
-                  <PanelsTopLeft className="size-4" />
-                  مسرح 3D مباشر
+                  <Save className="size-4" />
+                  حفظ
                 </Button>
                 <Button
                   type="button"
                   variant="outline"
+                  size="sm"
                   className="rounded-full bg-white/82"
-                  onClick={printProjectPreviewSnapshot}
-                  disabled={projectPreviewUnits.length === 0}
+                  onClick={() => setIsProjectSettingsOpen(true)}
                 >
-                  <Printer className="size-4" />
-                  طباعة لقطة
+                  <Settings2 className="size-4" />
+                  الإعدادات
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="rounded-full bg-white/82"
+                  onClick={() => setIsProjectLibraryOpen(true)}
+                >
+                  <FolderOpen className="size-4" />
+                  المشاريع
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="rounded-full bg-white/82"
+                  onClick={resetProjectWorkspace}
+                >
+                  <Plus className="size-4" />
+                  مشروع جديد
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="rounded-full bg-white/82"
+                  onClick={logoutCurrentUser}
+                >
+                  <LogOut className="size-4" />
+                  خروج
                 </Button>
                 <Button
                   type="button"
@@ -5717,383 +5985,58 @@ function App() {
               </div>
             </div>
 
-            <div className="mt-3 grid grid-cols-2 gap-2">
-              <Button
-                type="button"
-                variant="outline"
-                className="rounded-[1rem] bg-white/82"
-                onClick={() => setStageDrawerMobilePanel("details")}
-              >
-                <ArrowUp className="size-4" />
-                تفاصيل المسرح
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                className="rounded-[1rem] bg-white/82"
-                onClick={() => setStageDrawerMobilePanel("actions")}
-              >
-                <Settings2 className="size-4" />
-                لوحة الأوامر
-              </Button>
-            </div>
-          </div>
-
-          <div className="relative hidden xl:block">
-            <div className="rounded-[1.95rem] border border-slate-200/70 bg-white/76 p-5 shadow-[0_26px_70px_-42px_rgba(20,27,33,0.18)]">
-              <div className="flex items-start justify-between gap-6">
-                <div className="flex items-start gap-4">
-                  <div className="relative flex size-14 shrink-0 items-center justify-center rounded-[1.15rem] bg-[linear-gradient(145deg,#223741,#4b6978)] shadow-[0_18px_32px_-20px_rgba(26,42,51,0.42)]">
-                    <span className="absolute inset-[0.62rem] rounded-[0.8rem] border border-white/60" />
-                    <span className="absolute inset-y-[0.75rem] right-[0.7rem] w-[0.62rem] rounded-full border border-white/60 origin-left rotate-[-11deg]" />
-                  </div>
-
-                  <div>
-                    <h1 className="font-heading text-[2rem] font-semibold tracking-tight text-slate-950">
-                      Stage + Drawer
-                    </h1>
-                    <p className="mt-2 max-w-2xl text-sm leading-7 text-slate-600">
-                      المسرح هو الواجهة الأساسية، وباقي التفاصيل تخرج من الأدراج.
-                    </p>
-                    <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-slate-500">
-                      <Badge variant="outline" className="bg-white/90">
-                        {currentUser.name}
-                      </Badge>
-                      <span dir="ltr">{currentUser.email}</span>
-                      <span>{projectName}</span>
-                      <span>{projectItemCount} عنصر</span>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="flex max-w-[34rem] flex-wrap items-center justify-end gap-2">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    className="rounded-full bg-white/82"
-                    onClick={() => setActiveWorkspaceTab("preview")}
-                  >
-                    <PanelsTopLeft className="size-4" />
-                    مسرح 3D مباشر
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    className="rounded-full bg-white/82"
-                    onClick={printProjectPreviewSnapshot}
-                    disabled={projectPreviewUnits.length === 0}
-                  >
-                    <Printer className="size-4" />
-                    طباعة لقطة
-                  </Button>
-                  <Button
-                    type="button"
-                    className="rounded-full bg-[linear-gradient(145deg,#416575,#5b8699)] text-white shadow-[0_16px_28px_-18px_rgba(65,101,117,0.3)] hover:bg-[linear-gradient(145deg,#416575,#5b8699)]"
-                    onClick={mobilePrimaryAction.onClick}
-                    disabled={mobilePrimaryAction.disabled}
-                  >
-                    <mobilePrimaryAction.icon className="size-4" />
-                    {mobilePrimaryAction.label}
-                  </Button>
-                </div>
+            <div className="mt-5 flex flex-col gap-3 border-t border-slate-200/70 pt-4 lg:flex-row lg:items-center lg:justify-between">
+              <div className="flex flex-wrap gap-2 text-xs text-slate-500">
+                {dashboardProjectRailSettings.map((setting) => (
+                  <span key={setting.label}>{setting.label}: {setting.value}</span>
+                ))}
               </div>
 
-              <div className="mt-5 flex flex-wrap items-center justify-between gap-4 border-t border-slate-200/70 pt-4">
-                <div className="flex flex-wrap gap-2">
-                  {workspaceTabs.map((tab) => {
-                    const Icon = tab.icon;
-                    const isActive = activeWorkspaceTab === tab.id;
-
-                    return (
-                      <button
-                        key={tab.id}
-                        type="button"
-                        onClick={() => setActiveWorkspaceTab(tab.id)}
-                        className={cn(
-                          "flex items-center gap-2 rounded-full border px-3 py-2 text-sm transition-colors",
-                          isActive
-                            ? "border-slate-300 bg-[linear-gradient(145deg,#223842,#49616d)] text-white"
-                            : "border-slate-200 bg-white/80 text-slate-700 hover:bg-white",
-                        )}
-                      >
-                        <Icon className="size-4" />
-                        <span>{tab.label}</span>
-                        <span
-                          className={cn(
-                            "text-[11px]",
-                            isActive ? "text-slate-200" : "text-slate-500",
-                          )}
-                        >
-                          {tab.badge}
-                        </span>
-                      </button>
-                    );
-                  })}
-                </div>
-
-                <div className="flex flex-wrap items-center gap-2">
-                  <Button type="button" variant="outline" size="sm" onClick={saveCurrentProject}>
-                    <Save className="size-4" />
-                    حفظ
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setIsProjectSettingsOpen(true)}
+              <div className="flex flex-wrap items-center gap-2 text-xs">
+                {projectActionMessage ? (
+                  <span className="rounded-full bg-teal-50 px-3 py-1 font-medium text-teal-700">
+                    {projectActionMessage}
+                  </span>
+                ) : null}
+                {projectArrangementAutosaveMessage ? (
+                  <span
+                    className={cn(
+                      "rounded-full bg-white/85 px-3 py-1 font-medium",
+                      projectArrangementAutosaveToneClassName,
+                    )}
                   >
-                    <Settings2 className="size-4" />
-                    الإعدادات
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setIsProjectLibraryOpen(true)}
-                  >
-                    <FolderOpen className="size-4" />
-                    المشاريع
-                  </Button>
-                  <Button type="button" variant="outline" size="sm" onClick={resetProjectWorkspace}>
-                    <Plus className="size-4" />
-                    مشروع جديد
-                  </Button>
-                  <Button type="button" variant="outline" size="sm" onClick={logoutCurrentUser}>
-                    <LogOut className="size-4" />
-                    خروج
-                  </Button>
-                </div>
-              </div>
-
-              <div className="mt-4 flex flex-wrap items-center justify-between gap-3 text-xs">
-                <div className="flex flex-wrap gap-3 text-slate-500">
-                  <span>{units.length} وحدة</span>
-                  <span>{customParts.length} مقاس حر</span>
-                  <span>{savedProjects.length} محفوظ</span>
-                  <span>{projectMaterialSummary}</span>
-                </div>
-
-                {projectActionMessage || projectArrangementAutosaveMessage ? (
-                  <div className="flex flex-col items-end gap-1">
-                    {projectActionMessage ? (
-                      <span className="font-medium text-teal-700">
-                        {projectActionMessage}
-                      </span>
-                    ) : null}
-                    {projectArrangementAutosaveMessage ? (
-                      <span className={cn("font-medium", projectArrangementAutosaveToneClassName)}>
-                        {projectArrangementAutosaveMessage}
-                      </span>
-                    ) : null}
-                  </div>
-                ) : (
+                    {projectArrangementAutosaveMessage}
+                  </span>
+                ) : null}
+                {!projectActionMessage && !projectArrangementAutosaveMessage ? (
                   <span className="text-slate-500">
                     {currentProjectId
-                      ? "يمكنك تحديث نفس المشروع أو حفظ نسخة جديدة من نفس المسرح."
-                      : "ابدأ التسمية ثم احفظ المشروع ليظهر داخل مكتبة المشاريع."}
+                      ? "يمكنك تحديث المشروع الحالي أو حفظ نسخة جديدة من نفس المسار."
+                      : "ابدأ التسمية ثم احفظ المشروع ليظهر داخل مكتبة الحساب."}
                   </span>
-                )}
+                ) : null}
               </div>
             </div>
           </div>
         </section>
 
-        <section className="mt-4 xl:hidden">
-          <Card className="border-0 bg-white/88 shadow-[0_20px_56px_-40px_rgba(20,27,33,0.24)] ring-1 ring-slate-900/5">
+        <section className="mt-4 grid gap-4 xl:grid-cols-[220px_minmax(0,1fr)_360px]">
+          <Card className="border-0 bg-white/88 shadow-[0_24px_64px_-44px_rgba(20,27,33,0.22)] ring-1 ring-slate-900/5">
             <CardContent className="space-y-4 p-4">
-              <div className="flex flex-wrap items-start justify-between gap-3">
-                <div className="min-w-0 flex-1">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <Badge
-                      variant="outline"
-                      className="flex items-center gap-1.5 border-slate-200 bg-white/85 text-slate-700"
-                    >
-                      <ActiveWorkspaceIcon className="size-3.5" />
-                      {dashboardFocusTitle}
-                    </Badge>
-                    <span className="text-[11px] text-slate-500">
-                      {stageDrawerSceneStatusLabel}
-                    </span>
-                  </div>
-                  <p className="mt-3 text-xs leading-6 text-slate-600">
-                    {dashboardFocusDescription}
-                  </p>
-                </div>
-                <div className="flex size-11 shrink-0 items-center justify-center rounded-[1rem] bg-[linear-gradient(145deg,#223842,#49616d)] text-slate-100 shadow-[0_16px_28px_-18px_rgba(26,42,51,0.42)]">
-                  <ActiveWorkspaceIcon className="size-4" />
-                </div>
+              <div>
+                <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500">
+                  Project Rail
+                </p>
+                <h2 className="mt-3 text-xl font-semibold text-slate-950">
+                  التنقل كأداة عمل
+                </h2>
+                <p className="mt-2 text-xs leading-6 text-slate-500">
+                  كل تبويب له مكان ثابت وواضح، مع عداد سريع يشرح أين تقف الآن.
+                </p>
               </div>
 
-              <div className="rounded-[1.5rem] border border-slate-200/70 bg-[radial-gradient(circle_at_top,_rgba(255,255,255,0.6),_transparent_38%),linear-gradient(180deg,#edf3f4_0%,#dbe7e7_100%)] p-4 shadow-[0_18px_40px_-32px_rgba(26,42,51,0.18)]">
-                <div className="flex items-center justify-between gap-3">
-                  <div>
-                    <p className="text-[11px] uppercase tracking-[0.14em] text-slate-500">
-                      Immersive Stage
-                    </p>
-                    <p className="mt-1 text-sm font-semibold text-slate-950">
-                      {dashboardLeadUnit
-                        ? dashboardLeadUnit.title
-                        : "المشهد ينتظر أول وحدة"}
-                    </p>
-                    <p className="mt-1 text-[11px] leading-5 text-slate-500">
-                      {dashboardLeadUnitSizeLabel ??
-                        "أضف وحدة أو افتح مشروعًا ليبدأ المسرح بعرض الترتيب الحالي."}
-                    </p>
-                  </div>
-                  <Badge
-                    variant="outline"
-                    className="border-slate-200 bg-white/80 text-slate-700"
-                  >
-                    {stageDrawerSceneStatusLabel}
-                  </Badge>
-                </div>
-
-                <div className="relative mt-4 overflow-hidden rounded-[1.3rem] border border-slate-200/70 bg-[linear-gradient(180deg,#e7eff1_0%,#cfdddd_100%)] px-4 pb-5 pt-8">
-                  <div className="absolute inset-x-6 bottom-3 h-4 rounded-full bg-slate-900/10 blur-xl" />
-                  <div className="relative flex min-h-40 items-end justify-center gap-3">
-                    {stageDrawerSceneUnits.length > 0 ? (
-                      stageDrawerSceneUnits.slice(0, 3).map((unit, index) => {
-                        const blockHeight = Math.min(
-                          Math.max(unit.height / 3.2, 88),
-                          180,
-                        );
-                        const blockWidth = Math.min(
-                          Math.max(unit.width / 2.5, 74),
-                          120,
-                        );
-
-                        return (
-                          <div
-                            key={unit.id}
-                            className="flex flex-col items-center gap-3"
-                          >
-                            <div
-                              className={cn(
-                                "relative rounded-[1.2rem] border border-slate-900/15 bg-[linear-gradient(180deg,#899fae_0%,#637c8e_100%)] shadow-[0_18px_30px_-20px_rgba(30,41,59,0.34)]",
-                                index === 1 &&
-                                  "bg-[linear-gradient(180deg,#708899_0%,#4e687b_100%)]",
-                                index === 2 &&
-                                  "bg-[linear-gradient(180deg,#9db4c2_0%,#7994a5_100%)]",
-                              )}
-                              style={{
-                                height: `${blockHeight}px`,
-                                width: `${blockWidth}px`,
-                              }}
-                            >
-                              <div className="absolute inset-[12%] rounded-[0.95rem] border border-white/30" />
-                              <div className="absolute inset-y-[14%] right-[14%] w-[14%] rounded-full border border-white/30 origin-left rotate-[-9deg]" />
-                            </div>
-                            <div className="text-center">
-                              <p className="text-xs font-semibold text-slate-950">
-                                {unit.title}
-                              </p>
-                              <p className="text-[10px] text-slate-500">
-                                {unit.frontLabel}
-                              </p>
-                            </div>
-                          </div>
-                        );
-                      })
-                    ) : (
-                      <div className="flex w-full items-center justify-center rounded-[1rem] border border-dashed border-slate-300 bg-white/55 px-5 py-8 text-center text-sm leading-7 text-slate-500">
-                        افتح وحدة أو أضف أول عنصر ليظهر المسرح التفاعلي هنا بدل
-                        العرض النصي التقليدي.
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                {activeWorkspaceTab !== "results" ? (
-                  <div className="mt-3 grid grid-cols-2 gap-2">
-                    {dashboardTopMetrics.slice(0, 2).map((metric) => (
-                      <div
-                        key={metric.label}
-                        className="rounded-[1rem] border border-slate-200/80 bg-white/82 p-3"
-                      >
-                        <p className="text-[11px] text-slate-500">
-                          {metric.label}
-                        </p>
-                        <p className="mt-2 text-lg font-semibold text-slate-950">
-                          {metric.value}
-                        </p>
-                      </div>
-                    ))}
-                  </div>
-                ) : null}
-              </div>
-
-              <details className="rounded-[1.35rem] border border-slate-200 bg-slate-50/80 p-4">
-                <summary className="flex cursor-pointer list-none items-center justify-between gap-3 text-sm font-medium text-slate-950 [&::-webkit-details-marker]:hidden">
-                  <span>Drawer سريع</span>
-                  <span className="text-[11px] text-slate-500">
-                    التوصيات والمحفوظات
-                  </span>
-                </summary>
-                <div className="mt-3 space-y-3">
-                  {stageDrawerLeadRecommendation ? (
-                    <div className="rounded-[1rem] border border-slate-200 bg-white/85 p-3">
-                      <p className="text-sm font-semibold text-slate-950">
-                        {stageDrawerLeadRecommendation.title}
-                      </p>
-                      <p className="mt-1 text-xs leading-6 text-slate-500">
-                        {stageDrawerLeadRecommendation.body}
-                      </p>
-                    </div>
-                  ) : null}
-                  {stageDrawerSupportRecommendation ? (
-                    <div className="rounded-[1rem] border border-slate-200 bg-white/85 p-3">
-                      <p className="text-sm font-semibold text-slate-950">
-                        {stageDrawerSupportRecommendation.title}
-                      </p>
-                      <p className="mt-1 text-xs leading-6 text-slate-500">
-                        {stageDrawerSupportRecommendation.body}
-                      </p>
-                    </div>
-                  ) : null}
-                  <div className="rounded-[1rem] border border-slate-200 bg-white/85 p-3">
-                    <p className="text-xs text-slate-500">آخر مشروع محفوظ</p>
-                    <p className="mt-1 text-sm font-semibold text-slate-950">
-                      {dashboardRecentProjects[0]?.name ?? "لا توجد محفوظات بعد"}
-                    </p>
-                    <p className="mt-1 text-[11px] text-slate-500">
-                      {dashboardRecentProjects[0]
-                        ? `${dashboardRecentProjects[0].units.length} وحدة • ${formatProjectUpdatedAt(dashboardRecentProjects[0].updatedAt)}`
-                        : "عند حفظ أول مشروع سيظهر هنا للعودة السريعة."}
-                    </p>
-                  </div>
-                </div>
-              </details>
-
-              <div className="rounded-[1.45rem] bg-[linear-gradient(180deg,#203640_0%,#15272d_100%)] p-4 text-slate-50 shadow-[0_18px_40px_-28px_rgba(26,42,51,0.52)]">
-                <div className="flex items-center justify-between gap-3">
-                  <div>
-                    <p className="text-xs text-slate-300">الأمر الحالي</p>
-                    <p className="mt-1 text-base font-semibold">
-                      {mobilePrimaryAction.label}
-                    </p>
-                  </div>
-                  <Badge className="bg-white/10 text-slate-50 hover:bg-white/10">
-                    {activeWorkspaceTabConfig.label}
-                  </Badge>
-                </div>
-                <div className="mt-3 flex flex-wrap gap-x-3 gap-y-1 text-xs text-slate-300">
-                  <span>{units.length} وحدة</span>
-                  <span>{customParts.length} حر</span>
-                  <span>{savedProjects.length} محفوظ</span>
-                </div>
-                <Button
-                  type="button"
-                  className="mt-4 h-10 w-full rounded-[0.95rem] bg-white text-slate-950 hover:bg-white/90"
-                  onClick={mobilePrimaryAction.onClick}
-                  disabled={mobilePrimaryAction.disabled}
-                >
-                  <mobilePrimaryAction.icon className="size-4" />
-                  {mobilePrimaryAction.label}
-                </Button>
-              </div>
-
-              <div className="grid grid-cols-4 gap-2 rounded-[1.35rem] bg-slate-950/90 p-2 shadow-[0_18px_34px_-28px_rgba(20,27,33,0.45)]">
-                {stageDrawerNavTabs.map((tab) => {
+              <div className="grid gap-2">
+                {workspaceTabs.map((tab) => {
                   const Icon = tab.icon;
                   const isActive = activeWorkspaceTab === tab.id;
 
@@ -6101,404 +6044,149 @@ function App() {
                     <button
                       key={tab.id}
                       type="button"
-                      onClick={() => {
-                        setActiveWorkspaceTab(tab.id);
-                        setStageDrawerMobilePanel(null);
-                      }}
+                      onClick={() => setActiveWorkspaceTab(tab.id)}
                       className={cn(
-                        "rounded-[1rem] px-2 py-2 text-center text-[11px] font-medium text-slate-300 transition-colors",
-                        isActive &&
-                          "bg-[linear-gradient(145deg,#486d7f,#6a98ab)] text-white",
+                        "grid grid-cols-[auto_1fr_auto] items-center gap-3 rounded-[1.2rem] border px-3 py-3 text-right transition-colors",
+                        isActive
+                          ? "border-slate-300 bg-[linear-gradient(145deg,#edf5f7,#ffffff)] ring-1 ring-slate-200"
+                          : "border-slate-200 bg-white/82 text-slate-700 hover:bg-white",
                       )}
                     >
-                      <Icon className="mx-auto mb-1 size-4" />
-                      {tab.label}
+                      <span
+                        className={cn(
+                          "flex size-9 items-center justify-center rounded-[0.9rem] bg-slate-100 text-slate-700",
+                          isActive &&
+                            "bg-[linear-gradient(145deg,#31515d,#5d8596)] text-white",
+                        )}
+                      >
+                        <Icon className="size-4" />
+                      </span>
+                      <span className="min-w-0">
+                        <span className="block text-sm font-semibold text-slate-950">
+                          {tab.label}
+                        </span>
+                        <span className="block text-[11px] text-slate-500">
+                          {tab.badge}
+                        </span>
+                      </span>
+                      <span className="rounded-full bg-slate-100 px-2 py-1 text-[11px] font-semibold text-slate-600">
+                        {tab.badge}
+                      </span>
                     </button>
                   );
                 })}
               </div>
-            </CardContent>
-          </Card>
-        </section>
 
-        {stageDrawerMobilePanel ? (
-          <div
-            className="fixed inset-0 z-40 bg-slate-950/35 backdrop-blur-sm xl:hidden"
-            onClick={() => setStageDrawerMobilePanel(null)}
-          >
-            <div
-              className="absolute inset-x-0 bottom-0 max-h-[78vh] overflow-hidden rounded-t-[2rem] border border-slate-200/70 bg-[linear-gradient(180deg,#f4f8f8_0%,#e6edec_100%)] shadow-[0_-24px_70px_-30px_rgba(20,27,33,0.45)]"
-              onClick={(event) => event.stopPropagation()}
-            >
-              <div className="mx-auto mt-3 h-1.5 w-14 rounded-full bg-slate-300" />
-              <div className="flex items-center justify-between gap-3 px-4 pb-3 pt-4">
-                <div className="flex gap-2">
-                  <Button
-                    type="button"
-                    variant={
-                      stageDrawerMobilePanel === "details" ? "default" : "outline"
-                    }
-                    className={cn(
-                      "rounded-full",
-                      stageDrawerMobilePanel === "details" &&
-                        "bg-[linear-gradient(145deg,#416575,#5b8699)] text-white hover:bg-[linear-gradient(145deg,#416575,#5b8699)]",
-                    )}
-                    onClick={() => setStageDrawerMobilePanel("details")}
-                  >
-                    تفاصيل
-                  </Button>
-                  <Button
-                    type="button"
-                    variant={
-                      stageDrawerMobilePanel === "actions" ? "default" : "outline"
-                    }
-                    className={cn(
-                      "rounded-full",
-                      stageDrawerMobilePanel === "actions" &&
-                        "bg-[linear-gradient(145deg,#203640,#15272d)] text-white hover:bg-[linear-gradient(145deg,#203640,#15272d)]",
-                    )}
-                    onClick={() => setStageDrawerMobilePanel("actions")}
-                  >
-                    أوامر
-                  </Button>
-                </div>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="rounded-full bg-white/85"
-                  onClick={() => setStageDrawerMobilePanel(null)}
-                >
-                  إغلاق
-                </Button>
-              </div>
+              {activeWorkspaceTab === "builder" ? (
+                <div className="border-t border-slate-200/80 pt-4">
+                  <p className="text-xs font-semibold text-slate-500">
+                    لوحة الإضافة
+                  </p>
+                  <div className="mt-3 grid gap-2">
+                    {builderTabs.map((tab) => {
+                      const isActive = activeBuilderTab === tab.id;
 
-              <div className="max-h-[calc(78vh-4.5rem)] overflow-y-auto px-4 pb-5">
-                {stageDrawerMobilePanel === "details" ? (
-                  <div className="space-y-3">
-                    <div className="rounded-[1.3rem] border border-slate-200 bg-white/84 p-4">
-                      <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-slate-500">
-                        Left Drawer
-                      </p>
-                      <p className="mt-2 text-base font-semibold text-slate-950">
-                        تفاصيل الوحدة تفتح وتغلق بدل أن تبقى دائمة.
-                      </p>
-                      <p className="mt-2 text-sm leading-7 text-slate-600">
-                        {dashboardFocusDescription}
-                      </p>
-                    </div>
-
-                    <div className="rounded-[1.15rem] border border-slate-200 bg-white/84 p-4">
-                      <p className="text-xs text-slate-500">الوحدة النشطة</p>
-                      <p className="mt-2 text-sm font-semibold text-slate-950">
-                        {dashboardLeadUnit?.title ?? "المشهد ينتظر أول وحدة"}
-                      </p>
-                      <p className="mt-1 text-xs leading-6 text-slate-500">
-                        {dashboardLeadUnitSizeLabel ??
-                          "أضف وحدة أو افتح مشروعًا ليبدأ المسرح بعرض الترتيب الحالي."}
-                      </p>
-                    </div>
-
-                    {stageDrawerLeadRecommendation ? (
-                      <div className="rounded-[1.15rem] border border-slate-200 bg-white/84 p-4">
-                        <p className="text-sm font-semibold text-slate-950">
-                          {stageDrawerLeadRecommendation.title}
-                        </p>
-                        <p className="mt-1 text-xs leading-6 text-slate-500">
-                          {stageDrawerLeadRecommendation.body}
-                        </p>
-                      </div>
-                    ) : null}
-
-                    {stageDrawerSupportRecommendation ? (
-                      <div className="rounded-[1.15rem] border border-slate-200 bg-white/84 p-4">
-                        <p className="text-sm font-semibold text-slate-950">
-                          {stageDrawerSupportRecommendation.title}
-                        </p>
-                        <p className="mt-1 text-xs leading-6 text-slate-500">
-                          {stageDrawerSupportRecommendation.body}
-                        </p>
-                      </div>
-                    ) : null}
-
-                    <div className="rounded-[1.15rem] border border-slate-200 bg-white/84 p-4">
-                      <div className="flex items-center justify-between gap-3">
-                        <p className="text-sm font-semibold text-slate-950">
-                          آخر المشاريع
-                        </p>
-                        <span className="text-xs text-slate-500">
-                          {savedProjects.length} محفوظ
-                        </span>
-                      </div>
-                      <div className="mt-3 space-y-2">
-                        {dashboardRecentProjects.length > 0 ? (
-                          dashboardRecentProjects.map((project) => (
-                            <div
-                              key={project.id}
-                              className="rounded-[1rem] border border-slate-200 bg-slate-50/80 px-3 py-3"
-                            >
-                              <p className="text-sm font-semibold text-slate-950">
-                                {project.name}
-                              </p>
-                              <p className="mt-1 text-xs text-slate-500">
-                                {project.units.length} وحدة • آخر حفظ{" "}
-                                {formatProjectUpdatedAt(project.updatedAt)}
-                              </p>
-                            </div>
-                          ))
-                        ) : (
-                          <p className="text-xs leading-6 text-slate-500">
-                            عند حفظ أول مشروع سيظهر هنا كمختصر سريع للعودة إليه.
-                          </p>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="space-y-3">
-                    <div className="rounded-[1.3rem] bg-[linear-gradient(180deg,#203640_0%,#15272d_100%)] p-4 text-slate-50 shadow-[0_18px_40px_-28px_rgba(26,42,51,0.36)]">
-                      <div className="flex items-center justify-between gap-3">
-                        <div>
-                          <p className="text-xs text-slate-300">الأمر الحالي</p>
-                          <p className="mt-1 text-base font-semibold">
-                            {mobilePrimaryAction.label}
-                          </p>
-                        </div>
-                        <Badge className="bg-white/10 text-slate-50 hover:bg-white/10">
-                          {activeWorkspaceTabConfig.label}
-                        </Badge>
-                      </div>
-                      <div className="mt-3 flex flex-wrap gap-x-3 gap-y-1 text-xs text-slate-300">
-                        <span>{units.length} وحدة</span>
-                        <span>{customParts.length} حر</span>
-                        <span>{savedProjects.length} محفوظ</span>
-                      </div>
-                      <Button
-                        type="button"
-                        className="mt-4 h-10 w-full rounded-[0.95rem] bg-white text-slate-950 hover:bg-white/90"
-                        onClick={() => {
-                          mobilePrimaryAction.onClick();
-                          setStageDrawerMobilePanel(null);
-                        }}
-                        disabled={mobilePrimaryAction.disabled}
-                      >
-                        <mobilePrimaryAction.icon className="size-4" />
-                        {mobilePrimaryAction.label}
-                      </Button>
-                    </div>
-
-                    <div className="rounded-[1.15rem] border border-slate-200 bg-white/84 p-4">
-                      <Label
-                        htmlFor="stageProjectNameMobile"
-                        className="text-xs text-slate-500"
-                      >
-                        اسم المشروع
-                      </Label>
-                      <Input
-                        id="stageProjectNameMobile"
-                        value={projectName}
-                        onChange={(event) => setProjectName(event.target.value)}
-                        className="mt-2 h-10 bg-white text-sm font-medium"
-                      />
-                    </div>
-
-                    <div className="space-y-2 rounded-[1.15rem] border border-slate-200 bg-white/84 p-4">
-                      {dashboardProjectRailSettings.map((setting) => (
-                        <div
-                          key={setting.label}
-                          className="flex items-center justify-between gap-3 text-sm"
+                      return (
+                        <button
+                          key={tab.id}
+                          type="button"
+                          onClick={() => setActiveBuilderTab(tab.id)}
+                          className={cn(
+                            "rounded-[1rem] border px-3 py-3 text-right transition-colors",
+                            isActive
+                              ? "border-slate-300 bg-slate-100 ring-1 ring-slate-200"
+                              : "border-slate-200 bg-white/82",
+                          )}
                         >
-                          <span className="text-slate-500">{setting.label}</span>
-                          <span className="font-medium text-slate-950">
-                            {setting.value}
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-2">
-                      <Button
-                        type="button"
-                        variant="outline"
-                        className="h-10 bg-white/85"
-                        onClick={saveCurrentProject}
+                          <p className="text-sm font-semibold text-slate-950">
+                            {tab.label}
+                          </p>
+                          <p className="mt-1 text-[11px] leading-5 text-slate-500">
+                            {tab.description}
+                          </p>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              ) : (
+                <div className="border-t border-slate-200/80 pt-4">
+                  <p className="text-xs font-semibold text-slate-500">
+                    إعدادات سريعة
+                  </p>
+                  <div className="mt-3 space-y-2">
+                    {dashboardProjectRailSettings.map((setting) => (
+                      <div
+                        key={setting.label}
+                        className="rounded-[1rem] border border-slate-200 bg-white/80 px-3 py-3"
                       >
-                        <Save className="size-4" />
-                        حفظ
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        className="h-10 bg-white/85"
-                        onClick={() => setIsProjectSettingsOpen(true)}
-                      >
-                        <Settings2 className="size-4" />
-                        الإعدادات
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        className="h-10 bg-white/85"
-                        onClick={() => setIsProjectLibraryOpen(true)}
-                      >
-                        <FolderOpen className="size-4" />
-                        المشاريع
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        className="h-10 bg-white/85"
-                        onClick={resetProjectWorkspace}
-                      >
-                        <Plus className="size-4" />
-                        مشروع جديد
-                      </Button>
-                    </div>
-
-                    <div className="flex items-center justify-between gap-3 rounded-[1rem] border border-slate-200 bg-white/84 px-3 py-3 text-xs text-slate-500">
-                      <div>
-                        <Badge variant="outline" className="bg-white/90">
-                          {currentUser.name}
-                        </Badge>
-                        <p dir="ltr" className="mt-1 truncate text-[11px]">
-                          {currentUser.email}
+                        <p className="text-[11px] text-slate-500">
+                          {setting.label}
+                        </p>
+                        <p className="mt-1 text-sm font-medium text-slate-950">
+                          {setting.value}
                         </p>
                       </div>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={logoutCurrentUser}
-                      >
-                        <LogOut className="size-4" />
-                        خروج
-                      </Button>
-                    </div>
+                    ))}
                   </div>
-                )}
-              </div>
-            </div>
-          </div>
-        ) : null}
-
-        <section
-          className={cn(
-            "mt-6 hidden gap-5 xl:grid",
-            stageDrawerDesktopLeftOpen && stageDrawerDesktopRightOpen
-              ? "xl:grid-cols-[0.82fr_minmax(0,1.3fr)_0.88fr]"
-              : stageDrawerDesktopLeftOpen
-                ? "xl:grid-cols-[0.82fr_minmax(0,1.4fr)_4.5rem]"
-                : stageDrawerDesktopRightOpen
-                  ? "xl:grid-cols-[4.5rem_minmax(0,1.4fr)_0.88fr]"
-                  : "xl:grid-cols-[4.5rem_minmax(0,1fr)_4.5rem]",
-          )}
-        >
-          <Card className="border-0 bg-white/88 shadow-[0_24px_64px_-44px_rgba(20,27,33,0.22)] ring-1 ring-slate-900/5">
-            <CardContent className={cn("h-full", stageDrawerDesktopLeftOpen ? "space-y-4 p-5" : "p-0")}>
-              {stageDrawerDesktopLeftOpen ? (
-                <>
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500">
-                        Left Drawer
-                      </p>
-                      <h2 className="mt-4 text-[1.8rem] font-semibold leading-tight text-slate-950">
-                        تفاصيل الوحدة تفتح وتغلق بدل أن تبقى دائمة.
-                      </h2>
-                      <p className="mt-3 text-sm leading-7 text-slate-600">
-                        {dashboardFocusDescription}
-                      </p>
-                    </div>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      className="rounded-full bg-white/85"
-                      onClick={() => setStageDrawerDesktopLeftOpen(false)}
-                    >
-                      <ArrowRight className="size-4" />
-                      طي
-                    </Button>
-                  </div>
-
-                  <div className="space-y-3">
-                    <div className="rounded-[1.35rem] border border-slate-200 bg-slate-50/80 p-4">
-                      <strong className="block text-base text-slate-950">
-                        الوحدة النشطة
-                      </strong>
-                      <p className="mt-2 text-sm leading-7 text-slate-500">
-                        {dashboardLeadUnit?.title ?? "المشهد ينتظر أول وحدة"} •{" "}
-                        {dashboardLeadUnitSizeLabel ?? "بانتظار إدخال المقاسات"}
-                      </p>
-                    </div>
-
-                    <div className="rounded-[1.35rem] border border-slate-200 bg-slate-50/80 p-4">
-                      <strong className="block text-base text-slate-950">
-                        المقاسات الحرة
-                      </strong>
-                      <p className="mt-2 text-sm leading-7 text-slate-500">
-                        {customParts.length > 0
-                          ? `${customParts.length} مقاس حر يفتح من drawer منفصل فوق المسرح عند الحاجة.`
-                          : "لا توجد مقاسات حرة بعد. سيظل هذا الجزء مختصرًا حتى تبدأ الإضافة."}
-                      </p>
-                    </div>
-
-                    <div className="rounded-[1.35rem] border border-slate-200 bg-slate-50/80 p-4">
-                      <strong className="block text-base text-slate-950">
-                        مراجعة قبل الإضافة
-                      </strong>
-                      <p className="mt-2 text-sm leading-7 text-slate-500">
-                        {stageDrawerLeadRecommendation?.title ??
-                          "تحذيرات التصميم ستظهر هنا فور اكتمال المقاسات بدل البقاء في بطاقات طويلة داخل الصفحة."}
-                      </p>
-                    </div>
-
-                    <div className="rounded-[1.35rem] border border-slate-200 bg-slate-50/80 p-4">
-                      <strong className="block text-base text-slate-950">
-                        قائمة الوحدات
-                      </strong>
-                      <p className="mt-2 text-sm leading-7 text-slate-500">
-                        {stageDrawerSceneUnits.length > 0
-                          ? stageDrawerSceneUnits
-                              .slice(0, 3)
-                              .map((unit) => unit.title)
-                              .join(" • ")
-                          : "سحب سريع بين الوحدات سيظهر هنا عندما يصبح لديك ترتيب فعلي على المسرح."}
-                      </p>
-                    </div>
-                  </div>
-                </>
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => setStageDrawerDesktopLeftOpen(true)}
-                  className="flex h-full w-full flex-col items-center justify-center gap-4 rounded-[1.9rem] bg-white/78 text-slate-500"
-                >
-                  <ArrowRight className="size-4" />
-                  <span className="-rotate-90 whitespace-nowrap text-xs font-bold uppercase tracking-[0.2em]">
-                    Left Drawer
-                  </span>
-                </button>
+                </div>
               )}
             </CardContent>
           </Card>
 
-          <Card className="border-0 bg-white/88 shadow-[0_26px_70px_-42px_rgba(20,27,33,0.24)] ring-1 ring-slate-900/5">
-            <CardContent className="p-0">
-              <div className="relative overflow-hidden rounded-[2rem] border border-slate-200/70 bg-[radial-gradient(circle_at_top,_rgba(255,255,255,0.62),_transparent_36%),linear-gradient(180deg,#edf3f4_0%,#dfe8e7_100%)] p-6">
-                <div className="absolute -left-12 top-0 size-36 rounded-full bg-sky-300/20 blur-3xl" />
-                <div className="absolute bottom-0 right-0 size-40 rounded-full bg-slate-200/30 blur-3xl" />
+          <div className="space-y-4">
+            <div className="grid gap-3 sm:grid-cols-2 2xl:grid-cols-4">
+              {dashboardTopMetrics.map((metric) => (
+                <div
+                  key={metric.label}
+                  className={cn(
+                    "rounded-[1.4rem] border p-4 shadow-[0_18px_40px_-32px_rgba(26,42,51,0.18)]",
+                    metric.label === "إجمالي التكلفة"
+                      ? "border-slate-300 bg-[linear-gradient(145deg,#20363f,#355260)] text-white"
+                      : "border-slate-200 bg-white/88",
+                  )}
+                >
+                  <p
+                    className={cn(
+                      "text-[11px]",
+                      metric.label === "إجمالي التكلفة"
+                        ? "text-slate-200"
+                        : "text-slate-500",
+                    )}
+                  >
+                    {metric.label}
+                  </p>
+                  <p className="mt-2 text-xl font-semibold">{metric.value}</p>
+                  <p
+                    className={cn(
+                      "mt-1 text-[11px] leading-5",
+                      metric.label === "إجمالي التكلفة"
+                        ? "text-slate-200"
+                        : "text-slate-500",
+                    )}
+                  >
+                    {metric.note}
+                  </p>
+                </div>
+              ))}
+            </div>
 
-                <div className="relative flex items-start justify-between gap-4">
-                  <div className="max-w-2xl">
-                    <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500">
-                      Immersive Stage
-                    </p>
-                    <h2 className="mt-4 text-3xl font-semibold leading-tight text-slate-950">
-                      المسرح هو البطل الرئيسي للتجربة.
+            <Card className="border-0 bg-white/88 shadow-[0_26px_70px_-42px_rgba(20,27,33,0.24)] ring-1 ring-slate-900/5">
+              <CardContent className="space-y-6 p-5">
+                <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                  <div className="min-w-0">
+                    <Badge
+                      variant="outline"
+                      className="flex w-fit items-center gap-1.5 border-slate-200 bg-white/85 text-slate-700"
+                    >
+                      <ActiveWorkspaceIcon className="size-3.5" />
+                      {dashboardFocusTitle}
+                    </Badge>
+                    <h2 className="mt-4 text-[1.8rem] font-semibold leading-tight text-slate-950">
+                      لوحة العمل النشطة
                     </h2>
-                    <p className="mt-3 text-sm leading-7 text-slate-600">
-                      مناسب لو تريد أن يشعر المستخدم أنه يعمل داخل مشهد تفاعلي، خصوصًا مع ترتيب الوحدات وفتح الدلف والطباعة من نفس الشاشة.
+                    <p className="mt-3 max-w-3xl text-sm leading-7 text-slate-600">
+                      {dashboardFocusDescription}
                     </p>
                   </div>
 
@@ -6506,243 +6194,273 @@ function App() {
                     variant="outline"
                     className="border-slate-200 bg-white/85 text-slate-700"
                   >
-                    {stageDrawerSceneUnits.length > 0
-                      ? `${stageDrawerSceneUnits.length} وحدات • ${stageDrawerSceneStatusLabel}`
-                      : stageDrawerSceneStatusLabel}
+                    {activeWorkspaceTabConfig.label}
                   </Badge>
                 </div>
 
-                <div className="relative mt-6 overflow-hidden rounded-[1.8rem] border border-slate-200/70 bg-[linear-gradient(180deg,#dfe9ea_0%,#ccdbda_100%)] px-6 pb-24 pt-10">
-                  <div className="absolute inset-x-6 top-4 flex items-center justify-between text-[11px] text-slate-500">
-                    <span>
-                      الترتيب: {projectPreviewUnits.length > 0 ? `داخل المشروع ${projectPreviewUnits.length}` : "بانتظار البناء"}
-                    </span>
-                    <span>
-                      الوحدة النشطة: {dashboardLeadUnit?.title ?? "--"}
-                    </span>
-                  </div>
-                  <div className="absolute inset-x-10 bottom-10 h-5 rounded-full bg-slate-900/10 blur-xl" />
+                <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_20rem]">
+                  <div>
+                    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                      {operatorFocusCards.map((card) => (
+                        <div
+                          key={card.label}
+                          className="rounded-[1.2rem] border border-slate-200 bg-slate-50/80 p-4"
+                        >
+                          <p className="text-[11px] text-slate-500">
+                            {card.label}
+                          </p>
+                          <p className="mt-2 text-sm font-semibold text-slate-950">
+                            {card.value}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
 
-                  <div className="relative flex min-h-[28rem] items-end justify-center gap-5">
-                    {stageDrawerSceneUnits.length > 0 ? (
-                      stageDrawerSceneUnits.slice(0, 3).map((unit, index) => {
-                        const blockHeight = Math.min(
-                          Math.max(unit.height / 2.9, 140),
-                          284,
-                        );
-                        const blockWidth = Math.min(
-                          Math.max(unit.width / 1.7, 112),
-                          170,
-                        );
+                    <div className="mt-4 rounded-[1.4rem] border border-slate-200 bg-[linear-gradient(145deg,rgba(240,246,248,0.94),rgba(255,255,255,0.86))] p-4">
+                      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                        <div>
+                          <p className="text-xs text-slate-500">الأمر الحالي</p>
+                          <p className="mt-1 text-base font-semibold text-slate-950">
+                            {mobilePrimaryAction.label}
+                          </p>
+                          <p className="mt-1 text-xs leading-6 text-slate-500">
+                            {operatorActionNote}
+                          </p>
+                        </div>
 
-                        return (
-                          <div
-                            key={unit.id}
-                            className="flex flex-col items-center gap-3"
+                        <div className="flex flex-wrap gap-2">
+                          <Button
+                            type="button"
+                            variant="outline"
+                            onClick={() => setActiveWorkspaceTab("preview")}
                           >
-                            <div
-                              className={cn(
-                                "relative rounded-[1.65rem] border border-slate-900/15 bg-[linear-gradient(180deg,#899fae_0%,#637c8e_100%)] shadow-[0_20px_34px_-22px_rgba(30,41,59,0.34)]",
-                                index === 1 &&
-                                  "bg-[linear-gradient(180deg,#708899_0%,#4e687b_100%)]",
-                                index === 2 &&
-                                  "bg-[linear-gradient(180deg,#9db4c2_0%,#7994a5_100%)]",
-                              )}
-                              style={{
-                                height: `${blockHeight}px`,
-                                width: `${blockWidth}px`,
-                              }}
-                            >
-                              <div className="absolute inset-[12%] rounded-[1.1rem] border border-white/30" />
-                              <div className="absolute inset-y-[13%] right-[13%] w-[12%] rounded-full border border-white/30 origin-left rotate-[-11deg]" />
-                            </div>
-                            <div className="text-center">
-                              <p className="text-sm font-semibold text-slate-950">
-                                {unit.title}
-                              </p>
-                              <p className="text-[11px] text-slate-500">
-                                {unit.frontLabel} • {round2(unit.width)} × {round2(unit.height)} × {round2(unit.depth)}
-                              </p>
-                            </div>
-                          </div>
-                        );
-                      })
-                    ) : (
-                      <div className="flex w-full items-center justify-center rounded-[1.2rem] border border-dashed border-slate-300 bg-white/55 px-6 py-14 text-center text-sm leading-7 text-slate-500">
-                        ابدأ بإضافة أول وحدة أو أكمل مقاسات المحرر الحالي ليظهر المسرح بدل الحالة الفارغة.
+                            <PanelsTopLeft className="size-4" />
+                            فتح 3D
+                          </Button>
+                          <Button
+                            type="button"
+                            className="bg-[linear-gradient(145deg,#416575,#5b8699)] text-white hover:bg-[linear-gradient(145deg,#416575,#5b8699)]"
+                            onClick={mobilePrimaryAction.onClick}
+                            disabled={mobilePrimaryAction.disabled}
+                          >
+                            <mobilePrimaryAction.icon className="size-4" />
+                            {mobilePrimaryAction.label}
+                          </Button>
+                        </div>
                       </div>
-                    )}
+                    </div>
                   </div>
 
-                  <div className="absolute bottom-4 left-1/2 flex -translate-x-1/2 items-center gap-2 rounded-[1.5rem] bg-slate-950/90 p-2 shadow-[0_20px_40px_-24px_rgba(18,24,30,0.34)]">
-                    <button
-                      type="button"
-                      onClick={() => setActiveWorkspaceTab("builder")}
-                      className="rounded-[1rem] px-4 py-2 text-xs font-semibold text-slate-300 transition-colors hover:bg-white/5 hover:text-white"
-                    >
-                      الإضافة
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setActiveWorkspaceTab("preview")}
-                      className="rounded-[1rem] bg-[linear-gradient(145deg,#457082,#6695a8)] px-4 py-2 text-xs font-semibold text-white"
-                    >
-                      المعاينة
-                    </button>
-                    <button
-                      type="button"
-                      onClick={printProjectPreviewSnapshot}
-                      disabled={projectPreviewUnits.length === 0}
-                      className="rounded-[1rem] px-4 py-2 text-xs font-semibold text-slate-300 transition-colors hover:bg-white/5 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
-                    >
-                      طباعة
-                    </button>
-                    <button
-                      type="button"
-                      onClick={resetProjectArrangement}
-                      disabled={projectPreviewUnits.length <= 1}
-                      className="rounded-[1rem] px-4 py-2 text-xs font-semibold text-slate-300 transition-colors hover:bg-white/5 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
-                    >
-                      إعادة ضبط
-                    </button>
+                  <div className="rounded-[1.55rem] border border-slate-200/80 bg-[radial-gradient(circle_at_top,_rgba(255,255,255,0.6),_transparent_38%),linear-gradient(180deg,#edf3f4_0%,#dbe7e7_100%)] p-4 shadow-[0_18px_40px_-32px_rgba(26,42,51,0.18)]">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="text-[11px] uppercase tracking-[0.14em] text-slate-500">
+                          Live Snapshot
+                        </p>
+                        <p className="mt-1 text-sm font-semibold text-slate-950">
+                          {dashboardLeadUnit?.title ?? "المشهد ينتظر أول وحدة"}
+                        </p>
+                        <p className="mt-1 text-[11px] leading-5 text-slate-500">
+                          {dashboardLeadUnitSizeLabel ??
+                            "أضف وحدة أو افتح مشروعًا ليبدأ المسار البصري الحالي."}
+                        </p>
+                      </div>
+                      <Badge
+                        variant="outline"
+                        className="border-slate-200 bg-white/80 text-slate-700"
+                      >
+                        {stageDrawerSceneStatusLabel}
+                      </Badge>
+                    </div>
+
+                    <div className="relative mt-4 overflow-hidden rounded-[1.3rem] border border-slate-200/70 bg-[linear-gradient(180deg,#e7eff1_0%,#cfdddd_100%)] px-4 pb-5 pt-8">
+                      <div className="absolute inset-x-6 bottom-3 h-4 rounded-full bg-slate-900/10 blur-xl" />
+                      <div className="relative flex min-h-44 items-end justify-center gap-3">
+                        {stageDrawerSceneUnits.length > 0 ? (
+                          stageDrawerSceneUnits.slice(0, 3).map((unit, index) => {
+                            const blockHeight = Math.min(
+                              Math.max(unit.height / 3.2, 88),
+                              180,
+                            );
+                            const blockWidth = Math.min(
+                              Math.max(unit.width / 2.5, 74),
+                              120,
+                            );
+
+                            return (
+                              <div
+                                key={unit.id}
+                                className="flex flex-col items-center gap-3"
+                              >
+                                <div
+                                  className={cn(
+                                    "relative rounded-[1.2rem] border border-slate-900/15 bg-[linear-gradient(180deg,#899fae_0%,#637c8e_100%)] shadow-[0_18px_30px_-20px_rgba(30,41,59,0.34)]",
+                                    index === 1 &&
+                                      "bg-[linear-gradient(180deg,#708899_0%,#4e687b_100%)]",
+                                    index === 2 &&
+                                      "bg-[linear-gradient(180deg,#9db4c2_0%,#7994a5_100%)]",
+                                  )}
+                                  style={{
+                                    height: `${blockHeight}px`,
+                                    width: `${blockWidth}px`,
+                                  }}
+                                >
+                                  <div className="absolute inset-[12%] rounded-[0.95rem] border border-white/30" />
+                                  <div className="absolute inset-y-[14%] right-[14%] w-[14%] rounded-full border border-white/30 origin-left rotate-[-9deg]" />
+                                </div>
+                                <div className="text-center">
+                                  <p className="text-xs font-semibold text-slate-950">
+                                    {unit.title}
+                                  </p>
+                                  <p className="text-[10px] text-slate-500">
+                                    {unit.frontLabel}
+                                  </p>
+                                </div>
+                              </div>
+                            );
+                          })
+                        ) : (
+                          <div className="flex w-full items-center justify-center rounded-[1rem] border border-dashed border-slate-300 bg-white/55 px-5 py-8 text-center text-sm leading-7 text-slate-500">
+                            أضف أول وحدة ليظهر الملخص البصري هنا بدل الشاشة
+                            الفارغة.
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="mt-3 grid grid-cols-2 gap-2">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="bg-white/82"
+                        onClick={() => setActiveWorkspaceTab("preview")}
+                      >
+                        <PanelsTopLeft className="size-4" />
+                        المشهد الكامل
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="bg-white/82"
+                        onClick={printProjectPreviewSnapshot}
+                        disabled={projectPreviewUnits.length === 0}
+                      >
+                        <Printer className="size-4" />
+                        طباعة
+                      </Button>
+                    </div>
                   </div>
                 </div>
-              </div>
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
+          </div>
 
           <Card className="border-0 bg-[linear-gradient(180deg,#19242a_0%,#12191f_100%)] text-slate-50 shadow-[0_26px_70px_-42px_rgba(20,27,33,0.56)] ring-1 ring-white/5">
-            <CardContent className={cn("h-full", stageDrawerDesktopRightOpen ? "space-y-4 p-5" : "p-0")}>
-              {stageDrawerDesktopRightOpen ? (
-                <>
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-300">
-                        Right Drawer
-                      </p>
-                      <h2 className="mt-4 text-[1.8rem] font-semibold leading-tight">
-                        لوحة أوامر وسياق بدل بطاقات كثيرة.
-                      </h2>
-                      <p className="mt-3 text-sm leading-7 text-slate-300">
-                        القيمة هنا أن الأوامر الأساسية لا تغادر المشهد، بينما التفاصيل الثانوية تبقى قابلة للطي.
-                      </p>
-                    </div>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      className="rounded-full border-white/10 bg-white/5 text-slate-100 hover:bg-white/10"
-                      onClick={() => setStageDrawerDesktopRightOpen(false)}
-                    >
-                      <ArrowLeft className="size-4" />
-                      طي
-                    </Button>
-                  </div>
+            <CardContent className="space-y-4 p-5">
+              <div>
+                <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-300">
+                  Decision Panel
+                </p>
+                <h2 className="mt-4 text-[1.8rem] font-semibold leading-tight">
+                  لوحة القرار
+                </h2>
+                <p className="mt-3 text-sm leading-7 text-slate-300">
+                  التكلفة، التوصيات، والإجراء التالي في عمود ثابت بدل تكرار نفس
+                  المعلومة عبر الشاشة.
+                </p>
+              </div>
 
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="rounded-[1.2rem] border border-white/10 bg-white/5 p-4">
-                      <p className="text-xs text-slate-300">الوحدات</p>
-                      <p className="mt-2 text-2xl font-semibold text-slate-50">
-                        {units.length}
-                      </p>
-                    </div>
-                    <div className="rounded-[1.2rem] border border-white/10 bg-white/5 p-4">
-                      <p className="text-xs text-slate-300">المفصلات</p>
-                      <p className="mt-2 text-2xl font-semibold text-slate-50">
-                        {hasCalculatedProject ? projectSummary.totalHingeCount : "--"}
-                      </p>
-                    </div>
-                    <div className="rounded-[1.2rem] border border-white/10 bg-white/5 p-4">
-                      <p className="text-xs text-slate-300">الهالك</p>
-                      <p className="mt-2 text-2xl font-semibold text-slate-50">
-                        {hasCalculatedProject ? `${projectLayoutWastePercent}%` : "--"}
-                      </p>
-                    </div>
-                    <div className="rounded-[1.2rem] border border-white/10 bg-white/5 p-4">
-                      <p className="text-xs text-slate-300">أمر سريع</p>
-                      <p className="mt-2 text-sm font-semibold leading-6 text-slate-50">
-                        {mobilePrimaryAction.label}
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="space-y-2 rounded-[1.35rem] border border-white/10 bg-white/5 p-4">
-                    {dashboardProjectRailSettings.map((setting) => (
-                      <div
-                        key={setting.label}
-                        className="flex items-center justify-between gap-3 text-sm"
-                      >
-                        <span className="text-slate-300">{setting.label}</span>
-                        <span className="font-medium text-slate-50">
-                          {setting.value}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-
-                  <div className="rounded-[1.35rem] border border-white/10 bg-white/5 p-4">
-                    <p className="text-sm font-semibold text-slate-50">
-                      أفضل لحظة استخدام
-                    </p>
-                    <p className="mt-2 text-sm leading-7 text-slate-300">
-                      بعد إدخال الوحدات، وأثناء مراجعة المشروع مع العميل أو داخل الورشة.
-                    </p>
-                  </div>
-
-                  <div className="rounded-[1.35rem] border border-white/10 bg-white/5 p-4">
-                    <div className="flex items-center justify-between gap-3">
-                      <p className="text-sm font-semibold text-slate-50">
-                        آخر المشاريع
-                      </p>
-                      <span className="text-xs text-slate-300">
-                        {savedProjects.length} محفوظ
-                      </span>
-                    </div>
-                    <div className="mt-3 space-y-2">
-                      {dashboardRecentProjects.length > 0 ? (
-                        dashboardRecentProjects.map((project) => (
-                          <div
-                            key={project.id}
-                            className="rounded-[1rem] border border-white/10 bg-white/5 px-3 py-3"
-                          >
-                            <p className="text-sm font-semibold text-slate-50">
-                              {project.name}
-                            </p>
-                            <p className="mt-1 text-xs text-slate-300">
-                              {project.units.length} وحدة • آخر حفظ {formatProjectUpdatedAt(project.updatedAt)}
-                            </p>
-                          </div>
-                        ))
-                      ) : (
-                        <p className="text-xs leading-6 text-slate-300">
-                          عند حفظ أول مشروع سيظهر هنا كمختصر سريع للعودة إليه.
-                        </p>
-                      )}
-                    </div>
-                  </div>
-
-                  <Button
-                    type="button"
-                    className="h-11 w-full rounded-[1rem] bg-white text-slate-950 hover:bg-white/90"
-                    onClick={mobilePrimaryAction.onClick}
-                    disabled={mobilePrimaryAction.disabled}
+              <div className="grid grid-cols-2 gap-3">
+                {operatorDecisionStats.map((stat) => (
+                  <div
+                    key={stat.label}
+                    className="rounded-[1.2rem] border border-white/10 bg-white/5 p-4"
                   >
-                    <mobilePrimaryAction.icon className="size-4" />
-                    {mobilePrimaryAction.label}
-                  </Button>
-                </>
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => setStageDrawerDesktopRightOpen(true)}
-                  className="flex h-full w-full flex-col items-center justify-center gap-4 rounded-[1.9rem] bg-[linear-gradient(180deg,#19242a_0%,#12191f_100%)] text-slate-300"
-                >
-                  <ArrowLeft className="size-4" />
-                  <span className="-rotate-90 whitespace-nowrap text-xs font-bold uppercase tracking-[0.2em]">
-                    Right Drawer
+                    <p className="text-xs text-slate-300">{stat.label}</p>
+                    <p className="mt-2 text-2xl font-semibold text-slate-50">
+                      {stat.value}
+                    </p>
+                  </div>
+                ))}
+              </div>
+
+              <div className="space-y-2 rounded-[1.35rem] border border-white/10 bg-white/5 p-4">
+                {dashboardProjectRailSettings.map((setting) => (
+                  <div
+                    key={setting.label}
+                    className="flex items-center justify-between gap-3 text-sm"
+                  >
+                    <span className="text-slate-300">{setting.label}</span>
+                    <span className="font-medium text-slate-50">
+                      {setting.value}
+                    </span>
+                  </div>
+                ))}
+              </div>
+
+              <div className="space-y-2">
+                {dashboardRecommendations.slice(0, 3).map((recommendation) => (
+                  <div
+                    key={recommendation.id}
+                    className={cn(
+                      "rounded-[1.15rem] border p-3",
+                      recommendation.tone === "action"
+                        ? "border-amber-200/30 bg-amber-300/10"
+                        : "border-white/10 bg-white/5",
+                    )}
+                  >
+                    <p className="text-sm font-semibold text-slate-50">
+                      {recommendation.title}
+                    </p>
+                    <p className="mt-1 text-xs leading-6 text-slate-300">
+                      {recommendation.body}
+                    </p>
+                  </div>
+                ))}
+              </div>
+
+              <div className="rounded-[1.35rem] border border-white/10 bg-white/5 p-4">
+                <div className="flex items-center justify-between gap-3">
+                  <p className="text-sm font-semibold text-slate-50">
+                    آخر المشاريع
+                  </p>
+                  <span className="text-xs text-slate-300">
+                    {savedProjects.length} محفوظ
                   </span>
-                </button>
-              )}
+                </div>
+                <div className="mt-3 space-y-2">
+                  {dashboardRecentProjects.length > 0 ? (
+                    dashboardRecentProjects.map((project) => (
+                      <div
+                        key={project.id}
+                        className="rounded-[1rem] border border-white/10 bg-white/5 px-3 py-3"
+                      >
+                        <p className="text-sm font-semibold text-slate-50">
+                          {project.name}
+                        </p>
+                        <p className="mt-1 text-xs text-slate-300">
+                          {project.units.length} وحدة • آخر حفظ{" "}
+                          {formatProjectUpdatedAt(project.updatedAt)}
+                        </p>
+                      </div>
+                    ))
+                  ) : (
+                    <p className="text-xs leading-6 text-slate-300">
+                      عند حفظ أول مشروع سيظهر هنا كمختصر سريع للعودة إليه.
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              <Button
+                type="button"
+                className="h-11 w-full rounded-[1rem] bg-white text-slate-950 hover:bg-white/90"
+                onClick={mobilePrimaryAction.onClick}
+                disabled={mobilePrimaryAction.disabled}
+              >
+                <mobilePrimaryAction.icon className="size-4" />
+                {mobilePrimaryAction.label}
+              </Button>
             </CardContent>
           </Card>
         </section>
@@ -6942,37 +6660,7 @@ function App() {
         ) : null}
 
         {activeWorkspaceTab === "builder" ? (
-          <>
-            <section className="mt-6">
-              <div className="flex gap-2 overflow-x-auto pb-2 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:grid sm:grid-cols-3 sm:overflow-visible sm:pb-0">
-                {builderTabs.map((tab) => {
-                  const isActive = activeBuilderTab === tab.id;
-
-                  return (
-                    <button
-                      key={tab.id}
-                      type="button"
-                      onClick={() => setActiveBuilderTab(tab.id)}
-                      className={cn(
-                        "min-w-[11rem] shrink-0 rounded-[1.2rem] border p-3 text-right transition-colors sm:min-w-0 sm:rounded-[1.35rem] sm:p-4",
-                        isActive
-                          ? "border-slate-300 bg-slate-100 ring-1 ring-slate-200"
-                          : "border-slate-200 bg-white/88",
-                      )}
-                    >
-                      <p className="text-sm font-semibold text-slate-950">
-                        {tab.label}
-                      </p>
-                      <p className="mt-1 hidden text-xs leading-6 text-slate-500 sm:block">
-                        {tab.description}
-                      </p>
-                    </button>
-                  );
-                })}
-              </div>
-            </section>
-
-            <section className="mt-6 grid gap-6 lg:grid-cols-[1.08fr_0.92fr]">
+          <section className="mt-6 grid gap-6 lg:grid-cols-[1.08fr_0.92fr]">
               <Card className="border-0 bg-white/88 shadow-[0_20px_60px_-45px_rgba(24,32,40,0.55)] ring-1 ring-slate-950/8">
                 {activeBuilderTab === "unit" ? (
                   <>
@@ -7319,7 +7007,8 @@ function App() {
                                     المعاينة الحالية تعكس شكل الواجهة المختار.
                                   </li>
                                   <li>
-                                    بعد إضافة الوحدات اضغط احسب لاستخراج مقاسات المشروع.
+                                    بعد إضافة الوحدات اضغط احسب لاستخراج مقاسات
+                                    المشروع.
                                   </li>
                                 </>
                               ) : (
@@ -7328,7 +7017,8 @@ function App() {
                                     ابدأ بإدخال العرض والارتفاع والعمق أولًا.
                                   </li>
                                   <li>
-                                    لو كانت الوحدة زاوية L، أدخل ضلع الرجوع أيضًا.
+                                    لو كانت الوحدة زاوية L، أدخل ضلع الرجوع
+                                    أيضًا.
                                   </li>
                                 </>
                               )}
@@ -8104,7 +7794,8 @@ function App() {
                                   ترتيب المشروع
                                 </p>
                                 <p className="mt-1 text-xs leading-6 text-slate-500">
-                                  للمشروع أكثر من وحدة. افتح تبويب 3D عند الحاجة بدل عرض المسرح الكامل هنا.
+                                  للمشروع أكثر من وحدة. افتح تبويب 3D عند الحاجة
+                                  بدل عرض المسرح الكامل هنا.
                                 </p>
                               </div>
                               <Badge
@@ -8135,204 +7826,209 @@ function App() {
                         </Card>
 
                         <Card className="hidden border-0 bg-white/88 shadow-[0_20px_60px_-45px_rgba(24,32,40,0.55)] ring-1 ring-slate-950/8 lg:block">
-                        <CardHeader>
-                          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                            <div>
-                              <CardTitle>3D لترتيب المشروع</CardTitle>
-                              <CardDescription>
-                                راقب شكل المشروع النهائي، اسحب الوحدة بزرار
-                                الماوس الشمال لتحريكها في المكان الذي تريده،
-                                واسحب بزرار الماوس اليمين لتغيير زاوية العرض قبل
-                                عرضها على العميل.
-                              </CardDescription>
+                          <CardHeader>
+                            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                              <div>
+                                <CardTitle>3D لترتيب المشروع</CardTitle>
+                                <CardDescription>
+                                  راقب شكل المشروع النهائي، اسحب الوحدة بزرار
+                                  الماوس الشمال لتحريكها في المكان الذي تريده،
+                                  واسحب بزرار الماوس اليمين لتغيير زاوية العرض
+                                  قبل عرضها على العميل.
+                                </CardDescription>
+                              </div>
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                onClick={resetProjectArrangement}
+                              >
+                                إعادة ضبط الترتيب
+                              </Button>
                             </div>
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="sm"
-                              onClick={resetProjectArrangement}
-                            >
-                              إعادة ضبط الترتيب
-                            </Button>
-                          </div>
-                        </CardHeader>
-                        <CardContent className="space-y-4">
-                          <ProjectPreview
-                            units={projectPreviewUnits.map((unit) => ({
-                              ...unit,
-                              active: unit.id === activeProjectPreviewUnit?.id,
-                            }))}
-                            onSelectUnit={setActiveProjectUnitId}
-                            onUnitPositionChange={updateProjectUnitPosition}
-                          />
+                          </CardHeader>
+                          <CardContent className="space-y-4">
+                            <ProjectPreview
+                              units={projectPreviewUnits.map((unit) => ({
+                                ...unit,
+                                active:
+                                  unit.id === activeProjectPreviewUnit?.id,
+                              }))}
+                              onSelectUnit={setActiveProjectUnitId}
+                              onUnitPositionChange={updateProjectUnitPosition}
+                            />
 
-                          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-                            {projectPreviewUnits.map((unit, index) => {
-                              const isActive =
-                                activeProjectPreviewUnit?.id === unit.id;
+                            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                              {projectPreviewUnits.map((unit, index) => {
+                                const isActive =
+                                  activeProjectPreviewUnit?.id === unit.id;
 
-                              return (
-                                <div
-                                  key={unit.id}
-                                  className={cn(
-                                    "rounded-2xl border p-4 ring-1",
-                                    isActive
-                                      ? "border-slate-300 bg-slate-50 ring-slate-200"
-                                      : "border-slate-200 bg-slate-50/80 ring-slate-200",
-                                  )}
-                                >
-                                  <button
-                                    type="button"
-                                    className="w-full text-right"
-                                    onClick={() =>
-                                      setActiveProjectUnitId(unit.id)
-                                    }
+                                return (
+                                  <div
+                                    key={unit.id}
+                                    className={cn(
+                                      "rounded-2xl border p-4 ring-1",
+                                      isActive
+                                        ? "border-slate-300 bg-slate-50 ring-slate-200"
+                                        : "border-slate-200 bg-slate-50/80 ring-slate-200",
+                                    )}
                                   >
-                                    <p className="font-medium text-slate-950">
-                                      {unit.title}
+                                    <button
+                                      type="button"
+                                      className="w-full text-right"
+                                      onClick={() =>
+                                        setActiveProjectUnitId(unit.id)
+                                      }
+                                    >
+                                      <p className="font-medium text-slate-950">
+                                        {unit.title}
+                                      </p>
+                                      <p className="mt-1 text-xs text-slate-500">
+                                        ترتيب {index + 1} • جانبي{" "}
+                                        {formatCm(unit.offsetX)} • ارتفاع{" "}
+                                        {formatCm(unit.offsetY)} • عمق{" "}
+                                        {formatCm(unit.offsetZ)} • دوران{" "}
+                                        {unit.rotationY}°
+                                      </p>
+                                    </button>
+
+                                    <div className="mt-4 flex flex-wrap gap-2">
+                                      <Button
+                                        type="button"
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={() =>
+                                          moveProjectUnitOrder(
+                                            unit.id,
+                                            "backward",
+                                          )
+                                        }
+                                        disabled={index === 0}
+                                      >
+                                        <ArrowRight className="size-4" />
+                                        تقديم
+                                      </Button>
+                                      <Button
+                                        type="button"
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={() =>
+                                          moveProjectUnitOrder(
+                                            unit.id,
+                                            "forward",
+                                          )
+                                        }
+                                        disabled={
+                                          index ===
+                                          projectPreviewUnits.length - 1
+                                        }
+                                      >
+                                        <ArrowLeft className="size-4" />
+                                        تأخير
+                                      </Button>
+                                      <Button
+                                        type="button"
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={() =>
+                                          rotateProjectUnit(unit.id, -90)
+                                        }
+                                      >
+                                        <RotateCcw className="size-4" />
+                                        لف يسار
+                                      </Button>
+                                      <Button
+                                        type="button"
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={() =>
+                                          rotateProjectUnit(unit.id, 90)
+                                        }
+                                      >
+                                        <RotateCw className="size-4" />
+                                        لف يمين
+                                      </Button>
+                                    </div>
+
+                                    <div className="mt-3 grid grid-cols-2 gap-2">
+                                      <Button
+                                        type="button"
+                                        variant="secondary"
+                                        size="sm"
+                                        onClick={() =>
+                                          nudgeProjectUnit(unit.id, "x", -10)
+                                        }
+                                      >
+                                        <ArrowRight className="size-4" />
+                                        يمين
+                                      </Button>
+                                      <Button
+                                        type="button"
+                                        variant="secondary"
+                                        size="sm"
+                                        onClick={() =>
+                                          nudgeProjectUnit(unit.id, "x", 10)
+                                        }
+                                      >
+                                        <ArrowLeft className="size-4" />
+                                        يسار
+                                      </Button>
+                                      <Button
+                                        type="button"
+                                        variant="secondary"
+                                        size="sm"
+                                        onClick={() =>
+                                          nudgeProjectUnit(unit.id, "z", -10)
+                                        }
+                                      >
+                                        <ArrowUp className="size-4" />
+                                        للأمام
+                                      </Button>
+                                      <Button
+                                        type="button"
+                                        variant="secondary"
+                                        size="sm"
+                                        onClick={() =>
+                                          nudgeProjectUnit(unit.id, "z", 10)
+                                        }
+                                      >
+                                        <ArrowDown className="size-4" />
+                                        للخلف
+                                      </Button>
+                                      <Button
+                                        type="button"
+                                        variant="secondary"
+                                        size="sm"
+                                        onClick={() =>
+                                          nudgeProjectUnit(unit.id, "y", 10)
+                                        }
+                                      >
+                                        <ArrowUp className="size-4" />
+                                        لفوق
+                                      </Button>
+                                      <Button
+                                        type="button"
+                                        variant="secondary"
+                                        size="sm"
+                                        onClick={() =>
+                                          nudgeProjectUnit(unit.id, "y", -10)
+                                        }
+                                      >
+                                        <ArrowDown className="size-4" />
+                                        لتحت
+                                      </Button>
+                                    </div>
+
+                                    <p className="mt-3 text-[11px] leading-5 text-slate-500">
+                                      الوحدات الأرضية تبدأ تحت تلقائيًا،
+                                      والوحدات المعلقة تبدأ فوق تلقائيًا ويمكنك
+                                      ضبط مكان كل وحدة كما تريد.
                                     </p>
-                                    <p className="mt-1 text-xs text-slate-500">
-                                      ترتيب {index + 1} • جانبي{" "}
-                                      {formatCm(unit.offsetX)} • ارتفاع{" "}
-                                      {formatCm(unit.offsetY)} • عمق{" "}
-                                      {formatCm(unit.offsetZ)} • دوران{" "}
-                                      {unit.rotationY}°
-                                    </p>
-                                  </button>
-
-                                  <div className="mt-4 flex flex-wrap gap-2">
-                                    <Button
-                                      type="button"
-                                      variant="outline"
-                                      size="sm"
-                                      onClick={() =>
-                                        moveProjectUnitOrder(
-                                          unit.id,
-                                          "backward",
-                                        )
-                                      }
-                                      disabled={index === 0}
-                                    >
-                                      <ArrowRight className="size-4" />
-                                      تقديم
-                                    </Button>
-                                    <Button
-                                      type="button"
-                                      variant="outline"
-                                      size="sm"
-                                      onClick={() =>
-                                        moveProjectUnitOrder(unit.id, "forward")
-                                      }
-                                      disabled={
-                                        index === projectPreviewUnits.length - 1
-                                      }
-                                    >
-                                      <ArrowLeft className="size-4" />
-                                      تأخير
-                                    </Button>
-                                    <Button
-                                      type="button"
-                                      variant="outline"
-                                      size="sm"
-                                      onClick={() =>
-                                        rotateProjectUnit(unit.id, -90)
-                                      }
-                                    >
-                                      <RotateCcw className="size-4" />
-                                      لف يسار
-                                    </Button>
-                                    <Button
-                                      type="button"
-                                      variant="outline"
-                                      size="sm"
-                                      onClick={() =>
-                                        rotateProjectUnit(unit.id, 90)
-                                      }
-                                    >
-                                      <RotateCw className="size-4" />
-                                      لف يمين
-                                    </Button>
                                   </div>
-
-                                  <div className="mt-3 grid grid-cols-2 gap-2">
-                                    <Button
-                                      type="button"
-                                      variant="secondary"
-                                      size="sm"
-                                      onClick={() =>
-                                        nudgeProjectUnit(unit.id, "x", -10)
-                                      }
-                                    >
-                                      <ArrowRight className="size-4" />
-                                      يمين
-                                    </Button>
-                                    <Button
-                                      type="button"
-                                      variant="secondary"
-                                      size="sm"
-                                      onClick={() =>
-                                        nudgeProjectUnit(unit.id, "x", 10)
-                                      }
-                                    >
-                                      <ArrowLeft className="size-4" />
-                                      يسار
-                                    </Button>
-                                    <Button
-                                      type="button"
-                                      variant="secondary"
-                                      size="sm"
-                                      onClick={() =>
-                                        nudgeProjectUnit(unit.id, "z", -10)
-                                      }
-                                    >
-                                      <ArrowUp className="size-4" />
-                                      للأمام
-                                    </Button>
-                                    <Button
-                                      type="button"
-                                      variant="secondary"
-                                      size="sm"
-                                      onClick={() =>
-                                        nudgeProjectUnit(unit.id, "z", 10)
-                                      }
-                                    >
-                                      <ArrowDown className="size-4" />
-                                      للخلف
-                                    </Button>
-                                    <Button
-                                      type="button"
-                                      variant="secondary"
-                                      size="sm"
-                                      onClick={() =>
-                                        nudgeProjectUnit(unit.id, "y", 10)
-                                      }
-                                    >
-                                      <ArrowUp className="size-4" />
-                                      لفوق
-                                    </Button>
-                                    <Button
-                                      type="button"
-                                      variant="secondary"
-                                      size="sm"
-                                      onClick={() =>
-                                        nudgeProjectUnit(unit.id, "y", -10)
-                                      }
-                                    >
-                                      <ArrowDown className="size-4" />
-                                      لتحت
-                                    </Button>
-                                  </div>
-
-                                  <p className="mt-3 text-[11px] leading-5 text-slate-500">
-                                    الوحدات الأرضية تبدأ تحت تلقائيًا، والوحدات
-                                    المعلقة تبدأ فوق تلقائيًا ويمكنك ضبط مكان كل
-                                    وحدة كما تريد.
-                                  </p>
-                                </div>
-                              );
-                            })}
-                          </div>
-                        </CardContent>
+                                );
+                              })}
+                            </div>
+                          </CardContent>
                         </Card>
                       </>
                     ) : null}
@@ -8428,7 +8124,6 @@ function App() {
                 )}
               </div>
             </section>
-          </>
         ) : null}
 
         {activeWorkspaceTab === "preview" ? (
@@ -8862,8 +8557,8 @@ function App() {
                   <CardHeader>
                     <CardTitle>توصيات المحسن الذكي</CardTitle>
                     <CardDescription>
-                      ملاحظات عملية مبنية على توزيع الألواح الحالي لتقليل
-                      الهدر أو تفسير سبب الفصل بين بعض القطع.
+                      ملاحظات عملية مبنية على توزيع الألواح الحالي لتقليل الهدر
+                      أو تفسير سبب الفصل بين بعض القطع.
                     </CardDescription>
                   </CardHeader>
                   <CardContent>
@@ -8981,7 +8676,8 @@ function App() {
                             واضحًا حتى في الطباعة الأبيض والأسود.
                           </div>
                           {stock.sheets.map((sheet) => {
-                            const isSheetRotated = stock.boardLength >= stock.boardWidth;
+                            const isSheetRotated =
+                              stock.boardLength >= stock.boardWidth;
                             const sheetSvgPresentation =
                               getSheetSvgPresentation(stock, isSheetRotated);
 
@@ -8992,10 +8688,12 @@ function App() {
                               >
                                 <div className="mb-3 flex flex-col gap-3 text-xs text-slate-500 sm:flex-row sm:items-center sm:justify-between">
                                   <div className="space-y-1">
-                                    <span className="block">لوح #{sheet.index + 1}</span>
                                     <span className="block">
-                                      مستخدم طوليًا {formatCm(sheet.usedLength)} من{" "}
-                                      {formatCm(stock.boardLength)}
+                                      لوح #{sheet.index + 1}
+                                    </span>
+                                    <span className="block">
+                                      مستخدم طوليًا {formatCm(sheet.usedLength)}{" "}
+                                      من {formatCm(stock.boardLength)}
                                     </span>
                                   </div>
                                   <div className="flex items-center gap-2 self-start sm:self-auto">
@@ -9004,7 +8702,9 @@ function App() {
                                       variant="outline"
                                       size="sm"
                                       className="h-8 gap-1.5 rounded-xl"
-                                      onClick={() => printProjectSheet(stock, sheet)}
+                                      onClick={() =>
+                                        printProjectSheet(stock, sheet)
+                                      }
                                     >
                                       <Printer className="size-3.5" />
                                       طباعة
@@ -9019,347 +8719,433 @@ function App() {
                                     role="img"
                                     aria-label={`${stock.key} sheet ${sheet.index + 1} layout`}
                                   >
-                                  <g transform={sheetSvgPresentation.contentTransform}>
-                                  <line
-                                    x1="0"
-                                    y1="-10"
-                                    x2={stock.boardWidth}
-                                    y2="-10"
-                                    stroke="#9b8a75"
-                                    strokeWidth="0.9"
-                                  />
-                                  <line
-                                    x1="0"
-                                    y1="-13.5"
-                                    x2="0"
-                                    y2="-6.5"
-                                    stroke="#9b8a75"
-                                    strokeWidth="0.9"
-                                  />
-                                  <line
-                                    x1={stock.boardWidth}
-                                    y1="-13.5"
-                                    x2={stock.boardWidth}
-                                    y2="-6.5"
-                                    stroke="#9b8a75"
-                                    strokeWidth="0.9"
-                                  />
-                                  <text
-                                    x={stock.boardWidth / 2}
-                                    y="-12.5"
-                                    textAnchor="middle"
-                                    dominantBaseline="ideographic"
-                                    fontSize="5.2"
-                                    fontWeight="700"
-                                    fill="#6b5a45"
-                                  >
-                                    عرض اللوح {formatCm(stock.boardWidth)}
-                                  </text>
-                                  <line
-                                    x1={stock.boardWidth + 10}
-                                    y1="0"
-                                    x2={stock.boardWidth + 10}
-                                    y2={stock.boardLength}
-                                    stroke="#9b8a75"
-                                    strokeWidth="0.9"
-                                  />
-                                  <line
-                                    x1={stock.boardWidth + 6.5}
-                                    y1="0"
-                                    x2={stock.boardWidth + 13.5}
-                                    y2="0"
-                                    stroke="#9b8a75"
-                                    strokeWidth="0.9"
-                                  />
-                                  <line
-                                    x1={stock.boardWidth + 6.5}
-                                    y1={stock.boardLength}
-                                    x2={stock.boardWidth + 13.5}
-                                    y2={stock.boardLength}
-                                    stroke="#9b8a75"
-                                    strokeWidth="0.9"
-                                  />
-                                  <text
-                                    x={stock.boardWidth + 14}
-                                    y={stock.boardLength / 2}
-                                    textAnchor="middle"
-                                    dominantBaseline="middle"
-                                    fontSize="5.2"
-                                    fontWeight="700"
-                                    fill="#6b5a45"
-                                    transform={getSheetLengthLabelTransform(stock)}
-                                  >
-                                    طول اللوح {formatCm(stock.boardLength)}
-                                  </text>
-                                  <rect
-                                    x="0"
-                                    y="0"
-                                    width={stock.boardWidth}
-                                    height={stock.boardLength}
-                                    fill="#fcfaf7"
-                                    stroke="#d6cec2"
-                                    strokeWidth="1"
-                                    rx="4"
-                                  />
-                                  {sheet.pieces.map((piece) => {
-                                    const pieceLabel =
-                                      getSheetPieceLabelMode(piece);
-                                    const displayPiece =
-                                      pieceLabel.displayPiece;
-                                    const aggregatedPart =
-                                      aggregatedProjectPartMap.get(
-                                        piece.sourcePartId,
-                                      );
-                                    const projectPartLink =
-                                      projectPartLinkMap.get(
-                                        piece.sourcePartId,
-                                      );
-                                    const primaryLabel =
-                                      getSheetPiecePrimaryLabel(
-                                        piece,
-                                        pieceLabel,
-                                        projectPartLink?.code,
-                                      );
-                                    const nameTextPosition =
-                                      getSheetPieceTextPosition(
-                                        displayPiece,
-                                        0,
-                                        isSheetRotated,
-                                      );
-                                    const nameTextTransform =
-                                      getSheetPieceTextTransform(
-                                        displayPiece,
-                                        pieceLabel.rotate,
-                                        isSheetRotated,
-                                        nameTextPosition,
-                                      );
-                                    const dimensionTexts =
-                                      getSheetPieceDimensionTexts(
-                                        piece,
-                                        pieceLabel,
-                                        isSheetRotated,
-                                      );
-                                    const topDimensionTextStyle =
-                                      dimensionTexts.top
-                                        ? getSheetPieceDimensionTextStyle(
-                                            dimensionTexts.top.fontSize,
-                                          )
-                                        : null;
-                                    const sideDimensionTextStyle =
-                                      dimensionTexts.side
-                                        ? getSheetPieceDimensionTextStyle(
-                                            dimensionTexts.side.fontSize,
-                                          )
-                                        : null;
-                                    const visualEdges =
-                                      getSheetPieceVisualEdges(
-                                        piece,
-                                        displayPiece,
-                                      );
-                                    const edgeMarkerStrokeWidth =
-                                      getSheetPieceEdgeMarkerStrokeWidth(
-                                        displayPiece,
-                                      );
-                                    const edgeMarkerDash =
-                                      getSheetPieceEdgeMarkerDash(
-                                        displayPiece,
-                                      );
+                                    <g
+                                      transform={
+                                        sheetSvgPresentation.contentTransform
+                                      }
+                                    >
+                                      <line
+                                        x1="0"
+                                        y1="-10"
+                                        x2={stock.boardWidth}
+                                        y2="-10"
+                                        stroke="#9b8a75"
+                                        strokeWidth="0.9"
+                                      />
+                                      <line
+                                        x1="0"
+                                        y1="-13.5"
+                                        x2="0"
+                                        y2="-6.5"
+                                        stroke="#9b8a75"
+                                        strokeWidth="0.9"
+                                      />
+                                      <line
+                                        x1={stock.boardWidth}
+                                        y1="-13.5"
+                                        x2={stock.boardWidth}
+                                        y2="-6.5"
+                                        stroke="#9b8a75"
+                                        strokeWidth="0.9"
+                                      />
+                                      <text
+                                        x={stock.boardWidth / 2}
+                                        y="-12.5"
+                                        textAnchor="middle"
+                                        dominantBaseline="ideographic"
+                                        fontSize="5.2"
+                                        fontWeight="700"
+                                        fill="#6b5a45"
+                                      >
+                                        عرض اللوح {formatCm(stock.boardWidth)}
+                                      </text>
+                                      <line
+                                        x1={stock.boardWidth + 10}
+                                        y1="0"
+                                        x2={stock.boardWidth + 10}
+                                        y2={stock.boardLength}
+                                        stroke="#9b8a75"
+                                        strokeWidth="0.9"
+                                      />
+                                      <line
+                                        x1={stock.boardWidth + 6.5}
+                                        y1="0"
+                                        x2={stock.boardWidth + 13.5}
+                                        y2="0"
+                                        stroke="#9b8a75"
+                                        strokeWidth="0.9"
+                                      />
+                                      <line
+                                        x1={stock.boardWidth + 6.5}
+                                        y1={stock.boardLength}
+                                        x2={stock.boardWidth + 13.5}
+                                        y2={stock.boardLength}
+                                        stroke="#9b8a75"
+                                        strokeWidth="0.9"
+                                      />
+                                      <text
+                                        x={stock.boardWidth + 14}
+                                        y={stock.boardLength / 2}
+                                        textAnchor="middle"
+                                        dominantBaseline="middle"
+                                        fontSize="5.2"
+                                        fontWeight="700"
+                                        fill="#6b5a45"
+                                        transform={getSheetLengthLabelTransform(
+                                          stock,
+                                        )}
+                                      >
+                                        طول اللوح {formatCm(stock.boardLength)}
+                                      </text>
+                                      <rect
+                                        x="0"
+                                        y="0"
+                                        width={stock.boardWidth}
+                                        height={stock.boardLength}
+                                        fill="#fcfaf7"
+                                        stroke="#d6cec2"
+                                        strokeWidth="1"
+                                        rx="4"
+                                      />
+                                      {sheet.pieces.map((piece) => {
+                                        const pieceLabel =
+                                          getSheetPieceLabelMode(piece);
+                                        const displayPiece =
+                                          pieceLabel.displayPiece;
+                                        const aggregatedPart =
+                                          aggregatedProjectPartMap.get(
+                                            piece.sourcePartId,
+                                          );
+                                        const projectPartLink =
+                                          projectPartLinkMap.get(
+                                            piece.sourcePartId,
+                                          );
+                                        const primaryLabel =
+                                          getSheetPiecePrimaryLabel(
+                                            piece,
+                                            pieceLabel,
+                                            projectPartLink?.code,
+                                          );
+                                        const nameTextPosition =
+                                          getSheetPieceTextPosition(
+                                            displayPiece,
+                                            0,
+                                            isSheetRotated,
+                                          );
+                                        const nameTextTransform =
+                                          getSheetPieceTextTransform(
+                                            displayPiece,
+                                            pieceLabel.rotate,
+                                            isSheetRotated,
+                                            nameTextPosition,
+                                          );
+                                        const dimensionTexts =
+                                          getSheetPieceDimensionTexts(
+                                            piece,
+                                            pieceLabel,
+                                            isSheetRotated,
+                                          );
+                                        const topDimensionTextStyle =
+                                          dimensionTexts.top
+                                            ? getSheetPieceDimensionTextStyle(
+                                                dimensionTexts.top.fontSize,
+                                              )
+                                            : null;
+                                        const sideDimensionTextStyle =
+                                          dimensionTexts.side
+                                            ? getSheetPieceDimensionTextStyle(
+                                                dimensionTexts.side.fontSize,
+                                              )
+                                            : null;
+                                        const visualEdges =
+                                          getSheetPieceVisualEdges(
+                                            piece,
+                                            displayPiece,
+                                          );
+                                        const edgeMarkerStrokeWidth =
+                                          getSheetPieceEdgeMarkerStrokeWidth(
+                                            displayPiece,
+                                          );
+                                        const edgeMarkerDash =
+                                          getSheetPieceEdgeMarkerDash(
+                                            displayPiece,
+                                          );
 
-                                    return (
-                                      <g key={piece.id}>
-                                        <rect
-                                          x={displayPiece.x}
-                                          y={displayPiece.y}
-                                          width={displayPiece.width}
-                                          height={displayPiece.height}
-                                          className="cursor-pointer"
-                                          onClick={() =>
-                                            handlePartSelection(
-                                              piece.sourcePartId,
-                                            )
-                                          }
-                                          fill={
-                                            piece.category === "front"
-                                              ? "#c88f5a"
-                                              : piece.category === "back"
-                                                ? "#90a4ae"
-                                                : piece.category === "shelf"
-                                                  ? "#6f8f72"
-                                                  : piece.category === "support"
-                                                    ? "#d8c178"
-                                                    : "#9a7b5f"
-                                          }
-                                          fillOpacity={
-                                            selectedPartId ===
-                                            piece.sourcePartId
-                                              ? "1"
-                                              : "0.82"
-                                          }
-                                          stroke={
-                                            selectedPartId ===
-                                            piece.sourcePartId
-                                              ? "#1f2937"
-                                              : "#fff"
-                                          }
-                                          strokeWidth={
-                                            selectedPartId ===
-                                            piece.sourcePartId
-                                              ? "2"
-                                              : "0.8"
-                                          }
-                                          rx="1.5"
-                                        />
-                                        {aggregatedPart
-                                          ? visualEdges.map((edgeInfo) => {
-                                              const isActive =
-                                                aggregatedPart.part.edgeBanding[
-                                                  edgeInfo.logicalSide
-                                                ] ?? false;
-
-                                              return (
-                                                <g key={`${piece.id}-${edgeInfo.edge}`}>
-                                                  <rect
-                                                    x={edgeInfo.x}
-                                                    y={edgeInfo.y}
-                                                    width={edgeInfo.width}
-                                                    height={edgeInfo.height}
-                                                    rx="1"
-                                                    className="cursor-pointer"
-                                                    fill="rgba(255,255,255,0.001)"
-                                                    stroke="rgba(255,255,255,0.35)"
-                                                    strokeWidth="0.3"
-                                                    onClick={(event) => {
-                                                      event.stopPropagation();
-                                                      toggleProjectPartEdgeBand(
-                                                        piece.sourcePartId,
-                                                        edgeInfo.logicalSide,
-                                                      );
-                                                    }}
-                                                  />
-                                                  {isActive ? (
-                                                    <g pointerEvents="none">
-                                                      <line
-                                                        x1={edgeInfo.lineX1}
-                                                        y1={edgeInfo.lineY1}
-                                                        x2={edgeInfo.lineX2}
-                                                        y2={edgeInfo.lineY2}
-                                                        stroke="#111827"
-                                                        strokeWidth={edgeMarkerStrokeWidth}
-                                                        strokeLinecap="butt"
-                                                        strokeDasharray={edgeMarkerDash}
-                                                      />
-                                                    </g>
-                                                  ) : null}
-                                                </g>
-                                              );
-                                            })
-                                          : null}
-                                        {pieceLabel.mode === "full" ? (
-                                          <g>
-                                            <text
-                                              x={nameTextPosition.x}
-                                              y={nameTextPosition.y}
-                                              textAnchor="middle"
-                                              dominantBaseline="middle"
-                                              fontSize={
-                                                primaryLabel?.fontSize ??
-                                                pieceLabel.nameFontSize
+                                        return (
+                                          <g key={piece.id}>
+                                            <rect
+                                              x={displayPiece.x}
+                                              y={displayPiece.y}
+                                              width={displayPiece.width}
+                                              height={displayPiece.height}
+                                              className="cursor-pointer"
+                                              onClick={() =>
+                                                handlePartSelection(
+                                                  piece.sourcePartId,
+                                                )
                                               }
-                                              fontWeight="700"
-                                              fill="#fff"
-                                              direction="rtl"
-                                              unicodeBidi="plaintext"
-                                              transform={nameTextTransform}
-                                            >
-                                              {primaryLabel?.text ??
-                                                (projectPartLink
-                                                  ? `${projectPartLink.code} • ${piece.name}`
-                                                  : piece.name)}
-                                            </text>
-                                            {dimensionTexts.top ? (
-                                              <text
-                                                x={dimensionTexts.top.x}
-                                                y={dimensionTexts.top.y}
-                                                textAnchor="middle"
-                                                dominantBaseline="middle"
-                                                fontSize={dimensionTexts.top.fontSize}
-                                                fontWeight={topDimensionTextStyle?.fontWeight}
-                                                fill={topDimensionTextStyle?.fill}
-                                                stroke={topDimensionTextStyle?.stroke}
-                                                strokeWidth={topDimensionTextStyle?.strokeWidth}
-                                                strokeLinejoin={topDimensionTextStyle?.strokeLinejoin}
-                                                paintOrder={topDimensionTextStyle?.paintOrder}
-                                                transform={dimensionTexts.top.transform}
-                                              >
-                                                {dimensionTexts.top.text}
-                                              </text>
-                                            ) : null}
-                                            {dimensionTexts.side ? (
-                                              <text
-                                                x={dimensionTexts.side.x}
-                                                y={dimensionTexts.side.y}
-                                                textAnchor="middle"
-                                                dominantBaseline="middle"
-                                                fontSize={dimensionTexts.side.fontSize}
-                                                fontWeight={sideDimensionTextStyle?.fontWeight}
-                                                fill={sideDimensionTextStyle?.fill}
-                                                stroke={sideDimensionTextStyle?.stroke}
-                                                strokeWidth={sideDimensionTextStyle?.strokeWidth}
-                                                strokeLinejoin={sideDimensionTextStyle?.strokeLinejoin}
-                                                paintOrder={sideDimensionTextStyle?.paintOrder}
-                                                transform={dimensionTexts.side.transform}
-                                              >
-                                                {dimensionTexts.side.text}
-                                              </text>
+                                              fill={
+                                                piece.category === "front"
+                                                  ? "#c88f5a"
+                                                  : piece.category === "back"
+                                                    ? "#90a4ae"
+                                                    : piece.category === "shelf"
+                                                      ? "#6f8f72"
+                                                      : piece.category ===
+                                                          "support"
+                                                        ? "#d8c178"
+                                                        : "#9a7b5f"
+                                              }
+                                              fillOpacity={
+                                                selectedPartId ===
+                                                piece.sourcePartId
+                                                  ? "1"
+                                                  : "0.82"
+                                              }
+                                              stroke={
+                                                selectedPartId ===
+                                                piece.sourcePartId
+                                                  ? "#1f2937"
+                                                  : "#fff"
+                                              }
+                                              strokeWidth={
+                                                selectedPartId ===
+                                                piece.sourcePartId
+                                                  ? "2"
+                                                  : "0.8"
+                                              }
+                                              rx="1.5"
+                                            />
+                                            {aggregatedPart
+                                              ? visualEdges.map((edgeInfo) => {
+                                                  const isActive =
+                                                    aggregatedPart.part
+                                                      .edgeBanding[
+                                                      edgeInfo.logicalSide
+                                                    ] ?? false;
+
+                                                  return (
+                                                    <g
+                                                      key={`${piece.id}-${edgeInfo.edge}`}
+                                                    >
+                                                      <rect
+                                                        x={edgeInfo.x}
+                                                        y={edgeInfo.y}
+                                                        width={edgeInfo.width}
+                                                        height={edgeInfo.height}
+                                                        rx="1"
+                                                        className="cursor-pointer"
+                                                        fill="rgba(255,255,255,0.001)"
+                                                        stroke="rgba(255,255,255,0.35)"
+                                                        strokeWidth="0.3"
+                                                        onClick={(event) => {
+                                                          event.stopPropagation();
+                                                          toggleProjectPartEdgeBand(
+                                                            piece.sourcePartId,
+                                                            edgeInfo.logicalSide,
+                                                          );
+                                                        }}
+                                                      />
+                                                      {isActive ? (
+                                                        <g pointerEvents="none">
+                                                          <line
+                                                            x1={edgeInfo.lineX1}
+                                                            y1={edgeInfo.lineY1}
+                                                            x2={edgeInfo.lineX2}
+                                                            y2={edgeInfo.lineY2}
+                                                            stroke="#111827"
+                                                            strokeWidth={
+                                                              edgeMarkerStrokeWidth
+                                                            }
+                                                            strokeLinecap="butt"
+                                                            strokeDasharray={
+                                                              edgeMarkerDash
+                                                            }
+                                                          />
+                                                        </g>
+                                                      ) : null}
+                                                    </g>
+                                                  );
+                                                })
+                                              : null}
+                                            {pieceLabel.mode === "full" ? (
+                                              <g>
+                                                <text
+                                                  x={nameTextPosition.x}
+                                                  y={nameTextPosition.y}
+                                                  textAnchor="middle"
+                                                  dominantBaseline="middle"
+                                                  fontSize={
+                                                    primaryLabel?.fontSize ??
+                                                    pieceLabel.nameFontSize
+                                                  }
+                                                  fontWeight="700"
+                                                  fill="#fff"
+                                                  direction="rtl"
+                                                  unicodeBidi="plaintext"
+                                                  transform={nameTextTransform}
+                                                >
+                                                  {primaryLabel?.text ??
+                                                    (projectPartLink
+                                                      ? `${projectPartLink.code} • ${piece.name}`
+                                                      : piece.name)}
+                                                </text>
+                                                {dimensionTexts.top ? (
+                                                  <text
+                                                    x={dimensionTexts.top.x}
+                                                    y={dimensionTexts.top.y}
+                                                    textAnchor="middle"
+                                                    dominantBaseline="middle"
+                                                    fontSize={
+                                                      dimensionTexts.top
+                                                        .fontSize
+                                                    }
+                                                    fontWeight={
+                                                      topDimensionTextStyle?.fontWeight
+                                                    }
+                                                    fill={
+                                                      topDimensionTextStyle?.fill
+                                                    }
+                                                    stroke={
+                                                      topDimensionTextStyle?.stroke
+                                                    }
+                                                    strokeWidth={
+                                                      topDimensionTextStyle?.strokeWidth
+                                                    }
+                                                    strokeLinejoin={
+                                                      topDimensionTextStyle?.strokeLinejoin
+                                                    }
+                                                    paintOrder={
+                                                      topDimensionTextStyle?.paintOrder
+                                                    }
+                                                    transform={
+                                                      dimensionTexts.top
+                                                        .transform
+                                                    }
+                                                  >
+                                                    {dimensionTexts.top.text}
+                                                  </text>
+                                                ) : null}
+                                                {dimensionTexts.side ? (
+                                                  <text
+                                                    x={dimensionTexts.side.x}
+                                                    y={dimensionTexts.side.y}
+                                                    textAnchor="middle"
+                                                    dominantBaseline="middle"
+                                                    fontSize={
+                                                      dimensionTexts.side
+                                                        .fontSize
+                                                    }
+                                                    fontWeight={
+                                                      sideDimensionTextStyle?.fontWeight
+                                                    }
+                                                    fill={
+                                                      sideDimensionTextStyle?.fill
+                                                    }
+                                                    stroke={
+                                                      sideDimensionTextStyle?.stroke
+                                                    }
+                                                    strokeWidth={
+                                                      sideDimensionTextStyle?.strokeWidth
+                                                    }
+                                                    strokeLinejoin={
+                                                      sideDimensionTextStyle?.strokeLinejoin
+                                                    }
+                                                    paintOrder={
+                                                      sideDimensionTextStyle?.paintOrder
+                                                    }
+                                                    transform={
+                                                      dimensionTexts.side
+                                                        .transform
+                                                    }
+                                                  >
+                                                    {dimensionTexts.side.text}
+                                                  </text>
+                                                ) : null}
+                                              </g>
+                                            ) : pieceLabel.mode === "dims" ? (
+                                              <g>
+                                                {dimensionTexts.top ? (
+                                                  <text
+                                                    x={dimensionTexts.top.x}
+                                                    y={dimensionTexts.top.y}
+                                                    textAnchor="middle"
+                                                    dominantBaseline="middle"
+                                                    fontSize={
+                                                      dimensionTexts.top
+                                                        .fontSize
+                                                    }
+                                                    fontWeight={
+                                                      topDimensionTextStyle?.fontWeight
+                                                    }
+                                                    fill={
+                                                      topDimensionTextStyle?.fill
+                                                    }
+                                                    stroke={
+                                                      topDimensionTextStyle?.stroke
+                                                    }
+                                                    strokeWidth={
+                                                      topDimensionTextStyle?.strokeWidth
+                                                    }
+                                                    strokeLinejoin={
+                                                      topDimensionTextStyle?.strokeLinejoin
+                                                    }
+                                                    paintOrder={
+                                                      topDimensionTextStyle?.paintOrder
+                                                    }
+                                                    transform={
+                                                      dimensionTexts.top
+                                                        .transform
+                                                    }
+                                                  >
+                                                    {dimensionTexts.top.text}
+                                                  </text>
+                                                ) : null}
+                                                {dimensionTexts.side ? (
+                                                  <text
+                                                    x={dimensionTexts.side.x}
+                                                    y={dimensionTexts.side.y}
+                                                    textAnchor="middle"
+                                                    dominantBaseline="middle"
+                                                    fontSize={
+                                                      dimensionTexts.side
+                                                        .fontSize
+                                                    }
+                                                    fontWeight={
+                                                      sideDimensionTextStyle?.fontWeight
+                                                    }
+                                                    fill={
+                                                      sideDimensionTextStyle?.fill
+                                                    }
+                                                    stroke={
+                                                      sideDimensionTextStyle?.stroke
+                                                    }
+                                                    strokeWidth={
+                                                      sideDimensionTextStyle?.strokeWidth
+                                                    }
+                                                    strokeLinejoin={
+                                                      sideDimensionTextStyle?.strokeLinejoin
+                                                    }
+                                                    paintOrder={
+                                                      sideDimensionTextStyle?.paintOrder
+                                                    }
+                                                    transform={
+                                                      dimensionTexts.side
+                                                        .transform
+                                                    }
+                                                  >
+                                                    {dimensionTexts.side.text}
+                                                  </text>
+                                                ) : null}
+                                              </g>
                                             ) : null}
                                           </g>
-                                        ) : pieceLabel.mode === "dims" ? (
-                                          <g>
-                                            {dimensionTexts.top ? (
-                                              <text
-                                                x={dimensionTexts.top.x}
-                                                y={dimensionTexts.top.y}
-                                                textAnchor="middle"
-                                                dominantBaseline="middle"
-                                                fontSize={dimensionTexts.top.fontSize}
-                                                fontWeight={topDimensionTextStyle?.fontWeight}
-                                                fill={topDimensionTextStyle?.fill}
-                                                stroke={topDimensionTextStyle?.stroke}
-                                                strokeWidth={topDimensionTextStyle?.strokeWidth}
-                                                strokeLinejoin={topDimensionTextStyle?.strokeLinejoin}
-                                                paintOrder={topDimensionTextStyle?.paintOrder}
-                                                transform={dimensionTexts.top.transform}
-                                              >
-                                                {dimensionTexts.top.text}
-                                              </text>
-                                            ) : null}
-                                            {dimensionTexts.side ? (
-                                              <text
-                                                x={dimensionTexts.side.x}
-                                                y={dimensionTexts.side.y}
-                                                textAnchor="middle"
-                                                dominantBaseline="middle"
-                                                fontSize={dimensionTexts.side.fontSize}
-                                                fontWeight={sideDimensionTextStyle?.fontWeight}
-                                                fill={sideDimensionTextStyle?.fill}
-                                                stroke={sideDimensionTextStyle?.stroke}
-                                                strokeWidth={sideDimensionTextStyle?.strokeWidth}
-                                                strokeLinejoin={sideDimensionTextStyle?.strokeLinejoin}
-                                                paintOrder={sideDimensionTextStyle?.paintOrder}
-                                                transform={dimensionTexts.side.transform}
-                                              >
-                                                {dimensionTexts.side.text}
-                                              </text>
-                                            ) : null}
-                                          </g>
-                                        ) : null}
-                                      </g>
-                                    );
-                                  })}
-                                  </g>
-                                </svg>
+                                        );
+                                      })}
+                                    </g>
+                                  </svg>
+                                </div>
                               </div>
-                            </div>
                             );
                           })}
                         </div>
@@ -9432,7 +9218,8 @@ function App() {
                     <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
                       <p className="text-xs text-slate-500">المفصلات</p>
                       <p className="mt-2 text-lg font-semibold text-slate-950">
-                        {projectSummary.totalHingeCount} × {formatPrice(projectSettings.hingePrice)}
+                        {projectSummary.totalHingeCount} ×{" "}
+                        {formatPrice(projectSettings.hingePrice)}
                       </p>
                       <p className="mt-1 text-xs text-slate-500">
                         الإجمالي {formatPrice(projectSummary.totalHingeCost)}

@@ -28,14 +28,24 @@
         --soft-shadow: 0 18px 54px rgba(40, 28, 18, 0.12);
       }
 
-      * { box-sizing: border-box; }
-      html, body { margin: 0; min-height: 100%; }
+      * {
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        margin: 0;
+        min-height: 100%;
+      }
 
       body {
         font-family: "IBM Plex Sans Arabic", "Segoe UI", sans-serif;
         color: var(--ink);
         background:
-          radial-gradient(circle at top, rgba(209, 174, 110, 0.18), transparent 32%),
+          radial-gradient(
+            circle at top,
+            rgba(209, 174, 110, 0.18),
+            transparent 32%
+          ),
           linear-gradient(145deg, #17120e 0%, #261d17 50%, #17120e 100%);
       }
 
@@ -44,14 +54,18 @@
         position: fixed;
         inset: 0;
         background:
-          linear-gradient(rgba(255,255,255,0.03) 1px, transparent 1px),
-          linear-gradient(90deg, rgba(255,255,255,0.03) 1px, transparent 1px);
+          linear-gradient(rgba(255, 255, 255, 0.03) 1px, transparent 1px),
+          linear-gradient(90deg, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
         background-size: 32px 32px;
         opacity: 0.12;
         pointer-events: none;
       }
 
-      .stage { display: flex; justify-content: center; padding: 30px; }
+      .stage {
+        display: flex;
+        justify-content: center;
+        padding: 30px;
+      }
 
       .artboard {
         position: relative;
@@ -60,9 +74,13 @@
         padding: 24px;
         overflow: hidden;
         border-radius: 38px;
-        border: 1px solid rgba(255,255,255,0.08);
+        border: 1px solid rgba(255, 255, 255, 0.08);
         background:
-          radial-gradient(circle at top right, rgba(255,235,205,0.94), transparent 26%),
+          radial-gradient(
+            circle at top right,
+            rgba(255, 235, 205, 0.94),
+            transparent 26%
+          ),
           linear-gradient(180deg, #f8f0e4 0%, #eee3d4 100%);
         box-shadow: var(--shadow);
       }
@@ -77,12 +95,18 @@
       }
 
       .artboard::before {
-        top: -120px; right: -80px; width: 340px; height: 340px;
+        top: -120px;
+        right: -80px;
+        width: 340px;
+        height: 340px;
         background: rgba(205, 151, 79, 0.18);
       }
 
       .artboard::after {
-        left: -100px; bottom: -80px; width: 320px; height: 320px;
+        left: -100px;
+        bottom: -80px;
+        width: 320px;
+        height: 320px;
         background: rgba(82, 119, 99, 0.16);
       }
 
@@ -98,43 +122,73 @@
         box-shadow: var(--soft-shadow);
       }
 
-      .brand { display: flex; align-items: center; gap: 14px; }
+      .brand {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+      }
 
       .mark {
         position: relative;
-        width: 58px; height: 58px; border-radius: 18px;
+        width: 58px;
+        height: 58px;
+        border-radius: 18px;
         background: linear-gradient(145deg, #2c1d13, #6c4321);
       }
 
       .mark::before,
-      .mark::after { content: ""; position: absolute; }
+      .mark::after {
+        content: "";
+        position: absolute;
+      }
 
       .mark::before {
         inset: 11px 18px 11px 11px;
         border-radius: 12px;
-        border: 2px solid rgba(255,245,229,0.82);
+        border: 2px solid rgba(255, 245, 229, 0.82);
       }
 
       .mark::after {
-        top: 10px; right: 9px; width: 16px; height: 38px;
+        top: 10px;
+        right: 9px;
+        width: 16px;
+        height: 38px;
         border-radius: 10px;
-        border: 2px solid rgba(255,245,229,0.82);
+        border: 2px solid rgba(255, 245, 229, 0.82);
         transform: rotate(-11deg);
       }
 
-      .brand h1 { margin: 0; font-size: 24px; }
-      .brand p { margin: 6px 0 0; color: var(--muted); font-size: 13px; }
+      .brand h1 {
+        margin: 0;
+        font-size: 24px;
+      }
+      .brand p {
+        margin: 6px 0 0;
+        color: var(--muted);
+        font-size: 13px;
+      }
 
-      .actions { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; }
+      .actions {
+        display: flex;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 10px;
+      }
 
-      .pill, .button {
-        display: inline-flex; align-items: center; gap: 8px;
-        padding: 10px 14px; border-radius: 999px; font-size: 13px; font-weight: 700;
+      .pill,
+      .button {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 10px 14px;
+        border-radius: 999px;
+        font-size: 13px;
+        font-weight: 700;
       }
 
       .pill {
-        background: rgba(255,255,255,0.76);
-        border: 1px solid rgba(111,83,56,0.14);
+        background: rgba(255, 255, 255, 0.76);
+        border: 1px solid rgba(111, 83, 56, 0.14);
       }
 
       .button {
@@ -150,7 +204,11 @@
         margin-top: 18px;
       }
 
-      .column { display: flex; flex-direction: column; gap: 18px; }
+      .column {
+        display: flex;
+        flex-direction: column;
+        gap: 18px;
+      }
 
       .card {
         position: relative;
@@ -162,70 +220,115 @@
       }
 
       .card::before {
-        content: ""; position: absolute; inset: 0;
-        background: linear-gradient(180deg, rgba(255,255,255,0.34), transparent 36%);
+        content: "";
+        position: absolute;
+        inset: 0;
+        background: linear-gradient(
+          180deg,
+          rgba(255, 255, 255, 0.34),
+          transparent 36%
+        );
         pointer-events: none;
       }
 
       .card.dark {
         background: linear-gradient(180deg, #262018 0%, #18130f 100%);
         color: #fff7ed;
-        border-color: rgba(255,255,255,0.06);
+        border-color: rgba(255, 255, 255, 0.06);
       }
 
-      .inner { position: relative; padding: 18px; }
+      .inner {
+        position: relative;
+        padding: 18px;
+      }
       .eyebrow {
-        font-size: 11px; font-weight: 800; letter-spacing: 0.14em; text-transform: uppercase;
+        font-size: 11px;
+        font-weight: 800;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
         color: #907866;
       }
-      .dark .eyebrow { color: rgba(255,244,230,0.7); }
-      .title { margin: 10px 0 0; font-size: 34px; line-height: 1.08; }
-      .muted { color: var(--muted); }
-      .dark .muted { color: rgba(255,244,230,0.72); }
+      .dark .eyebrow {
+        color: rgba(255, 244, 230, 0.7);
+      }
+      .title {
+        margin: 10px 0 0;
+        font-size: 34px;
+        line-height: 1.08;
+      }
+      .muted {
+        color: var(--muted);
+      }
+      .dark .muted {
+        color: rgba(255, 244, 230, 0.72);
+      }
 
-      .ledger-stack { display: grid; gap: 12px; margin-top: 16px; }
+      .ledger-stack {
+        display: grid;
+        gap: 12px;
+        margin-top: 16px;
+      }
 
       .ledger-row {
-        display: grid; grid-template-columns: minmax(0, 1fr) auto auto;
-        gap: 12px; align-items: center;
-        padding: 14px; border-radius: 22px;
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto auto;
+        gap: 12px;
+        align-items: center;
+        padding: 14px;
+        border-radius: 22px;
         background: var(--panel-strong);
-        border: 1px solid rgba(111,83,56,0.12);
+        border: 1px solid rgba(111, 83, 56, 0.12);
       }
 
       .tag {
-        padding: 8px 10px; border-radius: 999px; font-size: 12px; font-weight: 700;
+        padding: 8px 10px;
+        border-radius: 999px;
+        font-size: 12px;
+        font-weight: 700;
         background: var(--gold-soft);
         color: #7f5a1f;
       }
 
       .price {
         font-family: "Readex Pro", sans-serif;
-        font-size: 19px; font-weight: 700;
+        font-size: 19px;
+        font-weight: 700;
       }
 
       .total-box {
-        margin-top: 16px; padding: 18px; border-radius: 26px;
+        margin-top: 16px;
+        padding: 18px;
+        border-radius: 26px;
         background: linear-gradient(145deg, #b27843, #d39b59);
         color: white;
       }
 
       .total-box strong {
-        display: block; margin-top: 8px; font-size: 40px; font-family: "Readex Pro", sans-serif;
+        display: block;
+        margin-top: 8px;
+        font-size: 40px;
+        font-family: "Readex Pro", sans-serif;
       }
 
       .summary-grid {
-        display: grid; grid-template-columns: repeat(4, minmax(0, 1fr));
-        gap: 12px; margin-top: 16px;
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 12px;
+        margin-top: 16px;
       }
 
       .summary-card {
-        padding: 14px; border-radius: 22px; background: rgba(255,255,255,0.76);
-        border: 1px solid rgba(111,83,56,0.12);
+        padding: 14px;
+        border-radius: 22px;
+        background: rgba(255, 255, 255, 0.76);
+        border: 1px solid rgba(111, 83, 56, 0.12);
       }
 
       .summary-card strong {
-        display: block; margin-top: 10px; font-size: 28px; font-family: "Readex Pro", sans-serif;
+        display: block;
+        margin-top: 10px;
+        font-size: 28px;
+        font-family: "Readex Pro", sans-serif;
       }
 
       .sheet-stage {
@@ -235,14 +338,19 @@
         padding: 18px;
         border-radius: 28px;
         background:
-          radial-gradient(circle at top, rgba(255,255,255,0.52), transparent 42%),
+          radial-gradient(
+            circle at top,
+            rgba(255, 255, 255, 0.52),
+            transparent 42%
+          ),
           linear-gradient(180deg, #fbf2e7 0%, #ecd9bf 100%);
         border: 1px solid rgba(130, 96, 63, 0.14);
       }
 
       .sheet-board {
         position: relative;
-        height: 100%; min-height: 384px;
+        height: 100%;
+        min-height: 384px;
         border-radius: 24px;
         background: linear-gradient(180deg, #d8b07e 0%, #bf854d 100%);
         border: 1px solid rgba(122, 80, 42, 0.16);
@@ -254,85 +362,140 @@
         border-radius: 16px;
         background: rgba(255, 247, 235, 0.88);
         border: 1px solid rgba(122, 80, 42, 0.16);
-        box-shadow: inset 0 0 0 1px rgba(255,255,255,0.26);
+        box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.26);
         padding: 10px;
         font-size: 13px;
         line-height: 1.5;
       }
 
-      .cut-piece b { display: block; font-size: 14px; }
-
-      .side-metrics { display: grid; gap: 12px; margin-top: 16px; }
-
-      .side-metric {
-        padding: 14px; border-radius: 22px;
-        background: rgba(255,255,255,0.08);
-        border: 1px solid rgba(255,255,255,0.06);
+      .cut-piece b {
+        display: block;
+        font-size: 14px;
       }
 
-      .side-metric strong { display: block; margin-top: 8px; font-size: 28px; font-family: "Readex Pro", sans-serif; }
+      .side-metrics {
+        display: grid;
+        gap: 12px;
+        margin-top: 16px;
+      }
 
-      .checklist { display: grid; gap: 10px; margin-top: 16px; }
+      .side-metric {
+        padding: 14px;
+        border-radius: 22px;
+        background: rgba(255, 255, 255, 0.08);
+        border: 1px solid rgba(255, 255, 255, 0.06);
+      }
+
+      .side-metric strong {
+        display: block;
+        margin-top: 8px;
+        font-size: 28px;
+        font-family: "Readex Pro", sans-serif;
+      }
+
+      .checklist {
+        display: grid;
+        gap: 10px;
+        margin-top: 16px;
+      }
 
       .check {
-        display: flex; align-items: flex-start; gap: 12px;
-        padding: 12px; border-radius: 18px;
-        background: rgba(255,255,255,0.08);
-        border: 1px solid rgba(255,255,255,0.06);
+        display: flex;
+        align-items: flex-start;
+        gap: 12px;
+        padding: 12px;
+        border-radius: 18px;
+        background: rgba(255, 255, 255, 0.08);
+        border: 1px solid rgba(255, 255, 255, 0.06);
       }
 
       .check span:first-child {
-        display: grid; place-items: center;
-        width: 28px; height: 28px; border-radius: 999px;
-        background: rgba(255,255,255,0.12); font-weight: 700;
+        display: grid;
+        place-items: center;
+        width: 28px;
+        height: 28px;
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.12);
+        font-weight: 700;
       }
 
-      .right-stack { display: grid; gap: 12px; }
+      .right-stack {
+        display: grid;
+        gap: 12px;
+      }
 
       .mini-card {
-        padding: 14px; border-radius: 22px;
-        background: rgba(255,255,255,0.78);
-        border: 1px solid rgba(111,83,56,0.12);
+        padding: 14px;
+        border-radius: 22px;
+        background: rgba(255, 255, 255, 0.78);
+        border: 1px solid rgba(111, 83, 56, 0.12);
       }
 
-      .mini-card strong { display: block; margin-top: 8px; font-size: 24px; font-family: "Readex Pro", sans-serif; }
+      .mini-card strong {
+        display: block;
+        margin-top: 8px;
+        font-size: 24px;
+        font-family: "Readex Pro", sans-serif;
+      }
 
       .phone {
-        margin-top: 18px; padding: 12px; border-radius: 36px;
+        margin-top: 18px;
+        padding: 12px;
+        border-radius: 36px;
         background: linear-gradient(180deg, #1f1813 0%, #110d0a 100%);
         box-shadow: 0 24px 40px rgba(21, 14, 9, 0.24);
       }
 
       .phone-screen {
-        min-height: 594px; border-radius: 26px; padding: 18px 16px 86px;
+        min-height: 594px;
+        border-radius: 26px;
+        padding: 18px 16px 86px;
         background: linear-gradient(180deg, #f8f0e3 0%, #ecdfcf 100%);
       }
 
-      .phone-head, .phone-box, .phone-stat {
-        border-radius: 20px; border: 1px solid rgba(111,83,56,0.12);
-        background: rgba(255,255,255,0.82);
+      .phone-head,
+      .phone-box,
+      .phone-stat {
+        border-radius: 20px;
+        border: 1px solid rgba(111, 83, 56, 0.12);
+        background: rgba(255, 255, 255, 0.82);
       }
 
-      .phone-head { padding: 14px; }
-      .phone-box { margin-top: 12px; padding: 14px; }
+      .phone-head {
+        padding: 14px;
+      }
+      .phone-box {
+        margin-top: 12px;
+        padding: 14px;
+      }
 
       .phone-stats {
-        display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));
-        gap: 8px; margin-top: 10px;
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 8px;
+        margin-top: 10px;
       }
 
-      .phone-stat { padding: 10px 12px; }
+      .phone-stat {
+        padding: 10px 12px;
+      }
 
       .bottom-nav {
-        display: grid; grid-template-columns: repeat(4, minmax(0, 1fr));
-        gap: 8px; margin-top: 16px;
-        padding: 10px; border-radius: 22px;
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 8px;
+        margin-top: 16px;
+        padding: 10px;
+        border-radius: 22px;
         background: rgba(28, 22, 17, 0.9);
       }
 
       .nav-item {
-        padding: 9px 6px; border-radius: 16px; text-align: center; font-size: 11px;
-        color: rgba(255,245,229,0.66);
+        padding: 9px 6px;
+        border-radius: 16px;
+        text-align: center;
+        font-size: 11px;
+        color: rgba(255, 245, 229, 0.66);
       }
 
       .nav-item.active {
@@ -366,7 +529,10 @@
               <div class="inner">
                 <div class="eyebrow">Cost Ledger</div>
                 <h2 class="title">سجل خامة واضح بدل بطاقات مبعثرة</h2>
-                <p class="muted">هذا الاتجاه يجعل الأسعار, الألواح, والمفصلات هي العمود الأساسي, بينما الإدخال نفسه يبقى في الوسط.</p>
+                <p class="muted">
+                  هذا الاتجاه يجعل الأسعار, الألواح, والمفصلات هي العمود
+                  الأساسي, بينما الإدخال نفسه يبقى في الوسط.
+                </p>
 
                 <div class="ledger-stack">
                   <div class="ledger-row">
@@ -406,7 +572,9 @@
                 <div class="total-box">
                   <div>الإجمالي المبدئي للمشروع</div>
                   <strong>١٥٬١٤٠</strong>
-                  <div style="opacity:.84">قبل المصنعية التفصيلية والخصومات</div>
+                  <div style="opacity: 0.84">
+                    قبل المصنعية التفصيلية والخصومات
+                  </div>
                 </div>
               </div>
             </section>
@@ -417,19 +585,31 @@
                 <div class="phone">
                   <div class="phone-screen">
                     <div class="phone-head">
-                      <strong style="display:block; font-size:22px">كشف التكلفة السريع</strong>
+                      <strong style="display: block; font-size: 22px"
+                        >كشف التكلفة السريع</strong
+                      >
                       <div class="phone-stats">
-                        <div class="phone-stat"><div class="muted">ألواح</div><strong>8</strong></div>
-                        <div class="phone-stat"><div class="muted">إجمالي</div><strong>١٥٬١٤٠</strong></div>
+                        <div class="phone-stat">
+                          <div class="muted">ألواح</div>
+                          <strong>8</strong>
+                        </div>
+                        <div class="phone-stat">
+                          <div class="muted">إجمالي</div>
+                          <strong>١٥٬١٤٠</strong>
+                        </div>
                       </div>
                     </div>
                     <div class="phone-box">
                       <strong>أهم بند</strong>
-                      <div class="muted" style="margin-top:8px">لوح الهيكل هو البند الأعلى تكلفة الآن.</div>
+                      <div class="muted" style="margin-top: 8px">
+                        لوح الهيكل هو البند الأعلى تكلفة الآن.
+                      </div>
                     </div>
                     <div class="phone-box">
                       <strong>الوحدة النشطة</strong>
-                      <div class="muted" style="margin-top:8px">المطبخ العلوي • حوض 80 • بدلف</div>
+                      <div class="muted" style="margin-top: 8px">
+                        المطبخ العلوي • حوض 80 • بدلف
+                      </div>
                     </div>
                     <div class="bottom-nav">
                       <div class="nav-item active">الخامة</div>
@@ -447,44 +627,111 @@
             <section class="card">
               <div class="inner">
                 <div class="eyebrow">Sheet & Cost Focus</div>
-                <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:14px;">
+                <div
+                  style="
+                    display: flex;
+                    align-items: flex-start;
+                    justify-content: space-between;
+                    gap: 14px;
+                  "
+                >
                   <div>
-                    <h2 class="title" style="font-size:30px">مركز المشروع يصبح كشف ألواح حي</h2>
-                    <p class="muted">بدل تكرار عناصر كثيرة, يتم تجميع المقاسات والوحدات في اليسار بينما الوسط يشرح أين ذهبت الخامة.</p>
+                    <h2 class="title" style="font-size: 30px">
+                      مركز المشروع يصبح كشف ألواح حي
+                    </h2>
+                    <p class="muted">
+                      بدل تكرار عناصر كثيرة, يتم تجميع المقاسات والوحدات في
+                      اليسار بينما الوسط يشرح أين ذهبت الخامة.
+                    </p>
                   </div>
                   <span class="tag">مطبخ علوي • 12 وحدة</span>
                 </div>
 
                 <div class="summary-grid">
-                  <div class="summary-card"><div class="muted">الوحدات</div><strong>12</strong></div>
-                  <div class="summary-card"><div class="muted">القطع</div><strong>84</strong></div>
-                  <div class="summary-card"><div class="muted">المفصلات</div><strong>28</strong></div>
-                  <div class="summary-card"><div class="muted">الهالك</div><strong>11%</strong></div>
+                  <div class="summary-card">
+                    <div class="muted">الوحدات</div>
+                    <strong>12</strong>
+                  </div>
+                  <div class="summary-card">
+                    <div class="muted">القطع</div>
+                    <strong>84</strong>
+                  </div>
+                  <div class="summary-card">
+                    <div class="muted">المفصلات</div>
+                    <strong>28</strong>
+                  </div>
+                  <div class="summary-card">
+                    <div class="muted">الهالك</div>
+                    <strong>11%</strong>
+                  </div>
                 </div>
 
                 <div class="sheet-stage">
                   <div class="sheet-board">
-                    <div class="cut-piece" style="top:18px;right:18px;width:190px;height:120px;">
+                    <div
+                      class="cut-piece"
+                      style="
+                        top: 18px;
+                        right: 18px;
+                        width: 190px;
+                        height: 120px;
+                      "
+                    >
                       <b>جنب وحدة</b>
                       72 × 58<br />شريط طولي
                     </div>
-                    <div class="cut-piece" style="top:18px;left:22px;width:250px;height:82px;">
+                    <div
+                      class="cut-piece"
+                      style="top: 18px; left: 22px; width: 250px; height: 82px"
+                    >
                       <b>رف داخلي</b>
                       76 × 56
                     </div>
-                    <div class="cut-piece" style="top:150px;right:18px;width:286px;height:140px;">
+                    <div
+                      class="cut-piece"
+                      style="
+                        top: 150px;
+                        right: 18px;
+                        width: 286px;
+                        height: 140px;
+                      "
+                    >
                       <b>واجهة دلفة</b>
                       39 × 68<br />مفصلتان
                     </div>
-                    <div class="cut-piece" style="top:110px;left:22px;width:214px;height:180px;">
+                    <div
+                      class="cut-piece"
+                      style="
+                        top: 110px;
+                        left: 22px;
+                        width: 214px;
+                        height: 180px;
+                      "
+                    >
                       <b>ظهر</b>
                       78 × 70
                     </div>
-                    <div class="cut-piece" style="bottom:22px;right:24px;width:330px;height:120px;">
+                    <div
+                      class="cut-piece"
+                      style="
+                        bottom: 22px;
+                        right: 24px;
+                        width: 330px;
+                        height: 120px;
+                      "
+                    >
                       <b>قاعدة</b>
                       80 × 58<br />حافة أمامية
                     </div>
-                    <div class="cut-piece" style="bottom:22px;left:22px;width:250px;height:150px;">
+                    <div
+                      class="cut-piece"
+                      style="
+                        bottom: 22px;
+                        left: 22px;
+                        width: 250px;
+                        height: 150px;
+                      "
+                    >
                       <b>رفوف</b>
                       2 × 76 × 56
                     </div>
@@ -498,19 +745,55 @@
             <section class="card dark">
               <div class="inner">
                 <div class="eyebrow">Decision Panel</div>
-                <h2 class="title" style="font-size:30px">كل بند يقول أثره على المشروع</h2>
-                <p class="muted">هذا الاتجاه مناسب لو القرار الأساسي عندك في الورشة هو: كم لوح؟ كم تكلفة؟ وما أكثر بند مؤثر؟</p>
+                <h2 class="title" style="font-size: 30px">
+                  كل بند يقول أثره على المشروع
+                </h2>
+                <p class="muted">
+                  هذا الاتجاه مناسب لو القرار الأساسي عندك في الورشة هو: كم لوح؟
+                  كم تكلفة؟ وما أكثر بند مؤثر؟
+                </p>
 
                 <div class="side-metrics">
-                  <div class="side-metric"><div class="muted">إجمالي اللوح</div><strong>8</strong></div>
-                  <div class="side-metric"><div class="muted">أعلى بند</div><strong>لوح 18</strong></div>
-                  <div class="side-metric"><div class="muted">شريط الحافة</div><strong>26 م ط</strong></div>
+                  <div class="side-metric">
+                    <div class="muted">إجمالي اللوح</div>
+                    <strong>8</strong>
+                  </div>
+                  <div class="side-metric">
+                    <div class="muted">أعلى بند</div>
+                    <strong>لوح 18</strong>
+                  </div>
+                  <div class="side-metric">
+                    <div class="muted">شريط الحافة</div>
+                    <strong>26 م ط</strong>
+                  </div>
                 </div>
 
                 <div class="checklist">
-                  <div class="check"><span>1</span><div><strong>راجع سعر اللوح</strong><div class="muted">لأنه العامل الأعلى في التكلفة النهائية.</div></div></div>
-                  <div class="check"><span>2</span><div><strong>ثبت سماكة الظهر</strong><div class="muted">لتقليل أي تفاوت في كشف الظهر.</div></div></div>
-                  <div class="check"><span>3</span><div><strong>احسب قبل الطباعة</strong><div class="muted">حتى يظهر الهالك والتكلفة والمفصلات بدقة.</div></div></div>
+                  <div class="check">
+                    <span>1</span>
+                    <div>
+                      <strong>راجع سعر اللوح</strong>
+                      <div class="muted">
+                        لأنه العامل الأعلى في التكلفة النهائية.
+                      </div>
+                    </div>
+                  </div>
+                  <div class="check">
+                    <span>2</span>
+                    <div>
+                      <strong>ثبت سماكة الظهر</strong>
+                      <div class="muted">لتقليل أي تفاوت في كشف الظهر.</div>
+                    </div>
+                  </div>
+                  <div class="check">
+                    <span>3</span>
+                    <div>
+                      <strong>احسب قبل الطباعة</strong>
+                      <div class="muted">
+                        حتى يظهر الهالك والتكلفة والمفصلات بدقة.
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </div>
             </section>
@@ -519,9 +802,18 @@
               <div class="inner">
                 <div class="eyebrow">Quick Facts</div>
                 <div class="right-stack">
-                  <div class="mini-card"><div class="muted">المشروع</div><strong>مطبخ علوي</strong></div>
-                  <div class="mini-card"><div class="muted">الوحدة النشطة</div><strong>حوض 80</strong></div>
-                  <div class="mini-card"><div class="muted">الوضع الأنسب</div><strong>قبل التسعير والطباعة</strong></div>
+                  <div class="mini-card">
+                    <div class="muted">المشروع</div>
+                    <strong>مطبخ علوي</strong>
+                  </div>
+                  <div class="mini-card">
+                    <div class="muted">الوحدة النشطة</div>
+                    <strong>حوض 80</strong>
+                  </div>
+                  <div class="mini-card">
+                    <div class="muted">الوضع الأنسب</div>
+                    <strong>قبل التسعير والطباعة</strong>
+                  </div>
                 </div>
               </div>
             </section>

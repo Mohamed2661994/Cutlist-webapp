@@ -235,7 +235,9 @@ function Panel({
                 ? previewPalette.highlight
                 : resolvePreviewPanelColor(color)
             }
-            emissive={highlighted ? previewPalette.highlightEmissive : "#000000"}
+            emissive={
+              highlighted ? previewPalette.highlightEmissive : "#000000"
+            }
             emissiveIntensity={highlighted ? 0.5 : 0}
             roughness={0.55}
             metalness={0.05}
@@ -301,7 +303,8 @@ function HingedFrontPanel({
   const hingeOffsetX = hingeSide === "left" ? -size[0] / 2 : size[0] / 2;
   const panelOffsetX = hingeSide === "left" ? size[0] / 2 : -size[0] / 2;
   const targetRotationY =
-    closedRotationY + (open ? (hingeSide === "left" ? -openAngle : openAngle) : 0);
+    closedRotationY +
+    (open ? (hingeSide === "left" ? -openAngle : openAngle) : 0);
 
   useFrame((_, delta) => {
     const hingeGroup = hingeGroupRef.current;
@@ -330,11 +333,7 @@ function HingedFrontPanel({
     angularVelocityRef.current *= Math.exp(-damping * delta);
 
     const maxStep = (isClosing ? 3.2 : 4.1) * delta;
-    const rotationStep = clamp(
-      angularVelocityRef.current,
-      -maxStep,
-      maxStep,
-    );
+    const rotationStep = clamp(angularVelocityRef.current, -maxStep, maxStep);
 
     hingeGroup.rotation.y += rotationStep;
 
@@ -350,11 +349,7 @@ function HingedFrontPanel({
   return (
     <group position={position}>
       <group ref={hingeGroupRef} position={[hingeOffsetX, 0, 0]}>
-        <Panel
-          {...panelProps}
-          size={size}
-          position={[panelOffsetX, 0, 0]}
-        />
+        <Panel {...panelProps} size={size} position={[panelOffsetX, 0, 0]} />
       </group>
     </group>
   );
@@ -391,7 +386,9 @@ function DoorToggleButton({ position, open, onToggle }: DoorToggleButtonProps) {
           <span
             className={cn(
               "absolute inset-y-0 right-[1px] w-[5px] rounded-[2px] border border-current/70 bg-current/10 transition-transform duration-200",
-              open ? "origin-left rotate-[-26deg] translate-x-[1px]" : "origin-left rotate-0",
+              open
+                ? "origin-left rotate-[-26deg] translate-x-[1px]"
+                : "origin-left rotate-0",
             )}
           />
         </span>
@@ -413,7 +410,11 @@ function AxisGuide({ planWidth, planDepth }: AxisGuideProps) {
     <group position={[0, 0.016, 0]}>
       <mesh position={[arrowLengthX / 2, 0, 0]}>
         <boxGeometry args={[arrowLengthX, 0.012, 0.016]} />
-        <meshBasicMaterial color={previewPalette.axisX} transparent opacity={0.92} />
+        <meshBasicMaterial
+          color={previewPalette.axisX}
+          transparent
+          opacity={0.92}
+        />
       </mesh>
       <mesh
         position={[arrowLengthX + 0.06, 0, 0]}
@@ -424,19 +425,31 @@ function AxisGuide({ planWidth, planDepth }: AxisGuideProps) {
       </mesh>
       <mesh position={[-arrowLengthX / 2, 0, 0]}>
         <boxGeometry args={[arrowLengthX, 0.012, 0.016]} />
-        <meshBasicMaterial color={previewPalette.axisX} transparent opacity={0.45} />
+        <meshBasicMaterial
+          color={previewPalette.axisX}
+          transparent
+          opacity={0.45}
+        />
       </mesh>
       <mesh
         position={[-arrowLengthX - 0.06, 0, 0]}
         rotation={[0, 0, Math.PI / 2]}
       >
         <coneGeometry args={[0.028, 0.08, 18]} />
-        <meshBasicMaterial color={previewPalette.axisX} transparent opacity={0.55} />
+        <meshBasicMaterial
+          color={previewPalette.axisX}
+          transparent
+          opacity={0.55}
+        />
       </mesh>
 
       <mesh position={[0, 0, arrowLengthZ / 2]} rotation={[0, Math.PI / 2, 0]}>
         <boxGeometry args={[arrowLengthZ, 0.012, 0.016]} />
-        <meshBasicMaterial color={previewPalette.axisZ} transparent opacity={0.92} />
+        <meshBasicMaterial
+          color={previewPalette.axisZ}
+          transparent
+          opacity={0.92}
+        />
       </mesh>
       <mesh
         position={[0, 0, arrowLengthZ + 0.06]}
@@ -447,14 +460,22 @@ function AxisGuide({ planWidth, planDepth }: AxisGuideProps) {
       </mesh>
       <mesh position={[0, 0, -arrowLengthZ / 2]} rotation={[0, Math.PI / 2, 0]}>
         <boxGeometry args={[arrowLengthZ, 0.012, 0.016]} />
-        <meshBasicMaterial color={previewPalette.axisZ} transparent opacity={0.45} />
+        <meshBasicMaterial
+          color={previewPalette.axisZ}
+          transparent
+          opacity={0.45}
+        />
       </mesh>
       <mesh
         position={[0, 0, -arrowLengthZ - 0.06]}
         rotation={[-Math.PI / 2, 0, 0]}
       >
         <coneGeometry args={[0.028, 0.08, 18]} />
-        <meshBasicMaterial color={previewPalette.axisZ} transparent opacity={0.55} />
+        <meshBasicMaterial
+          color={previewPalette.axisZ}
+          transparent
+          opacity={0.55}
+        />
       </mesh>
 
       <Html position={[arrowLengthX + 0.17, 0.02, 0]} center transform sprite>
@@ -513,7 +534,9 @@ function DragHandle({
       >
         <circleGeometry args={[handleRadius, 40]} />
         <meshStandardMaterial
-          color={dragging ? previewPalette.handleActive : previewPalette.handleIdle}
+          color={
+            dragging ? previewPalette.handleActive : previewPalette.handleIdle
+          }
           emissive={dragging ? previewPalette.handleEmissive : "#000000"}
           emissiveIntensity={dragging ? 0.22 : 0}
           transparent
@@ -526,7 +549,9 @@ function DragHandle({
         <ringGeometry args={[handleRadius * 1.15, handleRadius * 1.34, 48]} />
         <meshBasicMaterial
           color={
-            dragging ? previewPalette.handleRingActive : previewPalette.handleRingIdle
+            dragging
+              ? previewPalette.handleRingActive
+              : previewPalette.handleRingIdle
           }
           transparent
           opacity={dragging ? 0.72 : 0.48}
@@ -1140,11 +1165,7 @@ function CabinetModel({
             const upperCenter =
               cabinetBaseY + bodyHeight - upperHeight / 2 - 0.01;
             const hingeSide =
-              doorCount === 1
-                ? "left"
-                : columnIndex === 0
-                  ? "left"
-                  : "right";
+              doorCount === 1 ? "left" : columnIndex === 0 ? "left" : "right";
 
             return (
               <group key={`door-split-${columnIndex}`}>
@@ -1303,7 +1324,12 @@ export function CabinetPreview({
           />
         </mesh>
         <gridHelper
-          args={[5.8, 18, previewPalette.sceneGridStrong, previewPalette.sceneGridSoft]}
+          args={[
+            5.8,
+            18,
+            previewPalette.sceneGridStrong,
+            previewPalette.sceneGridSoft,
+          ]}
           position={[0, -0.495, 0]}
         />
         <mesh position={[0, 1.1, -1.85]} receiveShadow>
@@ -1733,7 +1759,10 @@ export function ProjectPreview({
         <div className="max-w-sm rounded-2xl border border-slate-900/10 bg-slate-950/70 px-3 py-2 text-[11px] leading-5 text-white/92 shadow-[0_18px_45px_-32px_rgba(28,25,23,0.7)] backdrop-blur-sm">
           <p>يمكنك سحب الوحدة من جسمها مباشرة أو من مقبض السحب أسفلها.</p>
           <p>أسهم الكيبورد = حركة 10 سم، و Shift + الأسهم = حركة دقيقة 1 سم.</p>
-          <p>اسحب بالماوس على المساحة الفارغة لتدوير الكاميرا، وعجلة الماوس = تقريب وإبعاد.</p>
+          <p>
+            اسحب بالماوس على المساحة الفارغة لتدوير الكاميرا، وعجلة الماوس =
+            تقريب وإبعاد.
+          </p>
         </div>
       </div>
       <div className="pointer-events-none absolute inset-x-7 bottom-5 z-10 flex flex-wrap items-end justify-between gap-3">
@@ -1881,7 +1910,12 @@ export function ProjectPreview({
                   event.stopPropagation();
                   onSelectUnit?.(unit.id);
 
-                  startDraggingUnit(unit, event.clientX, event.clientY, event.point.y);
+                  startDraggingUnit(
+                    unit,
+                    event.clientX,
+                    event.clientY,
+                    event.point.y,
+                  );
                 }}
               >
                 {isSelected ? (

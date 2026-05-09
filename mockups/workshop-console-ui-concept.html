@@ -43,7 +43,11 @@
       body {
         font-family: "Cairo", "Segoe UI", sans-serif;
         background:
-          radial-gradient(circle at top, rgba(255, 222, 178, 0.16), transparent 34%),
+          radial-gradient(
+            circle at top,
+            rgba(255, 222, 178, 0.16),
+            transparent 34%
+          ),
           linear-gradient(140deg, #1c140f 0%, #2d2118 48%, #1c140f 100%);
         color: var(--ink);
       }
@@ -74,7 +78,11 @@
         border-radius: 34px;
         border: 1px solid rgba(255, 255, 255, 0.08);
         background:
-          radial-gradient(circle at top right, rgba(255, 231, 205, 0.94), transparent 24%),
+          radial-gradient(
+            circle at top right,
+            rgba(255, 231, 205, 0.94),
+            transparent 24%
+          ),
           linear-gradient(180deg, #f6ede1 0%, #efe4d7 100%);
         box-shadow: var(--shadow);
         padding: 24px;
@@ -144,9 +152,16 @@
         inset: 9px 20px 9px 9px;
         border: 2px solid rgba(255, 243, 228, 0.82);
         background:
-          linear-gradient(rgba(255, 243, 228, 0.36), rgba(255, 243, 228, 0.36)) 33% 0 / 2px 100% no-repeat,
-          linear-gradient(rgba(255, 243, 228, 0.36), rgba(255, 243, 228, 0.36)) 66% 0 / 2px 100% no-repeat,
-          linear-gradient(90deg, rgba(255, 243, 228, 0.36), rgba(255, 243, 228, 0.36)) 0 45% / 100% 2px no-repeat;
+          linear-gradient(rgba(255, 243, 228, 0.36), rgba(255, 243, 228, 0.36))
+            33% 0 / 2px 100% no-repeat,
+          linear-gradient(rgba(255, 243, 228, 0.36), rgba(255, 243, 228, 0.36))
+            66% 0 / 2px 100% no-repeat,
+          linear-gradient(
+              90deg,
+              rgba(255, 243, 228, 0.36),
+              rgba(255, 243, 228, 0.36)
+            )
+            0 45% / 100% 2px no-repeat;
       }
 
       .brand-mark::after {
@@ -155,7 +170,11 @@
         width: 16px;
         height: 34px;
         border: 2px solid rgba(255, 243, 228, 0.82);
-        background: linear-gradient(180deg, rgba(255, 190, 124, 0.6), rgba(132, 75, 35, 0.45));
+        background: linear-gradient(
+          180deg,
+          rgba(255, 190, 124, 0.6),
+          rgba(132, 75, 35, 0.45)
+        );
         transform: rotate(-11deg);
         transform-origin: right center;
       }
@@ -238,7 +257,11 @@
         content: "";
         position: absolute;
         inset: 0;
-        background: linear-gradient(180deg, rgba(255, 255, 255, 0.34), transparent 34%);
+        background: linear-gradient(
+          180deg,
+          rgba(255, 255, 255, 0.34),
+          transparent 34%
+        );
         pointer-events: none;
       }
 
@@ -296,7 +319,11 @@
       }
 
       .unit-item.active {
-        background: linear-gradient(145deg, rgba(255, 242, 226, 1), rgba(255, 248, 240, 0.9));
+        background: linear-gradient(
+          145deg,
+          rgba(255, 242, 226, 1),
+          rgba(255, 248, 240, 0.9)
+        );
         border-color: rgba(214, 110, 47, 0.32);
         box-shadow: inset 0 0 0 1px rgba(214, 110, 47, 0.18);
       }
@@ -424,7 +451,11 @@
         overflow: hidden;
         border: 1px solid rgba(122, 90, 58, 0.12);
         background:
-          radial-gradient(circle at top, rgba(255, 255, 255, 0.5), transparent 38%),
+          radial-gradient(
+            circle at top,
+            rgba(255, 255, 255, 0.5),
+            transparent 38%
+          ),
           linear-gradient(180deg, #f9f0e3 0%, #f1e3cf 58%, #ead6b6 100%);
       }
 
@@ -433,7 +464,11 @@
         position: absolute;
         inset: auto 30px 48px 30px;
         height: 1px;
-        background: repeating-linear-gradient(90deg, rgba(120, 94, 69, 0.24) 0 1px, transparent 1px 28px);
+        background: repeating-linear-gradient(
+          90deg,
+          rgba(120, 94, 69, 0.24) 0 1px,
+          transparent 1px 28px
+        );
       }
 
       .scene-floor {
@@ -470,7 +505,12 @@
       .cabinet::before {
         content: "";
         inset: 0;
-        background: linear-gradient(90deg, rgba(255, 255, 255, 0.28), transparent 36% 64%, rgba(76, 42, 20, 0.15));
+        background: linear-gradient(
+          90deg,
+          rgba(255, 255, 255, 0.28),
+          transparent 36% 64%,
+          rgba(76, 42, 20, 0.15)
+        );
       }
 
       .cabinet::after {
@@ -506,7 +546,13 @@
         top: 16px;
         bottom: 16px;
         width: calc(50% - 12px);
-        background: linear-gradient(180deg, rgba(255,255,255,0.22), rgba(96, 58, 26, 0.12)), linear-gradient(145deg, #d79c63, #b56d36);
+        background:
+          linear-gradient(
+            180deg,
+            rgba(255, 255, 255, 0.22),
+            rgba(96, 58, 26, 0.12)
+          ),
+          linear-gradient(145deg, #d79c63, #b56d36);
         border: 2px solid rgba(76, 47, 23, 0.55);
       }
 
@@ -684,7 +730,11 @@
         width: 188px;
         border-radius: 30px;
         padding: 12px;
-        background: linear-gradient(180deg, rgba(30, 22, 17, 0.92), rgba(61, 40, 24, 0.9));
+        background: linear-gradient(
+          180deg,
+          rgba(30, 22, 17, 0.92),
+          rgba(61, 40, 24, 0.9)
+        );
         border: 1px solid rgba(255, 255, 255, 0.08);
         box-shadow: 0 24px 44px rgba(33, 22, 12, 0.22);
         color: #fff7ef;
@@ -743,7 +793,10 @@
             <div class="brand-mark"></div>
             <div class="brand-copy">
               <h1>Workshop Console</h1>
-              <p>تصور واجهة جديد يركز على التنفيذ السريع + قراءة الألواح + 3D أوضح.</p>
+              <p>
+                تصور واجهة جديد يركز على التنفيذ السريع + قراءة الألواح + 3D
+                أوضح.
+              </p>
             </div>
           </div>
         </header>
@@ -754,7 +807,10 @@
               <div class="card-inner">
                 <div class="eyebrow">Project Rail</div>
                 <h2 class="section-title">الوحدات والإعدادات</h2>
-                <p class="section-copy">عمود ثابت يلم كل ما يخص المشروع الحالي: الوحدات، المقاسات، السمك، وسعر التنفيذ.</p>
+                <p class="section-copy">
+                  عمود ثابت يلم كل ما يخص المشروع الحالي: الوحدات، المقاسات،
+                  السمك، وسعر التنفيذ.
+                </p>
 
                 <div class="unit-list">
                   <div class="unit-item active">
@@ -781,13 +837,24 @@
                 </div>
 
                 <div class="settings-stack">
-                  <div class="settings-line"><strong>الخامة</strong><span>كونتر</span></div>
-                  <div class="settings-line"><strong>سمك اللوح</strong><span>18 مم</span></div>
-                  <div class="settings-line"><strong>لوح القص</strong><span>120 × 240 سم</span></div>
-                  <div class="settings-line"><strong>سعر المفصلة</strong><span>25 ج / قطعة</span></div>
+                  <div class="settings-line">
+                    <strong>الخامة</strong><span>كونتر</span>
+                  </div>
+                  <div class="settings-line">
+                    <strong>سمك اللوح</strong><span>18 مم</span>
+                  </div>
+                  <div class="settings-line">
+                    <strong>لوح القص</strong><span>120 × 240 سم</span>
+                  </div>
+                  <div class="settings-line">
+                    <strong>سعر المفصلة</strong><span>25 ج / قطعة</span>
+                  </div>
                 </div>
 
-                <div class="footer-note">الفكرة: العمود ده يفضل ظاهر طول الوقت بدل التنقل الكثير بين التبويبات</div>
+                <div class="footer-note">
+                  الفكرة: العمود ده يفضل ظاهر طول الوقت بدل التنقل الكثير بين
+                  التبويبات
+                </div>
               </div>
             </section>
           </aside>
@@ -822,7 +889,10 @@
                   <div>
                     <div class="eyebrow">3D Studio</div>
                     <h2 class="section-title">مسرح المشروع</h2>
-                    <p class="section-copy">المشهد الرئيسي يصبح بطل الشاشة: وحدات أوضح، باب مفتوح، وحالة التنفيذ الحية في نفس المكان.</p>
+                    <p class="section-copy">
+                      المشهد الرئيسي يصبح بطل الشاشة: وحدات أوضح، باب مفتوح،
+                      وحالة التنفيذ الحية في نفس المكان.
+                    </p>
                   </div>
                   <div class="mini-actions">
                     <div class="chip">قياسات مباشرة</div>
@@ -866,7 +936,8 @@
                   </div>
                   <div class="floating-note">
                     <strong>ليش هذا الشكل؟</strong>
-                    لأن 3D عندك مهم، لكن لازم يندمج مع قرارات القص بدل ما يفضل شاشة منفصلة عن النتيجة.
+                    لأن 3D عندك مهم، لكن لازم يندمج مع قرارات القص بدل ما يفضل
+                    شاشة منفصلة عن النتيجة.
                   </div>
                 </div>
 
@@ -883,20 +954,135 @@
                       </div>
                     </div>
                     <div class="sheet-visual">
-                      <svg viewBox="0 0 390 235" xmlns="http://www.w3.org/2000/svg">
-                        <rect x="12" y="10" width="366" height="214" rx="16" fill="#fffdf8" stroke="#d2bda0" stroke-width="3"/>
-                        <rect x="26" y="24" width="124" height="82" rx="10" fill="#d28b4e" opacity="0.82"/>
-                        <rect x="156" y="24" width="96" height="82" rx="10" fill="#c0773d" opacity="0.88"/>
-                        <rect x="258" y="24" width="104" height="120" rx="10" fill="#dca063" opacity="0.82"/>
-                        <rect x="26" y="112" width="226" height="98" rx="10" fill="#b8753f" opacity="0.8"/>
-                        <rect x="258" y="150" width="104" height="60" rx="10" fill="#ebb47b" opacity="0.85"/>
-                        <text x="88" y="40" text-anchor="middle" font-size="11" font-weight="700" fill="#17110d">79.4</text>
-                        <text x="38" y="74" transform="rotate(-90 38 74)" text-anchor="middle" font-size="11" font-weight="700" fill="#17110d">44.55</text>
-                        <text x="204" y="40" text-anchor="middle" font-size="11" font-weight="700" fill="#17110d">60</text>
-                        <text x="275" y="82" transform="rotate(-90 275 82)" text-anchor="middle" font-size="11" font-weight="700" fill="#17110d">71.4</text>
-                        <text x="188" y="165" text-anchor="middle" font-size="13" font-weight="800" fill="#fff9f2">P-016 • دلفة</text>
-                        <line x1="26" y1="24" x2="150" y2="24" stroke="#1f2937" stroke-width="1.7" stroke-dasharray="9 7"/>
-                        <line x1="258" y1="24" x2="258" y2="144" stroke="#1f2937" stroke-width="1.7" stroke-dasharray="9 7"/>
+                      <svg
+                        viewBox="0 0 390 235"
+                        xmlns="http://www.w3.org/2000/svg"
+                      >
+                        <rect
+                          x="12"
+                          y="10"
+                          width="366"
+                          height="214"
+                          rx="16"
+                          fill="#fffdf8"
+                          stroke="#d2bda0"
+                          stroke-width="3"
+                        />
+                        <rect
+                          x="26"
+                          y="24"
+                          width="124"
+                          height="82"
+                          rx="10"
+                          fill="#d28b4e"
+                          opacity="0.82"
+                        />
+                        <rect
+                          x="156"
+                          y="24"
+                          width="96"
+                          height="82"
+                          rx="10"
+                          fill="#c0773d"
+                          opacity="0.88"
+                        />
+                        <rect
+                          x="258"
+                          y="24"
+                          width="104"
+                          height="120"
+                          rx="10"
+                          fill="#dca063"
+                          opacity="0.82"
+                        />
+                        <rect
+                          x="26"
+                          y="112"
+                          width="226"
+                          height="98"
+                          rx="10"
+                          fill="#b8753f"
+                          opacity="0.8"
+                        />
+                        <rect
+                          x="258"
+                          y="150"
+                          width="104"
+                          height="60"
+                          rx="10"
+                          fill="#ebb47b"
+                          opacity="0.85"
+                        />
+                        <text
+                          x="88"
+                          y="40"
+                          text-anchor="middle"
+                          font-size="11"
+                          font-weight="700"
+                          fill="#17110d"
+                        >
+                          79.4
+                        </text>
+                        <text
+                          x="38"
+                          y="74"
+                          transform="rotate(-90 38 74)"
+                          text-anchor="middle"
+                          font-size="11"
+                          font-weight="700"
+                          fill="#17110d"
+                        >
+                          44.55
+                        </text>
+                        <text
+                          x="204"
+                          y="40"
+                          text-anchor="middle"
+                          font-size="11"
+                          font-weight="700"
+                          fill="#17110d"
+                        >
+                          60
+                        </text>
+                        <text
+                          x="275"
+                          y="82"
+                          transform="rotate(-90 275 82)"
+                          text-anchor="middle"
+                          font-size="11"
+                          font-weight="700"
+                          fill="#17110d"
+                        >
+                          71.4
+                        </text>
+                        <text
+                          x="188"
+                          y="165"
+                          text-anchor="middle"
+                          font-size="13"
+                          font-weight="800"
+                          fill="#fff9f2"
+                        >
+                          P-016 • دلفة
+                        </text>
+                        <line
+                          x1="26"
+                          y1="24"
+                          x2="150"
+                          y2="24"
+                          stroke="#1f2937"
+                          stroke-width="1.7"
+                          stroke-dasharray="9 7"
+                        />
+                        <line
+                          x1="258"
+                          y1="24"
+                          x2="258"
+                          y2="144"
+                          stroke="#1f2937"
+                          stroke-width="1.7"
+                          stroke-dasharray="9 7"
+                        />
                       </svg>
                     </div>
                   </article>
@@ -905,24 +1091,118 @@
                     <div class="sheet-header">
                       <div>
                         <strong>لوح ظهر 6 مم • رقم 1</strong>
-                        <span>ألواح منظمة للطباعة المباشرة + كود القطعة واضح</span>
+                        <span
+                          >ألواح منظمة للطباعة المباشرة + كود القطعة واضح</span
+                        >
                       </div>
                       <div class="mini-actions">
                         <div class="chip accent">مراجعة الهالك</div>
                       </div>
                     </div>
                     <div class="sheet-visual">
-                      <svg viewBox="0 0 390 235" xmlns="http://www.w3.org/2000/svg">
-                        <rect x="12" y="10" width="366" height="214" rx="16" fill="#fffdf8" stroke="#d2bda0" stroke-width="3"/>
-                        <rect x="24" y="22" width="168" height="96" rx="10" fill="#9db0b9" opacity="0.86"/>
-                        <rect x="198" y="22" width="166" height="62" rx="10" fill="#8aa0aa" opacity="0.86"/>
-                        <rect x="198" y="90" width="80" height="118" rx="10" fill="#7f929c" opacity="0.8"/>
-                        <rect x="284" y="90" width="80" height="118" rx="10" fill="#a9bcc4" opacity="0.9"/>
-                        <text x="108" y="40" text-anchor="middle" font-size="11" font-weight="700" fill="#17110d">78.4</text>
-                        <text x="36" y="72" transform="rotate(-90 36 72)" text-anchor="middle" font-size="11" font-weight="700" fill="#17110d">70</text>
-                        <text x="278" y="55" text-anchor="middle" font-size="13" font-weight="800" fill="#fffaf5">P-004 • ظهر</text>
-                        <text x="238" y="110" transform="rotate(-90 238 110)" text-anchor="middle" font-size="11" font-weight="700" fill="#17110d">33.5</text>
-                        <text x="324" y="110" transform="rotate(-90 324 110)" text-anchor="middle" font-size="11" font-weight="700" fill="#17110d">33.5</text>
+                      <svg
+                        viewBox="0 0 390 235"
+                        xmlns="http://www.w3.org/2000/svg"
+                      >
+                        <rect
+                          x="12"
+                          y="10"
+                          width="366"
+                          height="214"
+                          rx="16"
+                          fill="#fffdf8"
+                          stroke="#d2bda0"
+                          stroke-width="3"
+                        />
+                        <rect
+                          x="24"
+                          y="22"
+                          width="168"
+                          height="96"
+                          rx="10"
+                          fill="#9db0b9"
+                          opacity="0.86"
+                        />
+                        <rect
+                          x="198"
+                          y="22"
+                          width="166"
+                          height="62"
+                          rx="10"
+                          fill="#8aa0aa"
+                          opacity="0.86"
+                        />
+                        <rect
+                          x="198"
+                          y="90"
+                          width="80"
+                          height="118"
+                          rx="10"
+                          fill="#7f929c"
+                          opacity="0.8"
+                        />
+                        <rect
+                          x="284"
+                          y="90"
+                          width="80"
+                          height="118"
+                          rx="10"
+                          fill="#a9bcc4"
+                          opacity="0.9"
+                        />
+                        <text
+                          x="108"
+                          y="40"
+                          text-anchor="middle"
+                          font-size="11"
+                          font-weight="700"
+                          fill="#17110d"
+                        >
+                          78.4
+                        </text>
+                        <text
+                          x="36"
+                          y="72"
+                          transform="rotate(-90 36 72)"
+                          text-anchor="middle"
+                          font-size="11"
+                          font-weight="700"
+                          fill="#17110d"
+                        >
+                          70
+                        </text>
+                        <text
+                          x="278"
+                          y="55"
+                          text-anchor="middle"
+                          font-size="13"
+                          font-weight="800"
+                          fill="#fffaf5"
+                        >
+                          P-004 • ظهر
+                        </text>
+                        <text
+                          x="238"
+                          y="110"
+                          transform="rotate(-90 238 110)"
+                          text-anchor="middle"
+                          font-size="11"
+                          font-weight="700"
+                          fill="#17110d"
+                        >
+                          33.5
+                        </text>
+                        <text
+                          x="324"
+                          y="110"
+                          transform="rotate(-90 324 110)"
+                          text-anchor="middle"
+                          font-size="11"
+                          font-weight="700"
+                          fill="#17110d"
+                        >
+                          33.5
+                        </text>
                       </svg>
                     </div>
                   </article>
@@ -936,20 +1216,32 @@
               <div class="card-inner">
                 <div class="eyebrow">Smart Guide</div>
                 <h2 class="section-title">ملخص ذكي</h2>
-                <p class="section-copy">يمين الشاشة يركز على القرار: هل الخطة كويسة؟ أين الهالك؟ أي لوح يستحق المراجعة؟</p>
+                <p class="section-copy">
+                  يمين الشاشة يركز على القرار: هل الخطة كويسة؟ أين الهالك؟ أي
+                  لوح يستحق المراجعة؟
+                </p>
 
                 <div class="recommend-stack">
                   <div class="recommendation accent">
                     <strong>اقتراح تحسين مباشر</strong>
-                    <span>دمج وحدتي الحوض والبوتاجاز على نفس ترتيب القص قد يوفر لوح 18 مم واحد.</span>
+                    <span
+                      >دمج وحدتي الحوض والبوتاجاز على نفس ترتيب القص قد يوفر لوح
+                      18 مم واحد.</span
+                    >
                   </div>
                   <div class="recommendation teal">
                     <strong>تنبيه تنفيذ</strong>
-                    <span>الدلفة الطويلة أعلى من 120 سم، لذلك تمت إضافة 3 مفصلات تلقائيًا.</span>
+                    <span
+                      >الدلفة الطويلة أعلى من 120 سم، لذلك تمت إضافة 3 مفصلات
+                      تلقائيًا.</span
+                    >
                   </div>
                   <div class="recommendation">
                     <strong>إخراج واضح للطباعة</strong>
-                    <span>شريط الحافة بخط متقطع، والمقاس على الضلع نفسه بدل النص الوسطي القديم.</span>
+                    <span
+                      >شريط الحافة بخط متقطع، والمقاس على الضلع نفسه بدل النص
+                      الوسطي القديم.</span
+                    >
                   </div>
                 </div>
 
@@ -963,26 +1255,102 @@
                   </div>
 
                   <div class="active-board-visual">
-                    <svg viewBox="0 0 322 210" xmlns="http://www.w3.org/2000/svg">
-                      <rect x="14" y="12" width="294" height="186" rx="16" fill="#fffdf7" stroke="#d3be9f" stroke-width="3"/>
-                      <rect x="28" y="28" width="118" height="76" rx="10" fill="#d58d4b"/>
-                      <rect x="152" y="28" width="68" height="76" rx="10" fill="#c3773b"/>
-                      <rect x="226" y="28" width="68" height="162" rx="10" fill="#e2a36a"/>
-                      <rect x="28" y="110" width="192" height="80" rx="10" fill="#b96d36"/>
-                      <text x="124" y="153" text-anchor="middle" font-size="12" font-weight="800" fill="#fffaf2">P-016 • دلفة</text>
-                      <text x="84" y="44" text-anchor="middle" font-size="10" font-weight="700" fill="#17110d">79.4</text>
-                      <text x="38" y="66" transform="rotate(-90 38 66)" text-anchor="middle" font-size="10" font-weight="700" fill="#17110d">44.55</text>
+                    <svg
+                      viewBox="0 0 322 210"
+                      xmlns="http://www.w3.org/2000/svg"
+                    >
+                      <rect
+                        x="14"
+                        y="12"
+                        width="294"
+                        height="186"
+                        rx="16"
+                        fill="#fffdf7"
+                        stroke="#d3be9f"
+                        stroke-width="3"
+                      />
+                      <rect
+                        x="28"
+                        y="28"
+                        width="118"
+                        height="76"
+                        rx="10"
+                        fill="#d58d4b"
+                      />
+                      <rect
+                        x="152"
+                        y="28"
+                        width="68"
+                        height="76"
+                        rx="10"
+                        fill="#c3773b"
+                      />
+                      <rect
+                        x="226"
+                        y="28"
+                        width="68"
+                        height="162"
+                        rx="10"
+                        fill="#e2a36a"
+                      />
+                      <rect
+                        x="28"
+                        y="110"
+                        width="192"
+                        height="80"
+                        rx="10"
+                        fill="#b96d36"
+                      />
+                      <text
+                        x="124"
+                        y="153"
+                        text-anchor="middle"
+                        font-size="12"
+                        font-weight="800"
+                        fill="#fffaf2"
+                      >
+                        P-016 • دلفة
+                      </text>
+                      <text
+                        x="84"
+                        y="44"
+                        text-anchor="middle"
+                        font-size="10"
+                        font-weight="700"
+                        fill="#17110d"
+                      >
+                        79.4
+                      </text>
+                      <text
+                        x="38"
+                        y="66"
+                        transform="rotate(-90 38 66)"
+                        text-anchor="middle"
+                        font-size="10"
+                        font-weight="700"
+                        fill="#17110d"
+                      >
+                        44.55
+                      </text>
                     </svg>
                   </div>
 
                   <div class="queue-stack">
-                    <div class="queue-line"><strong>أول قصّة</strong><span>طولي 240 سم</span></div>
-                    <div class="queue-line"><strong>عدد القطع</strong><span>5 قطع صافية</span></div>
-                    <div class="queue-line"><strong>شريط الحافة</strong><span>3 أضلاع نشطة</span></div>
+                    <div class="queue-line">
+                      <strong>أول قصّة</strong><span>طولي 240 سم</span>
+                    </div>
+                    <div class="queue-line">
+                      <strong>عدد القطع</strong><span>5 قطع صافية</span>
+                    </div>
+                    <div class="queue-line">
+                      <strong>شريط الحافة</strong><span>3 أضلاع نشطة</span>
+                    </div>
                   </div>
                 </div>
 
-                <div class="footer-note">اليمين هنا ليس مجرد summary، بل مركز قرارات التنفيذ والطباعة</div>
+                <div class="footer-note">
+                  اليمين هنا ليس مجرد summary، بل مركز قرارات التنفيذ والطباعة
+                </div>
               </div>
             </section>
           </aside>
@@ -990,18 +1358,29 @@
 
         <aside class="mobile-peek">
           <div class="mobile-card">
-            <strong style="font-size: 14px;">نسخة موبايل سريعة</strong>
-            <div style="margin-top: 8px; font-size: 11px; color: rgba(255,247,239,0.76); line-height: 1.8;">
+            <strong style="font-size: 14px">نسخة موبايل سريعة</strong>
+            <div
+              style="
+                margin-top: 8px;
+                font-size: 11px;
+                color: rgba(255, 247, 239, 0.76);
+                line-height: 1.8;
+              "
+            >
               Cards مختصرة + زر حساب ثابت + لوح نشط واحد فقط في البداية.
             </div>
           </div>
           <div class="mobile-metric">
-            <div style="font-size: 11px; color: rgba(255,247,239,0.72);">لوح نشط</div>
-            <div style="font-size: 22px; font-weight: 800;">#3</div>
+            <div style="font-size: 11px; color: rgba(255, 247, 239, 0.72)">
+              لوح نشط
+            </div>
+            <div style="font-size: 22px; font-weight: 800">#3</div>
           </div>
           <div class="mobile-metric">
-            <div style="font-size: 11px; color: rgba(255,247,239,0.72);">التكلفة</div>
-            <div style="font-size: 22px; font-weight: 800;">18,420</div>
+            <div style="font-size: 11px; color: rgba(255, 247, 239, 0.72)">
+              التكلفة
+            </div>
+            <div style="font-size: 22px; font-weight: 800">18,420</div>
           </div>
         </aside>
       </main>
