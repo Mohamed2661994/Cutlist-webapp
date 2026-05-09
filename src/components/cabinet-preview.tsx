@@ -34,6 +34,7 @@ type CabinetModelProps = CabinetPreviewProps & {
   doorsOpen?: boolean;
   showDoorToggle?: boolean;
   onToggleDoors?: () => void;
+  insidePeek?: boolean;
 };
 
 type ProjectPreviewProps = {
@@ -52,7 +53,30 @@ type ProjectPreviewProps = {
     unitId: string,
     nextPosition: { x: number; z: number },
   ) => void;
+  onUnitNudge?: (unitId: string, axis: "x" | "y" | "z", delta: number) => void;
+  onUnitRotate?: (unitId: string, delta: number) => void;
   onCanvasReady?: (canvas: HTMLCanvasElement | null) => void;
+  showQuickControls?: boolean;
+};
+
+type ProjectPreviewInteractionMode = "camera" | "move";
+type ProjectPreviewCameraAction = "inside";
+
+type ProjectPreviewCameraTransition = {
+  positionFrom: Vector3;
+  positionTo: Vector3;
+  targetFrom: Vector3;
+  targetTo: Vector3;
+  fovFrom: number;
+  fovTo: number;
+  nearFrom: number;
+  nearTo: number;
+  minDistanceFrom: number;
+  minDistanceTo: number;
+  maxDistanceFrom: number;
+  maxDistanceTo: number;
+  elapsed: number;
+  duration: number;
 };
 
 type PanelProps = {
@@ -134,6 +158,10 @@ function resolvePreviewPanelColor(color: string) {
 
 function clamp(value: number, min: number, max: number) {
   return Math.min(Math.max(value, min), max);
+}
+
+function lerpNumber(start: number, end: number, progress: number) {
+  return start + (end - start) * progress;
 }
 
 function snapToStep(value: number, step: number) {
@@ -242,6 +270,7 @@ function Panel({
             roughness={0.55}
             metalness={0.05}
             transparent={opacity < 1}
+            depthWrite={opacity >= 0.95}
             opacity={opacity}
           />
         </mesh>
@@ -252,6 +281,7 @@ function Panel({
               <meshBasicMaterial
                 color={previewPalette.grain}
                 transparent
+                depthWrite={false}
                 opacity={0.28}
               />
             </mesh>
@@ -260,6 +290,7 @@ function Panel({
               <meshBasicMaterial
                 color={previewPalette.grain}
                 transparent
+                depthWrite={false}
                 opacity={0.18}
               />
             </mesh>
@@ -353,6 +384,73 @@ function HingedFrontPanel({
       </group>
     </group>
   );
+}
+
+function ProjectCameraTransitionController({
+  cameraRef,
+  controlsRef,
+  transitionRef,
+}: {
+  cameraRef: { current: Camera | null };
+  controlsRef: { current: OrbitControlsImpl | null };
+  transitionRef: { current: ProjectPreviewCameraTransition | null };
+}) {
+  useFrame((_, delta) => {
+    const camera = cameraRef.current;
+    const controls = controlsRef.current;
+    const transition = transitionRef.current;
+
+    if (!camera || !controls || !transition) {
+      return;
+    }
+
+    transition.elapsed = Math.min(transition.elapsed + delta, transition.duration);
+    const rawProgress =
+      transition.duration <= 0
+        ? 1
+        : clamp(transition.elapsed / transition.duration, 0, 1);
+    const easedProgress = 1 - Math.pow(1 - rawProgress, 3);
+
+    camera.position.lerpVectors(
+      transition.positionFrom,
+      transition.positionTo,
+      easedProgress,
+    );
+    controls.target.lerpVectors(
+      transition.targetFrom,
+      transition.targetTo,
+      easedProgress,
+    );
+    controls.minDistance = lerpNumber(
+      transition.minDistanceFrom,
+      transition.minDistanceTo,
+      easedProgress,
+    );
+    controls.maxDistance = lerpNumber(
+      transition.maxDistanceFrom,
+      transition.maxDistanceTo,
+      easedProgress,
+    );
+
+    if (camera instanceof PerspectiveCamera) {
+      camera.fov = lerpNumber(transition.fovFrom, transition.fovTo, easedProgress);
+      camera.near = lerpNumber(
+        transition.nearFrom,
+        transition.nearTo,
+        easedProgress,
+      );
+      camera.updateProjectionMatrix();
+    }
+
+    controls.enabled = rawProgress >= 1;
+    controls.update();
+
+    if (rawProgress >= 1) {
+      transitionRef.current = null;
+    }
+  });
+
+  return null;
 }
 
 function DoorToggleButton({ position, open, onToggle }: DoorToggleButtonProps) {
@@ -610,6 +708,7 @@ function CabinetModel({
   doorsOpen = false,
   showDoorToggle = false,
   onToggleDoors,
+  insidePeek = false,
 }: CabinetModelProps) {
   const isCornerLBase =
     input.cabinetType === "corner-l-base" ||
@@ -671,6 +770,34 @@ function CabinetModel({
     return part ? part.id === selectedPartId : false;
   }
 
+  function bodyOpacity(kind: "side" | "bottom" | "top" | "back" | "shelf" | "brace") {
+    if (!insidePeek) {
+      return 1;
+    }
+
+    if (kind === "top") {
+      return 0.01;
+    }
+
+    if (kind === "bottom") {
+      return 0.14;
+    }
+
+    if (kind === "side") {
+      return 0.12;
+    }
+
+    if (kind === "back") {
+      return 0.28;
+    }
+
+    if (kind === "shelf") {
+      return 0.18;
+    }
+
+    return 0.1;
+  }
+
   if (isCornerLBase) {
     const armWidth = Math.max(mainArmLength, board * 4);
     const armDepth = Math.max(depth, board * 4);
@@ -699,6 +826,7 @@ function CabinetModel({
       y: number,
       color: string,
       labelOffset: [number, number, number],
+      opacity = 1,
     ) {
       return (
         <>
@@ -706,6 +834,7 @@ function CabinetModel({
             size={[armWidth, board, armDepth]}
             position={[0, y, 0]}
             color={color}
+            opacity={opacity}
             highlighted={isSelected(part)}
             label={showPartLabels ? formatPartLabel(part) : undefined}
             labelOffset={labelOffset}
@@ -717,6 +846,7 @@ function CabinetModel({
             size={[armDepth, board, returnArm]}
             position={[returnX, y, returnBackZ]}
             color={color}
+            opacity={opacity}
             highlighted={isSelected(part)}
             grainDirection={part.grainDirection}
             lengthAxis="x"
@@ -738,6 +868,7 @@ function CabinetModel({
             0,
           ]}
           color="#a07751"
+          opacity={bodyOpacity("side")}
           highlighted={isSelected(side)}
           label={showPartLabels ? formatPartLabel(side) : undefined}
           labelOffset={[input.cornerHand === "left" ? 0.08 : -0.08, 0.05, 0]}
@@ -749,6 +880,7 @@ function CabinetModel({
           size={[armDepth, bodyHeight, board]}
           position={[returnX, bodyCenterY, -returnArm / 2 + board / 2]}
           color="#a07751"
+          opacity={bodyOpacity("side")}
           highlighted={isSelected(side)}
           label={showPartLabels ? formatPartLabel(side) : undefined}
           labelOffset={[0, 0.05, -0.08]}
@@ -758,17 +890,32 @@ function CabinetModel({
         />
 
         {bottom
-          ? renderCornerDeck(bottom, bottomY, "#b88d60", [0, 0.05, 0.04])
+          ? renderCornerDeck(
+              bottom,
+              bottomY,
+              "#b88d60",
+              [0, 0.05, 0.04],
+              bodyOpacity("bottom"),
+            )
           : null}
 
-        {top ? renderCornerDeck(top, topY, "#b88d60", [0, 0.05, 0.04]) : null}
+        {top && !insidePeek
+          ? renderCornerDeck(
+              top,
+              topY,
+              "#b88d60",
+              [0, 0.05, 0.04],
+              bodyOpacity("top"),
+            )
+          : null}
 
-        {stretchers ? (
+        {stretchers && !insidePeek ? (
           <>
             <Panel
               size={[armWidth, board, stretchers.width / 100]}
               position={[0, topY, armDepth / 2 - stretchers.width / 200]}
               color="#8b6a49"
+              opacity={bodyOpacity("brace")}
               highlighted={isSelected(stretchers)}
               label={showPartLabels ? formatPartLabel(stretchers) : undefined}
               labelOffset={[0, 0.05, 0.06]}
@@ -784,6 +931,7 @@ function CabinetModel({
                 -returnArm / 2 + Math.max(returnArm - board, board) / 2,
               ]}
               color="#8b6a49"
+              opacity={bodyOpacity("brace")}
               highlighted={isSelected(stretchers)}
               grainDirection={stretchers.grainDirection}
               lengthAxis="x"
@@ -798,6 +946,7 @@ function CabinetModel({
               size={[armWidth, bodyHeight, back]}
               position={[0, bodyCenterY, -armDepth / 2 + back / 2]}
               color="#8093a1"
+              opacity={bodyOpacity("back")}
               highlighted={isSelected(backPart)}
               label={showPartLabels ? formatPartLabel(backPart) : undefined}
               labelOffset={[0, 0.05, -0.03]}
@@ -815,6 +964,7 @@ function CabinetModel({
                 returnBackZ,
               ]}
               color="#8093a1"
+              opacity={bodyOpacity("back")}
               highlighted={isSelected(backPart)}
               grainDirection={backPart.grainDirection}
               lengthAxis="z"
@@ -836,6 +986,7 @@ function CabinetModel({
                       size={[armWidth, board, armDepth]}
                       position={[0, shelfY, 0]}
                       color="#d8bd87"
+                      opacity={bodyOpacity("shelf")}
                       highlighted={isSelected(shelf)}
                       label={
                         showPartLabels ? formatPartLabel(shelf) : undefined
@@ -848,6 +999,7 @@ function CabinetModel({
                       size={[armDepth, board, returnArm]}
                       position={[returnX, shelfY, returnBackZ]}
                       color="#d8bd87"
+                      opacity={bodyOpacity("shelf")}
                       highlighted={isSelected(shelf)}
                       grainDirection={shelf.grainDirection}
                       lengthAxis="x"
@@ -919,6 +1071,7 @@ function CabinetModel({
         size={[board, bodyHeight, depth]}
         position={[leftX, bodyCenterY, 0]}
         color="#a07751"
+        opacity={bodyOpacity("side")}
         highlighted={isSelected(side)}
         label={showPartLabels ? formatPartLabel(side) : undefined}
         labelOffset={[-0.08, 0.05, 0]}
@@ -930,6 +1083,7 @@ function CabinetModel({
         size={[board, bodyHeight, depth]}
         position={[rightX, bodyCenterY, 0]}
         color="#a07751"
+        opacity={bodyOpacity("side")}
         highlighted={isSelected(side)}
         label={showPartLabels ? formatPartLabel(side) : undefined}
         labelOffset={[0.08, 0.05, 0]}
@@ -943,6 +1097,7 @@ function CabinetModel({
           size={[bottom.length / 100, board, bottom.width / 100]}
           position={[0, bottomY, shelfZ]}
           color="#b88d60"
+          opacity={bodyOpacity("bottom")}
           highlighted={isSelected(bottom)}
           label={showPartLabels ? formatPartLabel(bottom) : undefined}
           grainDirection={bottom.grainDirection}
@@ -951,11 +1106,12 @@ function CabinetModel({
         />
       ) : null}
 
-      {top ? (
+      {top && !insidePeek ? (
         <Panel
           size={[top.length / 100, board, top.width / 100]}
           position={[0, topY, shelfZ]}
           color="#b88d60"
+          opacity={bodyOpacity("top")}
           highlighted={isSelected(top)}
           label={showPartLabels ? formatPartLabel(top) : undefined}
           grainDirection={top.grainDirection}
@@ -964,12 +1120,13 @@ function CabinetModel({
         />
       ) : null}
 
-      {stretchers ? (
+      {stretchers && !insidePeek ? (
         <>
           <Panel
             size={[stretchers.length / 100, board, stretchers.width / 100]}
             position={[0, topY, depth / 2 - stretchers.width / 200]}
             color="#8b6a49"
+            opacity={bodyOpacity("brace")}
             highlighted={isSelected(stretchers)}
             label={showPartLabels ? formatPartLabel(stretchers) : undefined}
             labelOffset={[0, 0.05, 0.06]}
@@ -981,6 +1138,7 @@ function CabinetModel({
             size={[stretchers.length / 100, board, stretchers.width / 100]}
             position={[0, topY, -depth / 2 + stretchers.width / 200 + back]}
             color="#8b6a49"
+            opacity={bodyOpacity("brace")}
             highlighted={isSelected(stretchers)}
             label={showPartLabels ? formatPartLabel(stretchers) : undefined}
             labelOffset={[0, 0.05, -0.06]}
@@ -996,6 +1154,7 @@ function CabinetModel({
           size={[width - 0.004, bodyHeight - 0.004, back]}
           position={[0, bodyCenterY, -depth / 2 + back / 2]}
           color="#8093a1"
+          opacity={bodyOpacity("back")}
           highlighted={isSelected(backPart)}
           label={showPartLabels ? formatPartLabel(backPart) : undefined}
           labelOffset={[0, 0.05, -0.03]}
@@ -1010,6 +1169,7 @@ function CabinetModel({
           size={[fixedShelf.length / 100, board, fixedShelf.width / 100]}
           position={[0, cabinetBaseY + bodyHeight * 0.5, shelfZ]}
           color="#bca16e"
+          opacity={bodyOpacity("shelf")}
           highlighted={isSelected(fixedShelf)}
           label={showPartLabels ? formatPartLabel(fixedShelf) : undefined}
           grainDirection={fixedShelf.grainDirection}
@@ -1029,6 +1189,7 @@ function CabinetModel({
                   size={[shelf.length / 100, board, shelf.width / 100]}
                   position={[0, cabinetBaseY + level * (index + 1), shelfZ]}
                   color="#d8bd87"
+                  opacity={bodyOpacity("shelf")}
                   highlighted={isSelected(shelf)}
                   label={showPartLabels ? formatPartLabel(shelf) : undefined}
                   grainDirection={shelf.grainDirection}
@@ -1050,6 +1211,7 @@ function CabinetModel({
               -depth / 2 + board / 2 + 0.02,
             ]}
             color="#6c7d89"
+            opacity={bodyOpacity("brace")}
             highlighted={isSelected(hangingRail)}
             label={showPartLabels ? formatPartLabel(hangingRail) : undefined}
             labelOffset={[0, 0.05, -0.03]}
@@ -1065,6 +1227,7 @@ function CabinetModel({
               -depth / 2 + board / 2 + 0.02,
             ]}
             color="#6c7d89"
+            opacity={bodyOpacity("brace")}
             highlighted={isSelected(hangingRail)}
             label={showPartLabels ? formatPartLabel(hangingRail) : undefined}
             labelOffset={[0, 0.05, -0.03]}
@@ -1080,6 +1243,7 @@ function CabinetModel({
           size={[plinth.length / 100, plinth.width / 100, board]}
           position={[0, toeKick / 2, depth / 2 - board / 2]}
           color="#70553a"
+            opacity={bodyOpacity("brace")}
           highlighted={isSelected(plinth)}
           label={showPartLabels ? formatPartLabel(plinth) : undefined}
           labelOffset={[0, 0.05, 0.05]}
@@ -1357,10 +1521,7 @@ export function CabinetPreview({
         <OrbitControls
           enableDamping
           dampingFactor={0.08}
-          enablePan={false}
-          minDistance={isCornerLBase ? 2.2 : 1.9}
-          maxDistance={isCornerLBase ? 6.2 : 5.4}
-          maxPolarAngle={isCornerLBase ? Math.PI / 1.95 : Math.PI / 2.05}
+          enablePan={true}
         />
       </Canvas>
     </div>
@@ -1371,17 +1532,29 @@ export function ProjectPreview({
   units,
   onSelectUnit,
   onUnitPositionChange,
+  onUnitNudge,
+  onUnitRotate,
   onCanvasReady,
+  showQuickControls = false,
 }: ProjectPreviewProps) {
   const positionSnapCm = 10;
   const controlsRef = useRef<OrbitControlsImpl | null>(null);
   const sceneRef = useRef<Group | null>(null);
   const cameraRef = useRef<Camera | null>(null);
+  const [initialCameraConfig] = useState(() => ({
+    position: [0, 3, 7.2] as [number, number, number],
+    fov: 34,
+  }));
+  const cameraTransitionRef = useRef<ProjectPreviewCameraTransition | null>(null);
   const canvasElementRef = useRef<HTMLCanvasElement | null>(null);
   const dragPlaneRef = useRef(new Plane(new Vector3(0, 1, 0), 0));
   const dragPointRef = useRef(new Vector3());
   const raycasterRef = useRef(new Raycaster());
   const pointerRef = useRef(new Vector2());
+  const lastUnitPointerDownRef = useRef<{
+    unitId: string;
+    timestamp: number;
+  } | null>(null);
   const dragStateRef = useRef<{
     unitId: string;
     pointerOffsetX: number;
@@ -1392,6 +1565,12 @@ export function ProjectPreview({
   const [openDoorUnits, setOpenDoorUnits] = useState<Record<string, boolean>>(
     {},
   );
+  const [interactionMode, setInteractionMode] =
+    useState<ProjectPreviewInteractionMode>("camera");
+  const [cameraMenuUnitId, setCameraMenuUnitId] = useState<string | null>(null);
+  const [cameraDistanceMode, setCameraDistanceMode] = useState<
+    "default" | "inside"
+  >("default");
 
   function toggleUnitDoors(unitId: string) {
     setOpenDoorUnits((current) => ({
@@ -1528,8 +1707,6 @@ export function ProjectPreview({
     ? 8.4
     : Math.max(11.5, round2(baseCameraDistance * 2.05));
   const targetY = Math.max(0.86, round2(sceneHeight * 0.32));
-  const fogNear = Math.max(7, round2(baseCameraDistance * 0.82));
-  const fogFar = Math.max(fogNear + 13, round2(maxCameraDistance * 1.7));
   const dragLimitX = Math.max(160, round2((layoutWidth * 100) / 2 + 60));
   const dragLimitZ = Math.max(160, round2((layoutDepth * 100) / 2 + 60));
   const activeUnitFootprint = activeUnit
@@ -1538,6 +1715,14 @@ export function ProjectPreview({
         activeUnit.input.height,
         round2(getPlanDepth(activeUnit) * 100),
       )
+    : null;
+  const canShowQuickControls =
+    showQuickControls && Boolean(activeUnit) && Boolean(onUnitNudge) && Boolean(onUnitRotate);
+  const visibleCameraMenuUnitId = units.some((unit) => unit.id === cameraMenuUnitId)
+    ? cameraMenuUnitId
+    : null;
+  const cameraMenuUnit = visibleCameraMenuUnitId
+    ? units.find((unit) => unit.id === visibleCameraMenuUnitId) ?? null
     : null;
 
   function getScenePointFromClient(
@@ -1676,6 +1861,10 @@ export function ProjectPreview({
       return;
     }
 
+    if (cameraDistanceMode === "inside") {
+      return;
+    }
+
     controls.target.set(0, targetY, 0);
     camera.position.set(
       sceneCenterX + round2(baseCameraDistance * (isSingleUnit ? 0.54 : 0.68)),
@@ -1703,6 +1892,7 @@ export function ProjectPreview({
     sceneCenterZ,
     sceneHeight,
     targetY,
+    cameraDistanceMode,
     units.length,
   ]);
 
@@ -1735,11 +1925,214 @@ export function ProjectPreview({
     }
   }
 
+  function openUnitCameraMenu(unit: ProjectPreviewProps["units"][number]) {
+    stopDragging();
+    cameraTransitionRef.current = null;
+    if (controlsRef.current) {
+      controlsRef.current.enabled = true;
+    }
+    onSelectUnit?.(unit.id);
+    setInteractionMode("camera");
+    setCameraDistanceMode("default");
+    setCameraMenuUnitId(unit.id);
+  }
+
+  function isRepeatedUnitPress(unitId: string, timestamp: number) {
+    const lastPress = lastUnitPointerDownRef.current;
+    const isDoublePress =
+      lastPress?.unitId === unitId && timestamp - lastPress.timestamp <= 320;
+
+    lastUnitPointerDownRef.current = isDoublePress
+      ? null
+      : { unitId, timestamp };
+
+    return isDoublePress;
+  }
+
+  function handleUnitPointerDown(
+    unit: ProjectPreviewProps["units"][number],
+    clientX: number,
+    clientY: number,
+    button: number,
+    timestamp: number,
+    stopPropagation: () => void,
+    dragPlaneWorldY: number,
+  ) {
+    if (button !== 0) {
+      return;
+    }
+
+    stopPropagation();
+    onSelectUnit?.(unit.id);
+
+    if (isRepeatedUnitPress(unit.id, timestamp)) {
+      openUnitCameraMenu(unit);
+      return;
+    }
+
+    if (interactionMode !== "move") {
+      return;
+    }
+
+    startDraggingUnit(unit, clientX, clientY, dragPlaneWorldY);
+  }
+
+  function focusCameraOnUnit(
+    unit: ProjectPreviewProps["units"][number],
+    action: ProjectPreviewCameraAction,
+  ) {
+    const camera = cameraRef.current;
+    const controls = controlsRef.current;
+
+    if (!camera || !controls) {
+      return;
+    }
+
+    const cabinetHeight = unit.input.height / 100;
+    const planDepth = getPlanDepth(unit);
+    const isCornerUnit =
+      unit.input.cabinetType === "corner-l-base" ||
+      unit.input.cabinetType === "corner-l-wall";
+    const unitCenter = new Vector3(
+      unit.position[0],
+      unit.position[1] + cabinetHeight * 0.46,
+      unit.position[2],
+    );
+    const frontDirection = new Vector3(0, 0, 1)
+      .applyAxisAngle(new Vector3(0, 1, 0), (unit.rotationY * Math.PI) / 180)
+      .normalize();
+    const sideDirection = new Vector3(1, 0, 0)
+      .applyAxisAngle(new Vector3(0, 1, 0), (unit.rotationY * Math.PI) / 180)
+      .normalize();
+    const toWorldPoint = (localX: number, localY: number, localZ: number) =>
+      new Vector3(unit.position[0], unit.position[1] + localY, unit.position[2])
+        .add(sideDirection.clone().multiplyScalar(localX))
+        .add(frontDirection.clone().multiplyScalar(localZ));
+    const currentFov = camera instanceof PerspectiveCamera ? camera.fov : 34;
+    const currentNear = camera instanceof PerspectiveCamera ? camera.near : 0.1;
+    const nextNear = 0.03;
+    const nextFov = action === "inside" ? (isCornerUnit ? 46 : 48) : 34;
+    const nextMinDistance = action === "inside" ? 0.18 : minCameraDistance;
+    const nextMaxDistance =
+      action === "inside"
+        ? Math.max(2.4, minCameraDistance * 1.2)
+        : maxCameraDistance;
+
+    setCameraDistanceMode("inside");
+    setOpenDoorUnits((current) => ({
+      ...current,
+      [unit.id]: true,
+    }));
+    const insideViewDirection = frontDirection;
+    const insideDistance = Math.max(planDepth * 0.88 + 0.12, 0.52);
+    const nextFrame = isCornerUnit
+      ? (() => {
+          const isWallMounted = unit.input.cabinetType === "corner-l-wall";
+          const toeKick = isWallMounted ? 0 : 0.1;
+          const cabinetBaseY = toeKick / 2;
+          const board = unit.input.boardThickness / 100;
+          const armWidth = Math.max(unit.input.width / 100, board * 4);
+          const armDepth = Math.max(unit.input.depth / 100, board * 4);
+          const returnArm = Math.max(unit.input.returnDepth / 100, armDepth);
+          const returnX =
+            unit.input.cornerHand === "left"
+              ? -armWidth / 2 + armDepth / 2
+              : armWidth / 2 - armDepth / 2;
+          const returnBackZ = -(returnArm - armDepth) / 2;
+          const cornerFront =
+            findPart(unit.result.parts, "front-main") ??
+            findPart(unit.result.parts, "front-upper") ??
+            findPart(unit.result.parts, "front-lower");
+          const cornerDoorWidth = Math.max(
+            (cornerFront?.length ?? unit.input.width / 2) / 100,
+            0.08,
+          );
+          const cornerDoorHeight = Math.max(
+            (cornerFront?.width ?? unit.input.height) / 100,
+            0.08,
+          );
+          const doorCenterOffset = (cornerDoorWidth / 2) * Math.SQRT1_2;
+          const doorOuterZ = armDepth / 2 + board * 0.28;
+          const doorCenterZ = doorOuterZ - doorCenterOffset;
+          const doorCenterY = cabinetBaseY + cornerDoorHeight / 2 + 0.01;
+          const leftDoorCenter = toWorldPoint(
+            -doorCenterOffset,
+            doorCenterY,
+            doorCenterZ,
+          );
+          const rightDoorCenter = toWorldPoint(
+            doorCenterOffset,
+            doorCenterY,
+            doorCenterZ,
+          );
+          const doorwayCenter = leftDoorCenter.clone().lerp(rightDoorCenter, 0.5);
+          const cameraAnchor = returnX >= 0 ? leftDoorCenter : rightDoorCenter;
+          const pocketCenter = toWorldPoint(
+            returnX * 0.52,
+            cabinetBaseY + cabinetHeight * 0.46,
+            returnBackZ * 0.55,
+          );
+
+          return {
+            position: cameraAnchor
+              .clone()
+              .add(frontDirection.clone().multiplyScalar(Math.max(board * 1.8, 0.24)))
+              .add(
+                sideDirection.clone().multiplyScalar(
+                  -(Math.sign(returnX) || 1) * Math.max(board * 1.2, 0.08),
+                ),
+              )
+              .setY(unit.position[1] + cabinetBaseY + cabinetHeight * 0.58),
+            target: doorwayCenter.clone().lerp(pocketCenter, 0.74),
+          };
+        })()
+      : {
+          position: new Vector3(
+            unit.position[0] + insideViewDirection.x * insideDistance,
+            unit.position[1] + cabinetHeight * 0.5,
+            unit.position[2] + insideViewDirection.z * insideDistance,
+          ),
+          target: unitCenter
+            .clone()
+            .add(new Vector3(0, cabinetHeight * 0.02, 0))
+            .add(
+              frontDirection
+                .clone()
+                .multiplyScalar(-Math.max(0.24, planDepth * 0.52)),
+            ),
+        };
+
+    cameraTransitionRef.current = {
+      positionFrom: camera.position.clone(),
+      positionTo: nextFrame.position.clone(),
+      targetFrom: controls.target.clone(),
+      targetTo: nextFrame.target.clone(),
+      fovFrom: currentFov,
+      fovTo: nextFov,
+      nearFrom: currentNear,
+      nearTo: nextNear,
+      minDistanceFrom: controls.minDistance,
+      minDistanceTo: nextMinDistance,
+      maxDistanceFrom: controls.maxDistance,
+      maxDistanceTo: nextMaxDistance,
+      elapsed: 0,
+      duration: isCornerUnit ? 0.72 : 0.58,
+    };
+    controls.enabled = false;
+
+    setInteractionMode("camera");
+    setCameraMenuUnitId(null);
+  }
+
   return (
     <div
       className={cn(
         "group relative isolate h-[35rem] w-full overflow-hidden rounded-[1.75rem] border border-slate-950/10 bg-[radial-gradient(circle_at_top,_rgba(255,255,255,0.82),_rgba(228,237,241,0.96)_50%,_rgba(209,222,228,0.98)_100%)] shadow-[0_32px_90px_-46px_rgba(26,42,51,0.38)] lg:h-[40rem]",
-        draggingUnitId ? "cursor-grabbing" : "cursor-grab",
+        draggingUnitId
+          ? "cursor-grabbing"
+          : interactionMode === "move"
+            ? "cursor-grab"
+            : "cursor-default",
       )}
       onContextMenu={(event) => event.preventDefault()}
     >
@@ -1756,20 +2149,86 @@ export function ProjectPreview({
             {formatPreviewDimension(sceneDepth * 100)}
           </p>
         </div>
-        <div className="max-w-sm rounded-2xl border border-slate-900/10 bg-slate-950/70 px-3 py-2 text-[11px] leading-5 text-white/92 shadow-[0_18px_45px_-32px_rgba(28,25,23,0.7)] backdrop-blur-sm">
-          <p>يمكنك سحب الوحدة من جسمها مباشرة أو من مقبض السحب أسفلها.</p>
-          <p>أسهم الكيبورد = حركة 10 سم، و Shift + الأسهم = حركة دقيقة 1 سم.</p>
-          <p>
-            اسحب بالماوس على المساحة الفارغة لتدوير الكاميرا، وعجلة الماوس =
-            تقريب وإبعاد.
-          </p>
+        <div className="pointer-events-auto flex flex-wrap items-center gap-2 rounded-2xl border border-white/70 bg-white/82 p-2 shadow-[0_18px_45px_-32px_rgba(26,42,51,0.26)] backdrop-blur-sm">
+          <button
+            type="button"
+            className={cn(
+              "rounded-xl px-3 py-2 text-xs font-medium transition",
+              interactionMode === "camera"
+                ? "bg-slate-950 text-white"
+                : "bg-slate-100 text-slate-700",
+            )}
+            onClick={() => setInteractionMode("camera")}
+          >
+            تحريك المشهد
+          </button>
+          <button
+            type="button"
+            className={cn(
+              "rounded-xl px-3 py-2 text-xs font-medium transition",
+              interactionMode === "move"
+                ? "bg-[linear-gradient(145deg,#31515d,#5d8596)] text-white"
+                : "bg-slate-100 text-slate-700",
+            )}
+            onClick={() => setInteractionMode("move")}
+          >
+            تحريك الوحدة
+          </button>
         </div>
       </div>
-      <div className="pointer-events-none absolute inset-x-7 bottom-5 z-10 flex flex-wrap items-end justify-between gap-3">
+      {cameraMenuUnit ? (
+        <div className="pointer-events-none absolute inset-x-4 top-24 z-20 flex justify-center">
+          <div className="pointer-events-auto w-full max-w-md rounded-[1.35rem] border border-white/80 bg-white/94 p-3 shadow-[0_24px_60px_-32px_rgba(26,42,51,0.34)] backdrop-blur-sm">
+            <div className="flex items-center justify-between gap-3">
+              <div className="text-right">
+                <p className="text-xs font-semibold text-slate-950">
+                  {cameraMenuUnit.title}
+                </p>
+                <p className="text-[11px] text-slate-500">
+                  حرّك الوحدة لأعلى أو لأسفل، أو افتح زوم داخلها.
+                </p>
+              </div>
+              <button
+                type="button"
+                className="rounded-xl border border-slate-200 px-3 py-2 text-[11px] font-medium text-slate-600 transition hover:bg-slate-50"
+                onClick={() => setCameraMenuUnitId(null)}
+              >
+                إغلاق
+              </button>
+            </div>
+            <div className="mt-3 grid grid-cols-3 gap-2 text-[11px] font-medium text-slate-700">
+              <button
+                type="button"
+                className="rounded-xl bg-slate-100 px-3 py-2 transition hover:bg-slate-200"
+                onClick={() => onUnitNudge?.(cameraMenuUnit.id, "y", 10)}
+              >
+                فوق
+              </button>
+              <button
+                type="button"
+                className="rounded-xl bg-slate-100 px-3 py-2 transition hover:bg-slate-200"
+                onClick={() => onUnitNudge?.(cameraMenuUnit.id, "y", -10)}
+              >
+                أسفل
+              </button>
+              <button
+                type="button"
+                className="rounded-xl bg-[linear-gradient(145deg,#31515d,#5d8596)] px-3 py-2 text-white transition hover:opacity-95"
+                onClick={() => focusCameraOnUnit(cameraMenuUnit, "inside")}
+              >
+                داخل الوحدة
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+      <div className="pointer-events-none absolute inset-x-7 bottom-5 z-10 hidden flex-wrap items-end justify-between gap-3 sm:flex">
         <div className="rounded-full border border-white/65 bg-white/76 px-3 py-1.5 text-[11px] font-medium text-slate-700 shadow-sm backdrop-blur-sm">
           {draggingUnitId
             ? `أنت الآن تحرك الوحدة داخل المسرح بخطوات ${positionSnapCm} سم`
-            : `الحركة الآن تمسك على شبكة ${positionSnapCm} سم لتفادي الاهتزاز والقفز`}
+            : interactionMode === "move"
+              ? `الحركة الآن تمسك على شبكة ${positionSnapCm} سم لتفادي الاهتزاز والقفز. دبل كليك على الوحدة يفتح زوايا سريعة.`
+              : "وضع الكاميرا نشط. اسحب الفراغ لتدوير المشهد، ودبل كليك على الوحدة لفتح زوايا فوق وتحت وداخل الوحدة."}
         </div>
         {activeUnit && activeUnitFootprint ? (
           <div className="rounded-2xl border border-white/70 bg-white/80 px-3 py-2 text-right text-[11px] leading-5 text-slate-700 shadow-sm backdrop-blur-sm">
@@ -1780,20 +2239,113 @@ export function ProjectPreview({
           </div>
         ) : null}
       </div>
+      {canShowQuickControls && activeUnit ? (
+        <div className="pointer-events-none absolute inset-x-4 bottom-4 z-10 flex justify-center sm:hidden">
+          <div className="pointer-events-auto w-full max-w-sm rounded-[1.45rem] border border-white/75 bg-white/88 p-3 shadow-[0_22px_55px_-32px_rgba(26,42,51,0.34)] backdrop-blur-sm">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="text-xs font-semibold text-slate-950">
+                  {activeUnit.title}
+                </p>
+                <p className="text-[11px] text-slate-500">
+                  {interactionMode === "move"
+                    ? "وضع تحريك الوحدة"
+                    : "وضع الكاميرا"}
+                </p>
+              </div>
+              <button
+                type="button"
+                className="rounded-xl bg-slate-100 px-3 py-2 text-[11px] font-medium text-slate-700"
+                onClick={() =>
+                  setInteractionMode((current) =>
+                    current === "move" ? "camera" : "move",
+                  )
+                }
+              >
+                {interactionMode === "move" ? "الكاميرا" : "التحريك"}
+              </button>
+            </div>
+
+            <div className="mt-3 grid grid-cols-4 gap-2 text-[11px] font-medium text-slate-700">
+              <button
+                type="button"
+                className="rounded-xl bg-slate-100 px-2 py-2"
+                onClick={() => onUnitRotate?.(activeUnit.id, -90)}
+              >
+                لف يسار
+              </button>
+              <button
+                type="button"
+                className="rounded-xl bg-slate-100 px-2 py-2"
+                onClick={() => onUnitNudge?.(activeUnit.id, "z", -10)}
+              >
+                أمام
+              </button>
+              <button
+                type="button"
+                className="rounded-xl bg-slate-100 px-2 py-2"
+                onClick={() => onUnitNudge?.(activeUnit.id, "y", 10)}
+              >
+                رفع
+              </button>
+              <button
+                type="button"
+                className="rounded-xl bg-slate-100 px-2 py-2"
+                onClick={() => onUnitRotate?.(activeUnit.id, 90)}
+              >
+                لف يمين
+              </button>
+              <button
+                type="button"
+                className="rounded-xl bg-slate-100 px-2 py-2"
+                onClick={() => onUnitNudge?.(activeUnit.id, "x", -10)}
+              >
+                يمين
+              </button>
+              <button
+                type="button"
+                className="rounded-xl bg-slate-100 px-2 py-2"
+                onClick={() => onUnitNudge?.(activeUnit.id, "z", 10)}
+              >
+                خلف
+              </button>
+              <button
+                type="button"
+                className="rounded-xl bg-slate-100 px-2 py-2"
+                onClick={() => onUnitNudge?.(activeUnit.id, "y", -10)}
+              >
+                خفض
+              </button>
+              <button
+                type="button"
+                className="rounded-xl bg-slate-100 px-2 py-2"
+                onClick={() => onUnitNudge?.(activeUnit.id, "x", 10)}
+              >
+                يسار
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
       <div className="pointer-events-none absolute inset-x-0 top-0 z-[1] h-36 bg-[radial-gradient(circle_at_top,_rgba(255,255,255,0.58),_transparent_68%)]" />
       <Canvas
-        camera={{ position: [0, 3, 7.2], fov: 34 }}
+        camera={initialCameraConfig}
         shadows="basic"
         dpr={[1, 1.5]}
         gl={{ preserveDrawingBuffer: true }}
+        onPointerMissed={() => setCameraMenuUnitId(null)}
         onCreated={({ camera, gl }) => {
           cameraRef.current = camera;
           canvasElementRef.current = gl.domElement;
           onCanvasReady?.(gl.domElement);
         }}
       >
+        <ProjectCameraTransitionController
+          cameraRef={cameraRef}
+          controlsRef={controlsRef}
+          transitionRef={cameraTransitionRef}
+        />
         <color attach="background" args={[previewPalette.sceneBackground]} />
-        <fog attach="fog" args={[previewPalette.sceneFog, fogNear, fogFar]} />
         <ambientLight intensity={1.18} />
         <hemisphereLight
           intensity={0.66}
@@ -1902,18 +2454,18 @@ export function ProjectPreview({
                 key={unit.id}
                 position={unit.position}
                 rotation={[0, (unit.rotationY * Math.PI) / 180, 0]}
-                onPointerDown={(event) => {
-                  if (event.button !== 0) {
-                    return;
-                  }
-
+                onDoubleClick={(event) => {
                   event.stopPropagation();
-                  onSelectUnit?.(unit.id);
-
-                  startDraggingUnit(
+                  openUnitCameraMenu(unit);
+                }}
+                onPointerDown={(event) => {
+                  handleUnitPointerDown(
                     unit,
                     event.clientX,
                     event.clientY,
+                    event.button,
+                    event.timeStamp,
+                    () => event.stopPropagation(),
                     event.point.y,
                   );
                 }}
@@ -1952,7 +2504,7 @@ export function ProjectPreview({
                     </mesh>
                     <AxisGuide planWidth={planWidth} planDepth={planDepth} />
                     <DragHandle
-                      active={isSelected}
+                      active={isSelected && interactionMode === "move"}
                       dragging={draggingUnitId === unit.id}
                       planWidth={planWidth}
                       planDepth={planDepth}
@@ -1974,6 +2526,9 @@ export function ProjectPreview({
                   result={unit.result}
                   selectedPartId={null}
                   showPartLabels={false}
+                  insidePeek={
+                    cameraDistanceMode === "inside" && activeUnit?.id === unit.id
+                  }
                   doorsOpen={openDoorUnits[unit.id] ?? false}
                   showDoorToggle={unit.active}
                   onToggleDoors={() => toggleUnitDoors(unit.id)}
@@ -1992,17 +2547,18 @@ export function ProjectPreview({
                         ? "border-slate-200 bg-slate-950/82 text-white shadow-[0_0_0_4px_rgba(245,158,11,0.18)]"
                         : "border-white/70 bg-white/80 text-slate-800",
                     )}
-                    onPointerDown={(event) => {
-                      if (event.button !== 0) {
-                        return;
-                      }
-
+                    onDoubleClick={(event) => {
                       event.stopPropagation();
-                      onSelectUnit?.(unit.id);
-                      startDraggingUnit(
+                      openUnitCameraMenu(unit);
+                    }}
+                    onPointerDown={(event) => {
+                      handleUnitPointerDown(
                         unit,
                         event.clientX,
                         event.clientY,
+                        event.button,
+                        event.timeStamp,
+                        () => event.stopPropagation(),
                         unit.position[1] -
                           0.55 +
                           Math.min(unit.input.height / 200, 0.45),
@@ -2028,17 +2584,15 @@ export function ProjectPreview({
 
         <OrbitControls
           ref={controlsRef}
-          enablePan={false}
+          enablePan={interactionMode === "camera"}
           enableDamping
+          enableRotate={interactionMode === "camera"}
           dampingFactor={0.09}
-          minDistance={minCameraDistance}
-          maxDistance={maxCameraDistance}
-          maxPolarAngle={Math.PI / 2.05}
           rotateSpeed={0.78}
           mouseButtons={{
             LEFT: MOUSE.ROTATE,
             MIDDLE: MOUSE.DOLLY,
-            RIGHT: MOUSE.ROTATE,
+            RIGHT: MOUSE.PAN,
           }}
         />
       </Canvas>

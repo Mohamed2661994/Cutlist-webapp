@@ -8066,6 +8066,9 @@ function App() {
                               }))}
                               onSelectUnit={setActiveProjectUnitId}
                               onUnitPositionChange={updateProjectUnitPosition}
+                              onUnitNudge={nudgeProjectUnit}
+                              onUnitRotate={rotateProjectUnit}
+                              showQuickControls
                             />
 
                             <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
@@ -8273,6 +8276,9 @@ function App() {
                           }))}
                           onSelectUnit={setActiveProjectUnitId}
                           onUnitPositionChange={updateProjectUnitPosition}
+                          onUnitNudge={nudgeProjectUnit}
+                          onUnitRotate={rotateProjectUnit}
+                          showQuickControls
                         />
                       </CardContent>
                     </Card>
@@ -8387,6 +8393,9 @@ function App() {
                     }))}
                     onSelectUnit={setActiveProjectUnitId}
                     onUnitPositionChange={updateProjectUnitPosition}
+                    onUnitNudge={nudgeProjectUnit}
+                    onUnitRotate={rotateProjectUnit}
+                    showQuickControls
                     onCanvasReady={bindProjectPreviewCanvas}
                   />
 
