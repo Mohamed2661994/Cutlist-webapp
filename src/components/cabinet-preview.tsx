@@ -2589,6 +2589,7 @@ export function ProjectPreview({
           enableRotate={interactionMode === "camera"}
           dampingFactor={0.09}
           rotateSpeed={0.78}
+          screenSpacePanning={true}
           mouseButtons={{
             LEFT: MOUSE.ROTATE,
             MIDDLE: MOUSE.DOLLY,
