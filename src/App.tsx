@@ -72,8 +72,10 @@ import {
   edgeBandSideLabels,
   formatCm,
   frontOptionLabels,
+  getGrainOrientedDimensions,
   grainDirectionLabels,
   materialLabels,
+  normalizeGrainDirection,
   normalizeSheetStockSize,
   partCategoryLabels,
   round2,
@@ -469,6 +471,20 @@ function applyProjectSettingsToInput(
   return {
     ...input,
     ...getCabinetProjectSettings(settings),
+    grainDirection: normalizeGrainDirection(input.grainDirection),
+  };
+}
+
+function normalizeCabinetUnitWithSettings(
+  unit: CabinetUnit,
+  settings: ProjectSettings,
+): CabinetUnit {
+  const { id, title, ...input } = unit;
+
+  return {
+    id,
+    title,
+    ...applyProjectSettingsToInput(input, settings),
   };
 }
 
@@ -809,6 +825,60 @@ function buildProjectOptimizationRecommendations(
       ).length,
     0,
   );
+  const lockedOversizeParts = parts
+    .map((part) => {
+      const oriented = getGrainOrientedDimensions(
+        part.length,
+        part.width,
+        part.grainDirection,
+      );
+
+      if (oriented.grainDirection === "free") {
+        return null;
+      }
+
+      const stock = sheetLayout.stocks.find((candidateStock) => {
+        if (candidateStock.isBackStock) {
+          return (
+            isBackStockPart(part) && part.thickness === candidateStock.thickness
+          );
+        }
+
+        return (
+          !isBackStockPart(part) &&
+          part.material === candidateStock.material &&
+          part.thickness === candidateStock.thickness
+        );
+      });
+
+      if (!stock) {
+        return null;
+      }
+
+      if (
+        oriented.length <= stock.boardLength &&
+        oriented.width <= stock.boardWidth
+      ) {
+        return null;
+      }
+
+      return {
+        part,
+        stock,
+        orientedLength: oriented.length,
+        orientedWidth: oriented.width,
+      };
+    })
+    .filter(
+      (
+        entry,
+      ): entry is {
+        part: CutlistPart;
+        stock: SheetLayoutResult["stocks"][number];
+        orientedLength: number;
+        orientedWidth: number;
+      } => Boolean(entry),
+    );
   const lockedCustomParts = parts.filter(
     (part) => part.kind === "custom" && part.grainDirection !== "free",
   );
@@ -834,6 +904,22 @@ function buildProjectOptimizationRecommendations(
         sparseSheetCount > 0
           ? `هناك ${sparseSheetCount} لوح شبه فارغ في النتيجة الحالية، والمحسن الذكي غالبًا ينجح أكثر في دمج القطع قبل الإبقاء على هذه الألواح.`
           : `نسبة الهدر الحالية ${wastePercent}%، ولذلك من المنطقي تجربة المحسن الذكي لأنه يوازن بين تقليل الهدر وتقليل الألواح الضعيفة الاستغلال.`,
+      tone: "action",
+    });
+  }
+
+  if (lockedOversizeParts.length > 0) {
+    const sample = lockedOversizeParts[0];
+    const lockedLabels = [
+      ...new Set(lockedOversizeParts.map((entry) => entry.part.name)),
+    ]
+      .slice(0, 2)
+      .join("، ");
+
+    recommendations.push({
+      id: "locked-grain-oversize",
+      title: "بعض القطع لا تدخل اللوح الحالي مع اتجاه الثمرة",
+      body: `قطع مثل ${lockedLabels} مثبتة الآن على ${grainDirectionLabels[sample.part.grainDirection]}، فتدخل على اللوح كمقاس ${round2(sample.orientedLength)} × ${round2(sample.orientedWidth)} سم مقابل لوح ${round2(sample.stock.boardLength)} × ${round2(sample.stock.boardWidth)} سم. لهذا يفصلها المحرك على ألواح مستقلة شبه فارغة بدل دمجها مع باقي القطع.`,
       tone: "action",
     });
   }
@@ -1299,6 +1385,9 @@ function normalizeSavedProjects(projects: SavedProject[]) {
       return {
         ...project,
         settings,
+        units: (project.units ?? []).map((unit) =>
+          normalizeCabinetUnitWithSettings(unit, settings),
+        ),
         customParts: (project.customParts ?? []).map((part) =>
           syncCustomProjectPartWithSettings(part, settings),
         ),
@@ -2650,6 +2739,7 @@ function syncCustomProjectPartWithSettings(
         : part.thickness,
     thicknessMode,
     material: settings.material,
+    grainDirection: normalizeGrainDirection(part.grainDirection),
     edgeBanding: part.edgeBanding ?? {},
   };
 }
@@ -4786,8 +4876,14 @@ function App() {
 
   function loadSavedProject(project: SavedProject) {
     const normalizedSettings = normalizeProjectSettings(project.settings);
+    const normalizedUnits = project.units.map((unit) =>
+      normalizeCabinetUnitWithSettings(unit, normalizedSettings),
+    );
+    const normalizedCustomParts = (project.customParts ?? []).map((part) =>
+      syncCustomProjectPartWithSettings(part, normalizedSettings),
+    );
     const nextArrangement = buildProjectArrangement(
-      project.units,
+      normalizedUnits,
       project.arrangement,
     );
     lastSavedProjectArrangementKeyRef.current =
@@ -4799,29 +4895,23 @@ function App() {
     setProjectArrangementAutosaveError(null);
     setProjectSettings(normalizedSettings);
     setProjectSettingsDrafts(buildProjectSettingsDrafts(normalizedSettings));
-    setUnits(project.units);
-    setCustomParts(
-      (project.customParts ?? []).map((part) =>
-        syncCustomProjectPartWithSettings(part, normalizedSettings),
-      ),
-    );
+    setUnits(normalizedUnits);
+    setCustomParts(normalizedCustomParts);
     setEdgeBandOverrides(project.edgeBandOverrides ?? {});
-    setCalculatedUnits(project.units.map((unit) => ({ ...unit })));
+    setCalculatedUnits(normalizedUnits.map((unit) => ({ ...unit })));
     setCalculatedCustomParts(
-      (project.customParts ?? []).map((part) =>
-        syncCustomProjectPartWithSettings(part, normalizedSettings),
-      ),
+      normalizedCustomParts.map((part) => ({ ...part })),
     );
-    setSelectedCalculatedUnitId(project.units[0]?.id ?? null);
+    setSelectedCalculatedUnitId(normalizedUnits[0]?.id ?? null);
     setProjectArrangement(nextArrangement);
     setActiveWorkspaceTab("project");
     setActiveBuilderTab("units");
     setActiveProjectUnitId(
-      nextArrangement[0]?.id ?? project.units[0]?.id ?? null,
+      nextArrangement[0]?.id ?? normalizedUnits[0]?.id ?? null,
     );
     setSelectedPartId(null);
     setUnitFeedback(null);
-    resetEditor(project.units.length, normalizedSettings);
+    resetEditor(normalizedUnits.length, normalizedSettings);
     resetCustomPartEditor(normalizedSettings);
     setIsProjectLibraryOpen(false);
     announceProjectAction(`تم تحميل ${project.name}.`);
@@ -7095,12 +7185,7 @@ function App() {
                             </SelectTrigger>
                             <SelectContent>
                               <SelectItem value="free">حر</SelectItem>
-                              <SelectItem value="length">
-                                طولي مع طول اللوح
-                              </SelectItem>
-                              <SelectItem value="width">
-                                عرضي مع عرض اللوح
-                              </SelectItem>
+                              <SelectItem value="grain">ثمرة</SelectItem>
                             </SelectContent>
                           </Select>
                         </div>
@@ -7564,12 +7649,7 @@ function App() {
                             </SelectTrigger>
                             <SelectContent>
                               <SelectItem value="free">حر</SelectItem>
-                              <SelectItem value="length">
-                                طولي مع طول اللوح
-                              </SelectItem>
-                              <SelectItem value="width">
-                                عرضي مع عرض اللوح
-                              </SelectItem>
+                              <SelectItem value="grain">ثمرة</SelectItem>
                             </SelectContent>
                           </Select>
                         </div>

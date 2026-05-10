@@ -195,7 +195,11 @@ function Panel({
   const showGrain =
     grainDirection !== "free" && Boolean(lengthAxis) && Boolean(widthAxis);
   const grainAxis =
-    showGrain && grainDirection === "length" ? lengthAxis : widthAxis;
+    showGrain && lengthAxis && widthAxis
+      ? size[axisIndex[lengthAxis]] >= size[axisIndex[widthAxis]]
+        ? lengthAxis
+        : widthAxis
+      : undefined;
   const crossAxis = grainAxis === lengthAxis ? widthAxis : lengthAxis;
   const thicknessAxis =
     lengthAxis && widthAxis

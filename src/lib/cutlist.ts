@@ -6,7 +6,8 @@ export type CabinetType =
   | "corner-l-wall";
 export type MaterialType = "mdf" | "melamine" | "plywood";
 export type FrontOption = "doors" | "drawers" | "mixed" | "none";
-export type GrainDirection = "free" | "length" | "width";
+export type GrainDirection = "free" | "grain";
+export type LegacyGrainDirection = GrainDirection | "length" | "width";
 export type CornerHand = "left" | "right";
 
 export type CabinetInput = {
@@ -151,6 +152,38 @@ export function normalizeSheetStockSize(
   };
 }
 
+export function normalizeGrainDirection(
+  value?: LegacyGrainDirection | string | null,
+): GrainDirection {
+  if (value === "grain" || value === "length" || value === "width") {
+    return "grain";
+  }
+
+  return "free";
+}
+
+export function getGrainOrientedDimensions(
+  length: number,
+  width: number,
+  grainDirection?: LegacyGrainDirection | string | null,
+) {
+  const normalizedGrainDirection = normalizeGrainDirection(grainDirection);
+
+  if (normalizedGrainDirection === "free" || length >= width) {
+    return {
+      length,
+      width,
+      grainDirection: normalizedGrainDirection,
+    };
+  }
+
+  return {
+    length: width,
+    width: length,
+    grainDirection: normalizedGrainDirection,
+  };
+}
+
 export type SheetLayoutOptimizationMode = "workshop" | "yield" | "smart";
 
 export type SheetLayoutOptions = {
@@ -290,8 +323,7 @@ export const frontOptionLabels: Record<FrontOption, string> = {
 
 export const grainDirectionLabels: Record<GrainDirection, string> = {
   free: "حر",
-  length: "طولي مع طول اللوح",
-  width: "عرضي مع عرض اللوح",
+  grain: "ثمرة",
 };
 
 export const partCategoryLabels: Record<PartCategory, string> = {
@@ -328,12 +360,14 @@ function createPart(
     edgeBanding?: EdgeBandProfile;
   },
 ): CutlistPart {
+  const grainDirection = normalizeGrainDirection(part.grainDirection);
+
   return {
     ...part,
     id: `${part.kind}-${part.length}-${part.width}-${part.qty}`,
     edgeBanding: part.edgeBanding ?? getDefaultEdgeBanding(part.kind),
-    grainDirection: part.grainDirection ?? "free",
-    allowRotation: part.allowRotation ?? true,
+    grainDirection,
+    allowRotation: part.allowRotation ?? grainDirection === "free",
   };
 }
 
@@ -385,7 +419,7 @@ export function calculateCabinetCutlist(
       2,
       Math.max(1, Math.floor(clamp(input.doorLeafCount || 0))),
     ),
-    grainDirection: input.grainDirection,
+    grainDirection: normalizeGrainDirection(input.grainDirection),
   };
   const lockGrain = normalized.grainDirection !== "free";
   const isBlindCornerBase =
@@ -816,7 +850,7 @@ export function calculateCabinetCutlist(
     normalized.grainDirection === "free"
   ) {
     warnings.push(
-      "خامة الكونتر غالبًا تحتاج تحديد اتجاه ثمرة الخشب قبل اعتماد توزيع الألواح.",
+      "خامة الكونتر غالبًا تحتاج تثبيت الثمرة قبل اعتماد توزيع الألواح.",
     );
   }
 
@@ -917,15 +951,23 @@ function buildSingleStockSheets(
   };
 
   const sourcePieces: FlatPiece[] = parts.flatMap((part) =>
-    Array.from({ length: part.qty }, (_, pieceIndex) => ({
-      id: `${part.id}-${pieceIndex}`,
-      sourcePartId: part.id,
-      name: part.name,
-      category: part.category,
-      length: part.grainDirection === "width" ? part.width : part.length,
-      width: part.grainDirection === "width" ? part.length : part.width,
-      allowRotation: part.allowRotation,
-    })),
+    Array.from({ length: part.qty }, (_, pieceIndex) => {
+      const oriented = getGrainOrientedDimensions(
+        part.length,
+        part.width,
+        part.grainDirection,
+      );
+
+      return {
+        id: `${part.id}-${pieceIndex}`,
+        sourcePartId: part.id,
+        name: part.name,
+        category: part.category,
+        length: oriented.length,
+        width: oriented.width,
+        allowRotation: part.allowRotation,
+      };
+    }),
   );
   const cutKerf = Math.max(layoutOptions.cutKerf ?? 0, 0);
   const trimMargin = Math.max(layoutOptions.trimMargin ?? 0, 0);
