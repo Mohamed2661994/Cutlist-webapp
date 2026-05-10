@@ -2173,7 +2173,7 @@ export function ProjectPreview({
                 إغلاق
               </button>
             </div>
-            <div className="mt-3 grid grid-cols-3 gap-2 text-[11px] font-medium text-slate-700">
+            <div className="mt-3 grid grid-cols-2 gap-2 text-[11px] font-medium text-slate-700 sm:grid-cols-4">
               <button
                 type="button"
                 className="rounded-xl bg-slate-100 px-3 py-2 transition hover:bg-slate-200"
@@ -2190,10 +2190,24 @@ export function ProjectPreview({
               </button>
               <button
                 type="button"
-                className="rounded-xl bg-[linear-gradient(145deg,#31515d,#5d8596)] px-3 py-2 text-white transition hover:opacity-95"
+                className="rounded-xl bg-slate-100 px-3 py-2 transition hover:bg-slate-200"
+                onClick={() => onUnitNudge?.(cameraMenuUnit.id, "x", -10)}
+              >
+                يمين
+              </button>
+              <button
+                type="button"
+                className="rounded-xl bg-slate-100 px-3 py-2 transition hover:bg-slate-200"
+                onClick={() => onUnitNudge?.(cameraMenuUnit.id, "x", 10)}
+              >
+                يسار
+              </button>
+              <button
+                type="button"
+                className="col-span-2 rounded-xl bg-[linear-gradient(145deg,#31515d,#5d8596)] px-3 py-2 text-white transition hover:opacity-95 sm:col-span-4"
                 onClick={() => focusCameraOnUnit(cameraMenuUnit, "inside")}
               >
-                داخل الوحدة
+                زوم داخل الوحدة
               </button>
             </div>
           </div>
