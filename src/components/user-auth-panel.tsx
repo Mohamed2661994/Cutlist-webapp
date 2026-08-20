@@ -25,6 +25,7 @@ type UserAuthPanelProps = {
   onFieldChange: (field: "name" | "email" | "password", value: string) => void;
   onModeChange: (mode: AuthMode) => void;
   onSubmit: (event: React.FormEvent<HTMLFormElement>) => void;
+  onGuestLogin?: () => void;
 };
 
 export function UserAuthPanel({
@@ -37,6 +38,7 @@ export function UserAuthPanel({
   onFieldChange,
   onModeChange,
   onSubmit,
+  onGuestLogin,
 }: UserAuthPanelProps) {
   const isRegisterMode = mode === "register";
 
@@ -176,6 +178,28 @@ export function UserAuthPanel({
                     ? "إنشاء الحساب والدخول"
                     : "تسجيل الدخول"}
               </Button>
+
+              {onGuestLogin ? (
+                <div className="pt-2 text-center">
+                  <div className="relative mb-3 flex items-center justify-center">
+                    <div className="absolute inset-0 flex items-center">
+                      <div className="w-full border-t border-slate-200" />
+                    </div>
+                    <span className="relative bg-white px-2 text-xs text-slate-400">
+                      أو
+                    </span>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="h-10 w-full rounded-xl border-slate-200 text-slate-700 hover:bg-slate-50"
+                    onClick={onGuestLogin}
+                    disabled={isSubmitting}
+                  >
+                    الدخول كضيف (تجربة سريعة بدون حساب)
+                  </Button>
+                </div>
+              ) : null}
             </form>
           </CardContent>
         </Card>

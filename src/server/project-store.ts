@@ -1,6 +1,7 @@
 import "server-only";
 
 import * as postgresStore from "@/server/project-store-postgres";
+import * as fileStore from "@/server/project-store-file";
 
 export {
   ProjectStoreError,
@@ -10,7 +11,10 @@ export {
 } from "@/server/project-store-shared";
 
 function getStoreBackend() {
-  return postgresStore;
+  if (process.env.DATABASE_URL?.trim()) {
+    return postgresStore;
+  }
+  return fileStore;
 }
 
 export async function getSessionBootstrap(sessionToken?: string) {

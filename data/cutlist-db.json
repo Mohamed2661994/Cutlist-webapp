@@ -1,0 +1,40 @@
+{
+  "users": [
+    {
+      "id": "user-0af87557-b4f8-47ed-8358-495c0345888a",
+      "name": "?????? ????",
+      "email": "guest@local.app",
+      "passwordHash": "729a4028cab780feed4d6f9c9ffaf276:dae5f72369349d3f09e7b8f93abbcc3dbad76dbef34bb17ef50febe4cb2c5748733493b062fa7749aa324bef51029f036f28976ed872b632157444a2769c92fb",
+      "createdAt": "2026-08-20T14:26:46.010Z",
+      "updatedAt": "2026-08-20T14:26:46.010Z",
+      "sessions": [
+        {
+          "id": "34fdc6c2-bded-4656-b190-9cf52202fd17",
+          "tokenHash": "eba6cf75df7e246d023eeeb62193f877f40eefe74c2daa1c48827123e1798519",
+          "createdAt": "2026-08-20T14:26:46.014Z",
+          "expiresAt": "2026-09-19T14:26:46.014Z"
+        }
+      ],
+      "projectSettings": null,
+      "savedProjects": []
+    },
+    {
+      "id": "user-41e01fee-8ea3-45e6-bd3f-455833b2f897",
+      "name": "Mohamed Salah",
+      "email": "dobby266@gmail.com",
+      "passwordHash": "dc52f4feaf06767c44a21633d0e41d49:74a069637c32b774393122fecf2e413e2371e413f9776a4cf00c85f2c89821f109c862e0ef2e39de74ece9e8ba4d03a8f21ab27f156c7d0100538b968502f6c7",
+      "createdAt": "2026-08-20T14:33:34.627Z",
+      "updatedAt": "2026-08-20T14:33:34.627Z",
+      "sessions": [
+        {
+          "id": "334986e2-4535-4422-a243-f27630862e9c",
+          "tokenHash": "cbdb88869b87a152b126abba43caf1693615b1dd229721022522ae45574c8b5e",
+          "createdAt": "2026-08-20T14:33:34.633Z",
+          "expiresAt": "2026-09-19T14:33:34.633Z"
+        }
+      ],
+      "projectSettings": null,
+      "savedProjects": []
+    }
+  ]
+}

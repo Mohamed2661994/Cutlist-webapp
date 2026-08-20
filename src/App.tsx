@@ -24,7 +24,13 @@ import {
   Sparkles,
   LogOut,
   Trash2,
+  FileSpreadsheet,
+  FileText,
 } from "lucide-react";
+import confetti from "canvas-confetti";
+
+import { exportProjectToPdf } from "@/lib/export-pdf";
+import { exportProjectToExcel } from "@/lib/export-excel";
 
 import { cn } from "@/lib/utils";
 import type {
@@ -3251,12 +3257,6 @@ function App() {
               "تعذر حفظ ترتيب الوحدات تلقائيا.")
             : null
       : null;
-  const projectArrangementAutosaveToneClassName =
-    projectArrangementAutosaveState === "error"
-      ? "text-slate-700"
-      : projectArrangementAutosaveState === "saving"
-        ? "text-sky-700"
-        : "text-teal-700";
   const syncSavedProjectsFromBootstrap = useCallback(
     (bootstrap: SessionBootstrap) => {
       if (bootstrap.user) {
@@ -4341,6 +4341,39 @@ function App() {
     }
   }
 
+  async function loginAsGuest() {
+    setIsAuthSubmitting(true);
+    setAuthError(null);
+    try {
+      let bootstrap: SessionBootstrap;
+      try {
+        bootstrap = await requestApi<SessionBootstrap>("/api/auth/login", {
+          method: "POST",
+          body: JSON.stringify({
+            email: "guest@local.app",
+            password: "password123",
+          }),
+        });
+      } catch {
+        bootstrap = await requestApi<SessionBootstrap>("/api/auth/register", {
+          method: "POST",
+          body: JSON.stringify({
+            name: "مستخدم محلي",
+            email: "guest@local.app",
+            password: "password123",
+          }),
+        });
+      }
+      applyAuthenticatedSession(bootstrap, "تم الدخول كضيف بنجاح.");
+    } catch (error) {
+      setAuthError(
+        error instanceof Error ? error.message : "تعذر الدخول كضيف الآن.",
+      );
+    } finally {
+      setIsAuthSubmitting(false);
+    }
+  }
+
   async function logoutCurrentUser() {
     try {
       await requestApi<{ ok: boolean }>("/api/auth/logout", {
@@ -5042,6 +5075,60 @@ function App() {
     announceProjectAction("تم تصدير CSV للمشروع.");
   }
 
+  function exportProjectPdf() {
+    if (projectParts.length === 0) {
+      return;
+    }
+
+    try {
+      exportProjectToPdf({
+        projectName: projectName.trim() || "مشروع جديد",
+        userName: currentUser?.name || "مستخدم محلي",
+        settings: projectSettings,
+        units,
+        customParts,
+        calculatedParts: projectParts,
+        sheetLayout: projectSheetLayout,
+      });
+      confetti({
+        particleCount: 35,
+        spread: 60,
+        origin: { y: 0.8 },
+      });
+      announceProjectAction("تم تصدير تقرير PDF للمشروع بنجاح.");
+    } catch (err) {
+      console.error("PDF export error:", err);
+      announceProjectAction("تعذر تصدير ملف PDF.");
+    }
+  }
+
+  function exportProjectExcel() {
+    if (projectParts.length === 0) {
+      return;
+    }
+
+    try {
+      exportProjectToExcel({
+        projectName: projectName.trim() || "مشروع جديد",
+        userName: currentUser?.name || "مستخدم محلي",
+        settings: projectSettings,
+        units,
+        customParts,
+        calculatedParts: projectParts,
+        sheetLayout: projectSheetLayout,
+      });
+      confetti({
+        particleCount: 35,
+        spread: 60,
+        origin: { y: 0.8 },
+      });
+      announceProjectAction("تم تصدير ملف Excel للمشروع بنجاح.");
+    } catch (err) {
+      console.error("Excel export error:", err);
+      announceProjectAction("تعذر تصدير ملف Excel.");
+    }
+  }
+
   function printProjectSummary() {
     if (projectParts.length === 0) {
       return;
@@ -5551,6 +5638,7 @@ function App() {
         onFieldChange={updateAuthField}
         onModeChange={setAuthMode}
         onSubmit={submitAuthForm}
+        onGuestLogin={loginAsGuest}
       />
     );
   }
@@ -6268,7 +6356,11 @@ function App() {
                   <span
                     className={cn(
                       "rounded-full bg-white/85 px-3 py-1 font-medium",
-                      projectArrangementAutosaveToneClassName,
+                      projectArrangementAutosaveState === "error"
+                        ? "text-slate-700"
+                        : projectArrangementAutosaveState === "saving"
+                          ? "text-sky-700"
+                          : "text-teal-700",
                     )}
                   >
                     {projectArrangementAutosaveMessage}
@@ -6328,11 +6420,11 @@ function App() {
                             "bg-[linear-gradient(145deg,#31515d,#5d8596)] text-white",
                         )}
                       >
-                          {isPendingTarget ? (
-                            <RotateCw className="size-4 animate-spin" />
-                          ) : (
-                            <Icon className="size-4" />
-                          )}
+                        {isPendingTarget ? (
+                          <RotateCw className="size-4 animate-spin" />
+                        ) : (
+                          <Icon className="size-4" />
+                        )}
                       </span>
                       <span className="min-w-0">
                         <span className="block text-sm font-semibold text-slate-950">
@@ -6846,6 +6938,26 @@ function App() {
                   >
                     <Settings2 className="size-4" />
                     الإعدادات
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="border-rose-500/30 bg-rose-500/10 text-rose-200 hover:bg-rose-500/20 hover:text-white"
+                    onClick={exportProjectPdf}
+                    disabled={projectParts.length === 0}
+                  >
+                    <FileText className="size-4 text-rose-400" />
+                    تصدير PDF
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="border-emerald-500/30 bg-emerald-500/10 text-emerald-200 hover:bg-emerald-500/20 hover:text-white"
+                    onClick={exportProjectExcel}
+                    disabled={projectParts.length === 0}
+                  >
+                    <FileSpreadsheet className="size-4 text-emerald-400" />
+                    Excel (BOM)
                   </Button>
                   <Button
                     type="button"
