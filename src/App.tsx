@@ -2835,32 +2835,49 @@ function normalizeProjectSettings(settings?: Partial<ProjectSettings> | null) {
 }
 
 async function requestApi<T>(input: string, init?: RequestInit) {
-  const response = await fetch(input, {
-    credentials: "same-origin",
-    headers: {
-      "Content-Type": "application/json",
-      ...(init?.headers ?? {}),
-    },
-    ...init,
-  });
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 8000);
+  const signal = init?.signal ?? controller.signal;
 
-  const isJsonResponse =
-    response.headers.get("content-type")?.includes("application/json") ?? false;
-  const payload = isJsonResponse ? ((await response.json()) as unknown) : null;
+  try {
+    const response = await fetch(input, {
+      credentials: "same-origin",
+      headers: {
+        "Content-Type": "application/json",
+        ...(init?.headers ?? {}),
+      },
+      ...init,
+      signal,
+    });
+    clearTimeout(timeoutId);
 
-  if (!response.ok) {
-    const message =
-      typeof payload === "object" &&
-      payload !== null &&
-      "message" in payload &&
-      typeof (payload as { message?: unknown }).message === "string"
-        ? String((payload as { message?: string }).message)
-        : "حدث خطأ غير متوقع.";
+    const isJsonResponse =
+      response.headers.get("content-type")?.includes("application/json") ?? false;
+    const payload = isJsonResponse ? ((await response.json()) as unknown) : null;
 
-    throw new ApiRequestError(message, response.status);
+    if (!response.ok) {
+      const message =
+        typeof payload === "object" &&
+        payload !== null &&
+        "message" in payload &&
+        typeof (payload as { message?: unknown }).message === "string"
+          ? String((payload as { message?: string }).message)
+          : "حدث خطأ غير متوقع.";
+
+      throw new ApiRequestError(message, response.status);
+    }
+
+    return payload as T;
+  } catch (error) {
+    clearTimeout(timeoutId);
+    if (error instanceof Error && error.name === "AbortError") {
+      throw new ApiRequestError(
+        "استغرقت العملية وقتاً أطول من المعتاد، يرجى إعادة المحاولة.",
+        408,
+      );
+    }
+    throw error;
   }
-
-  return payload as T;
 }
 
 function getSheetLayoutOptions(settings: ProjectSettings) {

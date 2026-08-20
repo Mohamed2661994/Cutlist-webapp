@@ -2,6 +2,7 @@ import "server-only";
 
 import * as postgresStore from "@/server/project-store-postgres";
 import * as fileStore from "@/server/project-store-file";
+import { ProjectStoreError } from "@/server/project-store-shared";
 
 export {
   ProjectStoreError,
@@ -10,15 +11,36 @@ export {
   sessionCookieName,
 } from "@/server/project-store-shared";
 
-function getStoreBackend() {
-  if (process.env.DATABASE_URL?.trim()) {
-    return postgresStore;
+async function withStoreFallback<T>(
+  postgresFn: () => Promise<T>,
+  fileFn: () => Promise<T>,
+): Promise<T> {
+  if (!process.env.DATABASE_URL?.trim()) {
+    return fileFn();
   }
-  return fileStore;
+
+  try {
+    const timeoutPromise = new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error("Database connection timed out")), 5000),
+    );
+    return await Promise.race([postgresFn(), timeoutPromise]);
+  } catch (error) {
+    if (error instanceof ProjectStoreError && error.status < 500) {
+      throw error;
+    }
+    console.warn(
+      "Database operation failed, seamlessly falling back to local store:",
+      error,
+    );
+    return fileFn();
+  }
 }
 
 export async function getSessionBootstrap(sessionToken?: string) {
-  return getStoreBackend().getSessionBootstrap(sessionToken);
+  return withStoreFallback(
+    () => postgresStore.getSessionBootstrap(sessionToken),
+    () => fileStore.getSessionBootstrap(sessionToken),
+  );
 }
 
 export async function registerUser(input: {
@@ -26,24 +48,33 @@ export async function registerUser(input: {
   email?: string;
   password?: string;
 }) {
-  return getStoreBackend().registerUser(input);
+  return withStoreFallback(
+    () => postgresStore.registerUser(input),
+    () => fileStore.registerUser(input),
+  );
 }
 
 export async function loginUser(input: { email?: string; password?: string }) {
-  return getStoreBackend().loginUser(input);
+  return withStoreFallback(
+    () => postgresStore.loginUser(input),
+    () => fileStore.loginUser(input),
+  );
 }
 
 export async function logoutUser(sessionToken?: string) {
-  return getStoreBackend().logoutUser(sessionToken);
+  return withStoreFallback(
+    () => postgresStore.logoutUser(sessionToken),
+    () => fileStore.logoutUser(sessionToken),
+  );
 }
 
 export async function saveProjectSettingsForSession(
   sessionToken: string | undefined,
   settings: import("@/lib/project-persistence").ProjectSettings,
 ) {
-  return getStoreBackend().saveProjectSettingsForSession(
-    sessionToken,
-    settings,
+  return withStoreFallback(
+    () => postgresStore.saveProjectSettingsForSession(sessionToken, settings),
+    () => fileStore.saveProjectSettingsForSession(sessionToken, settings),
   );
 }
 
@@ -51,12 +82,18 @@ export async function saveProjectForSession(
   sessionToken: string | undefined,
   project: import("@/lib/project-persistence").SavedProject,
 ) {
-  return getStoreBackend().saveProjectForSession(sessionToken, project);
+  return withStoreFallback(
+    () => postgresStore.saveProjectForSession(sessionToken, project),
+    () => fileStore.saveProjectForSession(sessionToken, project),
+  );
 }
 
 export async function deleteProjectForSession(
   sessionToken: string | undefined,
   projectId: string,
 ) {
-  return getStoreBackend().deleteProjectForSession(sessionToken, projectId);
+  return withStoreFallback(
+    () => postgresStore.deleteProjectForSession(sessionToken, projectId),
+    () => fileStore.deleteProjectForSession(sessionToken, projectId),
+  );
 }

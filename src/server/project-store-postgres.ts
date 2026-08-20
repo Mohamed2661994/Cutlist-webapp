@@ -164,15 +164,20 @@ async function getSql() {
   if (!sqlClient) {
     sqlClient = postgres(databaseUrl, {
       max: 1,
+      connect_timeout: 4,
+      idle_timeout: 10,
       prepare: false,
       ssl: shouldRequireSsl(databaseUrl) ? "require" : undefined,
     });
   }
 
   if (!schemaReadyPromise) {
-    schemaReadyPromise = ensureSchema(sqlClient).then(
-      () => sqlClient as SqlClient,
-    );
+    schemaReadyPromise = ensureSchema(sqlClient)
+      .then(() => sqlClient as SqlClient)
+      .catch((err) => {
+        schemaReadyPromise = null;
+        throw err;
+      });
   }
 
   return schemaReadyPromise;
