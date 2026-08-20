@@ -50,9 +50,13 @@ function getStoreFilePath() {
   if (customPath) {
     return path.isAbsolute(customPath) ? customPath : path.join(process.cwd(), customPath);
   }
+  if (process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME) {
+    return "/tmp/cutlist-db.json";
+  }
   return path.join(process.cwd(), "data", "cutlist-db.json");
 }
 
+let inMemoryDb: FileDatabase = { users: [] };
 let fileOperationQueue: Promise<unknown> = Promise.resolve();
 
 function runSerialized<T>(operation: () => Promise<T>): Promise<T> {
@@ -69,24 +73,28 @@ async function readDatabase(): Promise<FileDatabase> {
   try {
     const raw = await readFile(filePath, "utf-8");
     const parsed = JSON.parse(raw);
-    return {
-      users: Array.isArray(parsed?.users) ? parsed.users : [],
-    };
+    const users = Array.isArray(parsed?.users) ? parsed.users : [];
+    inMemoryDb = { users };
+    return { users };
   } catch (error: unknown) {
     const err = error as { code?: string };
     if (err?.code === "ENOENT") {
-      return { users: [] };
+      return inMemoryDb;
     }
-    console.error("Error reading local database file:", error);
-    return { users: [] };
+    return inMemoryDb;
   }
 }
 
 async function writeDatabase(data: FileDatabase): Promise<void> {
-  const filePath = getStoreFilePath();
-  const dir = path.dirname(filePath);
-  await mkdir(dir, { recursive: true });
-  await writeFile(filePath, JSON.stringify(data, null, 2), "utf-8");
+  inMemoryDb = data;
+  try {
+    const filePath = getStoreFilePath();
+    const dir = path.dirname(filePath);
+    await mkdir(dir, { recursive: true });
+    await writeFile(filePath, JSON.stringify(data, null, 2), "utf-8");
+  } catch (error) {
+    console.warn("Local storage write warning (using memory):", error);
+  }
 }
 
 function pruneExpiredUserSessions(user: FileUser): FileUser {

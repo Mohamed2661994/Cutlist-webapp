@@ -4398,32 +4398,33 @@ function App() {
     let isCancelled = false;
 
     async function hydrateSession() {
+      const abortController = new AbortController();
+      const timeoutId = setTimeout(() => abortController.abort(), 4000);
+
       try {
         const bootstrap = await requestApi<SessionBootstrap>(
           "/api/auth/session",
-          { method: "GET" },
+          { method: "GET", signal: abortController.signal },
         );
+        clearTimeout(timeoutId);
 
         if (isCancelled) {
           return;
         }
 
-        if (!bootstrap.user) {
+        if (!bootstrap || !bootstrap.user) {
           applyAnonymousSession(null);
           return;
         }
 
         applyAuthenticatedSession(bootstrap, null);
       } catch (error) {
+        clearTimeout(timeoutId);
         if (isCancelled) {
           return;
         }
 
-        setAuthError(
-          error instanceof Error
-            ? error.message
-            : "تعذر تحميل بيانات الحساب الحالية.",
-        );
+        console.warn("Session hydration fallback to anonymous:", error);
         applyAnonymousSession(null);
       }
     }
